@@ -9,6 +9,6 @@ COPY . .
 
 RUN mkdir -p data
 
-EXPOSE 8050
+EXPOSE 8000
 
-CMD ["python", "app.py"]
+CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]
