@@ -1,6 +1,18 @@
 import pytest
 from pathlib import Path
+import pandas as pd
+import backtesting.lib as btlib
 import core.repository as repo_module
+
+
+def _sma_compat(arr, n):
+    """backtesting 0.3.3에서 제거된 btlib.SMA 호환 구현."""
+    return pd.Series(arr).rolling(n, min_periods=1).mean().values
+
+
+@pytest.fixture(autouse=True)
+def patch_btlib_sma(monkeypatch):
+    monkeypatch.setattr(btlib, "SMA", _sma_compat, raising=False)
 
 @pytest.fixture(autouse=True)
 def fresh_db(tmp_path, monkeypatch):
