@@ -1,15 +1,14 @@
-dash==2.18.2
-dash-auth==2.3.0
-plotly==5.24.1
-dash-ag-grid==31.3.1
+# API
+fastapi==0.115.12
+uvicorn[standard]==0.34.3
+httpx==0.28.1
+pydantic==2.11.4
 
 # 데이터
 yfinance==0.2.54
 finance-datareader
 pandas==2.2.3
 numpy==2.1.3
-
-# KIS Open API
 python-kis==2.1.6
 
 # DB
@@ -27,3 +26,6 @@ backtesting==0.3.3
 python-dotenv==1.0.1
 requests==2.32.3
 pyyaml==6.0.2
+
+# 테스트
+pytest==8.3.5
