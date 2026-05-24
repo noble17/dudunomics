@@ -46,7 +46,8 @@ def delete_holding(ticker: str):
     return {"ok": True}
 
 def _backup_json():
-    path = Path("data/holdings.json")
+    root = Path(__file__).parent.parent.parent  # api/routers/holdings.py → project root
+    path = root / "data" / "holdings.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     holdings = repo.get_holdings()
     payload = {

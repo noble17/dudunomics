@@ -31,3 +31,12 @@ def test_cash_roundtrip(client):
 def test_invalid_currency(client):
     res = client.put("/api/holdings/TSLA", json={"name": "Tesla", "currency": "EUR", "quantity": 1, "avg_price": 100})
     assert res.status_code == 422
+
+def test_auth_required_when_env_set(monkeypatch):
+    monkeypatch.setenv("BASIC_AUTH_USERNAME", "admin")
+    monkeypatch.setenv("BASIC_AUTH_PASSWORD", "secret")
+    from fastapi.testclient import TestClient
+    from api.main import app
+    c = TestClient(app, raise_server_exceptions=False)
+    res = c.get("/api/holdings")  # no auth header
+    assert res.status_code == 401
