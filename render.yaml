@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: dudunomics
+    env: docker
+    dockerfilePath: ./Dockerfile
+    disk:
+      name: data
+      mountPath: /app/data
+      sizeGB: 1
+    envVars:
+      - key: KIS_APPKEY
+        sync: false
+      - key: KIS_SECRETKEY
+        sync: false
+      - key: KIS_ACCOUNT_NO
+        sync: false
+      - key: KIS_ENV
+        value: real
+      - key: FMP_API_KEY
+        sync: false
+      - key: BASIC_AUTH_USERNAME
+        sync: false
+      - key: BASIC_AUTH_PASSWORD
+        sync: false
+      - key: SECRET_KEY
+        generateValue: true

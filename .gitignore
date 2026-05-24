@@ -1,0 +1,10 @@
+.env
+data/dudunomics.duckdb
+data/holdings.json
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+.pytest_cache/
+.DS_Store
