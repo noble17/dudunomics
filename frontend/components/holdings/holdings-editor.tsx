@@ -41,6 +41,9 @@ interface Props {
 
 export function HoldingsEditor({ initialHoldings, initialCashKrw, initialCashUsd }: Props) {
   const [rows, setRows] = useState<Row[]>(initialHoldings.map(toRow));
+  const [savedTickers, setSavedTickers] = useState<Set<string>>(
+    () => new Set(initialHoldings.map((h) => h.ticker))
+  );
   const [cashKrw, setCashKrw] = useState(String(initialCashKrw));
   const [cashUsd, setCashUsd] = useState(String(initialCashUsd));
   const [saving, setSaving] = useState(false);
@@ -64,7 +67,7 @@ export function HoldingsEditor({ initialHoldings, initialCashKrw, initialCashUsd
     setSaving(true);
     setStatus("");
     try {
-      const existing = initialHoldings.map((h) => h.ticker);
+      const existing = [...savedTickers];
       const current = rows.map((r) => r.ticker).filter(Boolean);
       for (const t of existing) {
         if (!current.includes(t)) await holdingsApi.delete(t);
@@ -83,6 +86,7 @@ export function HoldingsEditor({ initialHoldings, initialCashKrw, initialCashUsd
         cash_usd: parseFloat(cashUsd) || 0,
       });
       setRows((prev) => prev.map((r) => ({ ...r, saved: true })));
+      setSavedTickers(new Set(rows.map((r) => r.ticker).filter(Boolean)));
       setStatus("저장 완료 ✓");
     } catch (e: unknown) {
       setStatus(`오류: ${e instanceof Error ? e.message : String(e)}`);
