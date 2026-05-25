@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { holdingsApi } from "@/lib/api";
 import { HoldingsEditor } from "@/components/holdings/holdings-editor";
 
