@@ -3,11 +3,36 @@ export interface HoldingIn {
   currency: "KRW" | "USD";
   quantity: number;
   avg_price: number;
+  sector?: string;
+  market?: string;
+}
+
+export interface TickerLookupOut {
+  ticker: string;
+  name: string;
+  market: string;
+  currency: string;
+}
+
+export interface TickerSearchHit {
+  ticker: string;
+  name: string;
+  exchange: string;
+  market: string;
+  type: string;
 }
 
 export interface HoldingOut extends HoldingIn {
   ticker: string;
   updated_at: string;
+}
+
+export interface EventOut {
+  id: number;
+  ts: string;
+  label: string;
+  amount: number;
+  type: string;
 }
 
 export interface CashUpdate {
@@ -25,6 +50,7 @@ export interface PortfolioRow {
   market_value_krw: number;
   return_pct: number;
   weight_pct: number;
+  sector?: string;
 }
 
 export interface PortfolioSnapshot {
@@ -53,15 +79,19 @@ export interface StrategyDef {
     type: string;
     default: number;
     label: string;
-    min: number;
-    max: number;
+    min?: number;
+    max?: number;
+    options?: string[];
   }>;
+  engine: string;
+  supports_risk_options: boolean;
 }
 
 export interface BacktestRunIn {
-  ticker: string;
+  ticker?: string;
+  tickers?: string[];
   strategy: string;
-  params: Record<string, number>;
+  params: Record<string, number | string>;
   period_start: string;
   period_end: string;
 }
@@ -70,7 +100,7 @@ export interface BacktestRunOut {
   id: number;
   ticker: string;
   strategy: string;
-  params: Record<string, number>;
+  params: Record<string, number | string>;
   period_start: string;
   period_end: string;
   total_return: number;
@@ -78,4 +108,11 @@ export interface BacktestRunOut {
   sharpe: number;
   equity_curve: Array<{ ts: string; equity: number }>;
   created_at: string;
+  // 1단계 이후 Optional
+  tickers?: string[];
+  cagr?: number;
+  per_ticker_contribution?: Record<string, number>;
+  weights_history?: Array<Record<string, number | string>>;
+  rebalance_log?: Array<Record<string, unknown>>;
+  warnings?: string[];
 }
