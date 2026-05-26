@@ -1,7 +1,7 @@
 from datetime import datetime
 from fastapi import APIRouter, Depends
 from api.auth import require_auth
-from api.models import PortfolioRow, PortfolioSnapshot, SnapshotHistory
+from api.models import PortfolioRow, PortfolioSnapshot, SnapshotHistory, EventIn, EventOut
 import core.repository as repo
 from core.fx import get_fx_provider
 from core.prices.kis import KISPriceProvider
@@ -23,7 +23,8 @@ def get_current():
         )
 
     tickers = [h["ticker"] for h in holdings]
-    prices = _price_provider.get_current_prices(tickers)
+    markets = {h["ticker"]: h.get("market") for h in holdings}
+    prices = _price_provider.get_current_prices(tickers, markets=markets)
     usdkrw = _get_usdkrw()
 
     cash_krw = float(repo.get_meta("cash_krw") or 0)
@@ -51,6 +52,7 @@ def get_current():
             avg_price=h["avg_price"], current_price=p.current,
             currency=p.currency, market_value_krw=mv_krw,
             return_pct=round(ret_pct, 2), weight_pct=0,
+            sector=h.get("sector"),
         ))
 
     denom = total_equity_krw or 1
@@ -83,6 +85,25 @@ def get_history(limit: int = 400):
         )
         for r in rows
     ]
+
+
+@router.get("/events", response_model=list[EventOut])
+def get_events():
+    return repo.get_events()
+
+
+@router.post("/events", response_model=EventOut)
+def add_event(body: EventIn):
+    event_id = repo.insert_event(
+        ts=body.ts, label=body.label, amount=body.amount, type_=body.type
+    )
+    return EventOut(id=event_id, ts=body.ts, label=body.label, amount=body.amount, type=body.type)
+
+
+@router.delete("/events/{event_id}")
+def delete_event(event_id: int):
+    repo.delete_event(event_id)
+    return {"ok": True}
 
 
 def _get_usdkrw() -> float:

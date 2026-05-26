@@ -18,7 +18,10 @@ def fresh_db(tmp_path, monkeypatch):
     repo_module._engine = None
 
 @pytest.fixture
-def client():
+def client(fresh_db, monkeypatch):
     from fastapi.testclient import TestClient
     from api.main import app
+    # load_dotenv()가 app import 시 실행되므로 import 후에 환경변수를 제거한다
+    monkeypatch.delenv("BASIC_AUTH_USERNAME", raising=False)
+    monkeypatch.delenv("BASIC_AUTH_PASSWORD", raising=False)
     return TestClient(app)
