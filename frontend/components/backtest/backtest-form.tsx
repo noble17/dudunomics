@@ -85,7 +85,22 @@ export function BacktestForm() {
                 <SelectTrigger><SelectValue placeholder="전략 선택" /></SelectTrigger>
                 <SelectContent>
                   {strategies?.map((s) => (
-                    <SelectItem key={s.name} value={s.name}>{s.name}</SelectItem>
+                    <SelectItem key={s.name} value={s.name}>
+                      <div className="flex items-center gap-2 py-0.5">
+                        {s.icon && <span className="text-base leading-none">{s.icon}</span>}
+                        <div className="flex flex-col">
+                          <span className="text-[13px] font-medium">{s.name}</span>
+                          {s.description && (
+                            <span className="text-[11px] text-muted-foreground leading-tight">{s.description}</span>
+                          )}
+                        </div>
+                        {s.tags?.[0] && (
+                          <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground shrink-0">
+                            {s.tags[0]}
+                          </span>
+                        )}
+                      </div>
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -99,6 +114,30 @@ export function BacktestForm() {
               <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
             </div>
           </div>
+
+          {selectedStrategy?.description && (
+            <div className="rounded-lg border bg-muted/30 p-3 flex items-start gap-3">
+              {selectedStrategy.icon && (
+                <span className="text-2xl leading-none mt-0.5">{selectedStrategy.icon}</span>
+              )}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-[13px] font-semibold">{selectedStrategy.name}</span>
+                  {selectedStrategy.tags?.map((tag) => (
+                    <span
+                      key={tag}
+                      className="text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary"
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+                <p className="text-[12px] text-muted-foreground leading-relaxed">
+                  {selectedStrategy.description}
+                </p>
+              </div>
+            </div>
+          )}
 
           {selectedStrategy && Object.keys(selectedStrategy.params_schema).length > 0 && (
             <div className="flex flex-wrap gap-4">

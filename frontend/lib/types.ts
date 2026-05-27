@@ -85,6 +85,9 @@ export interface StrategyDef {
   }>;
   engine: string;
   supports_risk_options: boolean;
+  description?: string;
+  icon?: string;
+  tags?: string[];
 }
 
 export interface RiskOptions {
