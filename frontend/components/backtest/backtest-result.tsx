@@ -1,52 +1,193 @@
 // frontend/components/backtest/backtest-result.tsx
 "use client";
 
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
+import {
+  AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
+  BarChart, Bar, Cell, LabelList,
+} from "recharts";
 import { Card, CardContent } from "@/components/ui/card";
 import type { BacktestRunOut } from "@/lib/types";
 
+const MONO = "var(--font-roboto-mono, 'Roboto Mono', monospace)";
+
+const CHART_COLORS = [
+  "#1375EC", "#DD3C44", "#0062DF", "#E67E22", "#27AE60",
+  "#8E44AD", "#16A085", "#C0392B", "#2980B9", "#D35400",
+];
+
+function fmt(n: number, digits = 2) {
+  return `${n >= 0 ? "+" : ""}${n.toFixed(digits)}%`;
+}
+
 export function BacktestResult({ result }: { result: BacktestRunOut }) {
   const kpis = [
-    { label: "총 수익률", value: `${result.total_return >= 0 ? "+" : ""}${result.total_return.toFixed(2)}%`, pos: result.total_return >= 0 },
-    { label: "MDD", value: `${result.mdd.toFixed(2)}%`, pos: false },
-    { label: "Sharpe", value: result.sharpe.toFixed(2), pos: result.sharpe >= 1 },
+    { label: "총 수익률", value: fmt(result.total_return), pos: result.total_return >= 0 },
+    ...(result.cagr != null ? [{ label: "CAGR", value: fmt(result.cagr), pos: result.cagr >= 0 }] : []),
+    { label: "MDD",    value: `${result.mdd.toFixed(2)}%`, pos: false },
+    { label: "Sharpe", value: result.sharpe.toFixed(2),     pos: result.sharpe >= 1 },
   ];
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-3 gap-4">
+      {/* 종목 칩 */}
+      {result.tickers && result.tickers.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {result.tickers.map((t) => (
+            <span key={t} className="border border-border px-2 py-0.5 font-mono text-[10px] text-muted-foreground">
+              {t}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* 경고 박스 */}
+      {result.warnings && result.warnings.length > 0 && (
+        <div className="border border-yellow-300 bg-yellow-50 px-4 py-3">
+          <p className="mb-1 text-[11px] font-semibold text-yellow-800">주의</p>
+          <ul className="space-y-0.5">
+            {result.warnings.map((w, i) => (
+              <li key={i} className="font-mono text-[11px] text-yellow-700">{w}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* KPI 카드 */}
+      <div className={`grid gap-4 ${kpis.length === 4 ? "grid-cols-4" : "grid-cols-3"}`}>
         {kpis.map(({ label, value, pos }) => (
           <Card key={label}>
-            <CardContent className="pt-4">
-              <p className="text-xs text-muted-foreground">{label}</p>
-              <p className={`mt-1 text-2xl font-bold ${pos ? "text-emerald-600" : "text-rose-600"}`}>{value}</p>
+            <CardContent className="pt-5">
+              <p className="text-[11px] font-medium text-muted-foreground">{label}</p>
+              <p className={`font-data mt-2 text-2xl font-normal ${pos ? "text-gain" : "text-loss"}`}>{value}</p>
             </CardContent>
           </Card>
         ))}
       </div>
 
+      {/* 자산 곡선 */}
       <Card>
-        <CardContent className="pt-4">
-          <p className="mb-2 text-sm font-medium">자산 곡선</p>
+        <CardContent className="pt-5">
+          <p className="mb-3 text-[11px] font-medium text-muted-foreground">자산 곡선</p>
           <ResponsiveContainer width="100%" height={280}>
             <AreaChart data={result.equity_curve} margin={{ top: 4, right: 8, bottom: 0, left: 8 }}>
               <defs>
                 <linearGradient id="bt" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                  <stop offset="5%"  stopColor="#1375EC" stopOpacity={0.18} />
+                  <stop offset="95%" stopColor="#1375EC" stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey="ts" tick={{ fontSize: 10 }} tickCount={8} />
-              <YAxis tickFormatter={(v) => `₩${(v / 1_000_000).toFixed(1)}M`} tick={{ fontSize: 10 }} />
-              <Tooltip formatter={(v: unknown) => typeof v === "number" ? [`₩${v.toLocaleString()}`] : [String(v)]} />
-              <Area type="monotone" dataKey="equity" stroke="#10b981" fill="url(#bt)" strokeWidth={2} dot={false} />
+              <CartesianGrid strokeDasharray="4 4" stroke="#EDEEF1" />
+              <XAxis dataKey="ts" tick={{ fontSize: 10, fill: "#666666", fontFamily: MONO }} tickCount={8} />
+              <YAxis
+                tickFormatter={(v) => `₩${(v / 1_000_000).toFixed(1)}M`}
+                tick={{ fontSize: 10, fill: "#666666", fontFamily: MONO }}
+              />
+              <Tooltip
+                formatter={(v: unknown) => typeof v === "number" ? [`₩${v.toLocaleString()}`] : [String(v)]}
+                contentStyle={{ background: "#FFFFFF", border: "1px solid #BEC1C6", borderRadius: 4, fontFamily: MONO, fontSize: 12 }}
+                labelStyle={{ color: "#1A2434" }}
+                itemStyle={{ color: "#1375EC" }}
+              />
+              <Area type="monotone" dataKey="equity" stroke="#1375EC" fill="url(#bt)" strokeWidth={2} dot={false} />
             </AreaChart>
           </ResponsiveContainer>
         </CardContent>
       </Card>
 
-      <p className="text-right text-xs text-muted-foreground">Run ID: {result.id}</p>
+      {/* 비중 변화 — stacked area */}
+      {result.weights_history && result.weights_history.length > 0 && (() => {
+        const allWeightKeys = Object.keys(result.weights_history[0]).filter((k) => k !== "ts");
+        const cashKey = allWeightKeys.includes("cash_weight") ? "cash_weight" : null;
+        const weightTickers = allWeightKeys.filter((k) => k !== "cash_weight");
+        return (
+          <Card>
+            <CardContent className="pt-5">
+              <p className="mb-3 text-[11px] font-medium text-muted-foreground">비중 변화</p>
+              <ResponsiveContainer width="100%" height={220}>
+                <AreaChart data={result.weights_history} margin={{ top: 4, right: 8, bottom: 0, left: 8 }}>
+                  <CartesianGrid strokeDasharray="4 4" stroke="#EDEEF1" />
+                  <XAxis dataKey="ts" tick={{ fontSize: 10, fill: "#666666", fontFamily: MONO }} tickCount={6} />
+                  <YAxis tickFormatter={(v) => `${(v * 100).toFixed(0)}%`} tick={{ fontSize: 10, fill: "#666666", fontFamily: MONO }} domain={[0, 1]} />
+                  <Tooltip
+                    formatter={(v: unknown, name: unknown) => [
+                      typeof v === "number" ? `${(v * 100).toFixed(1)}%` : String(v),
+                      String(name ?? ""),
+                    ]}
+                    contentStyle={{ background: "#FFFFFF", border: "1px solid #BEC1C6", borderRadius: 4, fontFamily: MONO, fontSize: 12 }}
+                  />
+                  {weightTickers.map((t, i) => (
+                    <Area
+                      key={t}
+                      type="monotone"
+                      dataKey={t}
+                      stackId="1"
+                      stroke={CHART_COLORS[i % CHART_COLORS.length]}
+                      fill={CHART_COLORS[i % CHART_COLORS.length]}
+                      fillOpacity={0.6}
+                      dot={false}
+                    />
+                  ))}
+                  {cashKey && (
+                    <Area
+                      key="cash_weight"
+                      type="monotone"
+                      dataKey="cash_weight"
+                      stackId="1"
+                      stroke="#9CA3AF"
+                      fill="#9CA3AF"
+                      fillOpacity={0.4}
+                      dot={false}
+                      name="현금"
+                    />
+                  )}
+                </AreaChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+        );
+      })()}
+
+      {/* 종목별 기여도 BarChart */}
+      {result.per_ticker_contribution && Object.keys(result.per_ticker_contribution).length > 0 && (() => {
+        const contribData = Object.entries(result.per_ticker_contribution)
+          .map(([ticker, value]) => ({ ticker, value }))
+          .sort((a, b) => b.value - a.value);
+        return (
+          <Card>
+            <CardContent className="pt-5">
+              <p className="mb-3 text-[11px] font-medium text-muted-foreground">종목별 기여도 (원)</p>
+              <ResponsiveContainer width="100%" height={Math.max(160, contribData.length * 32)}>
+                <BarChart data={contribData} layout="vertical" margin={{ top: 4, right: 40, bottom: 0, left: 40 }}>
+                  <CartesianGrid strokeDasharray="4 4" stroke="#EDEEF1" horizontal={false} />
+                  <XAxis
+                    type="number"
+                    tickFormatter={(v) => `${(v / 10000).toFixed(0)}만`}
+                    tick={{ fontSize: 10, fill: "#666666", fontFamily: MONO }}
+                  />
+                  <YAxis type="category" dataKey="ticker" tick={{ fontSize: 10, fill: "#333333", fontFamily: MONO }} width={52} />
+                  <Tooltip
+                    formatter={(v: unknown) => typeof v === "number" ? [`₩${v.toLocaleString()}`] : [String(v)]}
+                    contentStyle={{ background: "#FFFFFF", border: "1px solid #BEC1C6", borderRadius: 4, fontFamily: MONO, fontSize: 12 }}
+                  />
+                  <Bar dataKey="value" radius={0}>
+                    {contribData.map((entry, i) => (
+                      <Cell key={i} fill={entry.value >= 0 ? "#DD3C44" : "#1375EC"} />
+                    ))}
+                    <LabelList
+                      dataKey="value"
+                      position="right"
+                      formatter={(v: unknown) => typeof v === "number" ? `${(v / 10000).toFixed(0)}만` : ""}
+                      style={{ fontSize: 10, fontFamily: MONO, fill: "#666666" }}
+                    />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+        );
+      })()}
+
+      <p className="text-right font-mono text-xs text-muted-foreground">Run ID: {result.id}</p>
     </div>
   );
 }

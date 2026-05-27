@@ -87,6 +87,15 @@ export interface StrategyDef {
   supports_risk_options: boolean;
 }
 
+export interface RiskOptions {
+  market_filter?: boolean;
+  market_filter_index?: "auto" | "spy" | "kospi";
+  market_filter_ma_days?: number;
+  market_filter_reduction?: number;
+  weighting?: "equal" | "inverse_vol";
+  vol_lookback_days?: number;
+}
+
 export interface BacktestRunIn {
   ticker?: string;
   tickers?: string[];
@@ -94,6 +103,7 @@ export interface BacktestRunIn {
   params: Record<string, number | string>;
   period_start: string;
   period_end: string;
+  risk_options?: RiskOptions;
 }
 
 export interface BacktestRunOut {
