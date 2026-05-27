@@ -1,5 +1,9 @@
 # api/models.py
+from __future__ import annotations
+
 from datetime import date, datetime
+from typing import Literal
+
 from pydantic import BaseModel, field_validator, model_validator
 
 
@@ -77,6 +81,15 @@ class SnapshotHistory(BaseModel):
     total_with_cash_usd: float
 
 
+class RiskOptions(BaseModel):
+    market_filter: bool = False
+    market_filter_index: Literal["auto", "spy", "kospi"] = "auto"
+    market_filter_ma_days: int = 200
+    market_filter_reduction: float = 0.5
+    weighting: Literal["equal", "inverse_vol"] = "equal"
+    vol_lookback_days: int = 20
+
+
 class BacktestRunIn(BaseModel):
     ticker: str | None = None         # 레거시 단일 티커
     tickers: list[str] | None = None  # 1단계 멀티 티커
@@ -84,6 +97,7 @@ class BacktestRunIn(BaseModel):
     params: dict = {}
     period_start: date
     period_end: date
+    risk_options: RiskOptions | None = None
 
     @model_validator(mode="after")
     def normalize(self) -> "BacktestRunIn":
