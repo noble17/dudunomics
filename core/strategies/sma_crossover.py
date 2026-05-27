@@ -28,6 +28,9 @@ class _SMACrossoverBt(bt.Strategy):
 
 class SMACrossover(Strategy):
     name = "SMA Crossover"
+    description = "단기·장기 이동평균 골든/데드 크로스로 단일 종목을 매수·매도하는 기술적 추세 전략."
+    icon = "📈"
+    tags = ["단일종목", "기술적분석", "추세추종"]
     params_schema = {
         "fast": {"type": "int", "default": 5, "label": "단기 SMA", "min": 2, "max": 100},
         "slow": {"type": "int", "default": 20, "label": "장기 SMA", "min": 5, "max": 200},

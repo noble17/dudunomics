@@ -153,3 +153,6 @@ class StrategiesOut(BaseModel):
     params_schema: dict
     engine: str = "backtesting"
     supports_risk_options: bool = False
+    description: str = ""
+    icon: str = "📊"
+    tags: list[str] = []
