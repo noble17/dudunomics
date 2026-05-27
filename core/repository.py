@@ -391,9 +391,8 @@ def upsert_ohlcv_rows(rows: list[dict]) -> None:
     if not rows:
         return
     with session() as s:
-        for row in rows:
-            s.execute(text("""
-                INSERT OR IGNORE INTO prices_cache (ticker, date, open, high, low, close, volume)
-                VALUES (:ticker, :date, :open, :high, :low, :close, :volume)
-            """), row)
+        s.execute(text("""
+            INSERT OR IGNORE INTO prices_cache (ticker, date, open, high, low, close, volume)
+            VALUES (:ticker, :date, :open, :high, :low, :close, :volume)
+        """), rows)
         s.commit()
