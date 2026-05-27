@@ -38,6 +38,19 @@ function fmtTick(ts: string): string {
   return `${MM}-${DD} ${HH}:${mm}`;
 }
 
+function TwoLineTick({ x, y, payload }: { x?: number; y?: number; payload?: { value: string } }) {
+  if (!payload?.value) return null;
+  const d = new Date(payload.value);
+  const date = `${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const time = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  return (
+    <g transform={`translate(${x},${y})`}>
+      <text textAnchor="middle" dy={12} fontSize={10} fill="#444444" fontFamily={MONO}>{time}</text>
+      <text textAnchor="middle" dy={23} fontSize={9} fill="#999999" fontFamily={MONO}>{date}</text>
+    </g>
+  );
+}
+
 interface FormState { ts: string; label: string; amount: string; type: string }
 const EMPTY_FORM: FormState = { ts: "", label: "", amount: "", type: "입금" };
 
@@ -175,9 +188,9 @@ export function EquityCurve({ history }: Props) {
           <CartesianGrid strokeDasharray="4 4" stroke="#EDEEF1" />
           <XAxis
             dataKey="ts"
-            tickFormatter={fmtTick}
-            tick={{ fontSize: 10, fill: "#666666", fontFamily: MONO }}
-            minTickGap={80}
+            tick={<TwoLineTick />}
+            minTickGap={55}
+            height={36}
           />
           <YAxis
             tickFormatter={(v) => `₩${(v / 1_000_000).toFixed(0)}M`}
