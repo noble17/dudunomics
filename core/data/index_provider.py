@@ -4,7 +4,8 @@ from __future__ import annotations
 from datetime import date
 
 import pandas as pd
-import yfinance as yf
+
+from core.data.ohlcv_cache import fetch_index as _fetch_index
 
 _INDEX_SYMBOLS = {
     "spy": "SPY",
@@ -19,22 +20,11 @@ def fetch_market_index(
 ) -> pd.Series:
     """시장 지수 종가 시계열 반환 (tz-naive)."""
     yf_sym = _INDEX_SYMBOLS.get(symbol.lower(), symbol)
-    df = yf.download(yf_sym, start=str(start), end=str(end), progress=False, auto_adjust=True)
-    if df.empty:
-        return pd.Series(dtype=float)
-
-    # MultiIndex 컬럼 처리 (yfinance >= 0.2.x)
-    if isinstance(df.columns, pd.MultiIndex):
-        df.columns = [c[0] for c in df.columns]
-
-    close = df["Close"].squeeze()
-    if isinstance(close, pd.DataFrame):
-        close = close.iloc[:, 0]
-
-    # tz-naive 정규화
-    if close.index.tz is not None:
-        close.index = close.index.tz_localize(None)
-    return close.rename(symbol)
+    series = _fetch_index(yf_sym, start, end)
+    if series.empty:
+        return series
+    series.name = symbol  # "spy" / "kospi" 이름 유지
+    return series
 
 
 def compute_ma(series: pd.Series, window: int) -> pd.Series:
