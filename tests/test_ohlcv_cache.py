@@ -114,7 +114,6 @@ def test_fetch_ohlcv_stores_data_in_cache():
 
     fake = _make_fake_single_ticker_df("TSLA", n=5)
     call_count = {"n": 0}
-    original_download = __import__("yfinance").download
 
     def counting_download(*a, **kw):
         call_count["n"] += 1
@@ -133,8 +132,7 @@ def test_fetch_ohlcv_stores_data_in_cache():
 def test_fetch_index_cache_miss_calls_yfinance():
     """인덱스 캐시 없으면 yfinance 호출."""
     from core.data import ohlcv_cache
-    idx = pd.date_range("2023-01-02", periods=5, freq="B")
-    fake = pd.DataFrame({"Close": [100.0] * 5}, index=idx)
+    fake = _make_fake_single_ticker_df("SPY", n=5)
 
     with patch("yfinance.download", return_value=fake) as mock_dl:
         series = ohlcv_cache.fetch_index("SPY", date(2023, 1, 2), date(2023, 1, 6))

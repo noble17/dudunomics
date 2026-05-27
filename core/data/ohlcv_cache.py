@@ -88,7 +88,7 @@ def _fetch_and_store(tickers: list[str], start: date, end: date) -> list[str]:
         return warns
 
     if raw.index.tz is not None:
-        raw.index = raw.index.tz_localize(None)
+        raw.index = raw.index.tz_convert(None)
 
     # 단일 티커는 MultiIndex 없이 반환됨 → 수동 변환
     if not isinstance(raw.columns, pd.MultiIndex):
