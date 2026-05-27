@@ -177,7 +177,7 @@ export function EquityCurve({ history }: Props) {
             dataKey="ts"
             tickFormatter={fmtTick}
             tick={{ fontSize: 10, fill: "#666666", fontFamily: MONO }}
-            tickCount={6}
+            minTickGap={80}
           />
           <YAxis
             tickFormatter={(v) => `₩${(v / 1_000_000).toFixed(0)}M`}
