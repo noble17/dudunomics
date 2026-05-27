@@ -371,3 +371,29 @@ def insert_backtest_run(
         })
         s.commit()
         return run_id
+
+
+# ── OHLCV Cache ───────────────────────────────────────────────────────────────
+
+def get_ohlcv_range(ticker: str) -> "tuple[date, date] | None":
+    """캐시된 (min_date, max_date) 반환. 없으면 None."""
+    with session() as s:
+        row = s.execute(text("""
+            SELECT MIN(date), MAX(date) FROM prices_cache WHERE ticker = :ticker
+        """), {"ticker": ticker}).fetchone()
+        if row is None or row[0] is None:
+            return None
+        return (row[0], row[1])
+
+
+def upsert_ohlcv_rows(rows: list[dict]) -> None:
+    """(ticker, date, open, high, low, close, volume) 배치 insert. 중복 무시."""
+    if not rows:
+        return
+    with session() as s:
+        for row in rows:
+            s.execute(text("""
+                INSERT OR IGNORE INTO prices_cache (ticker, date, open, high, low, close, volume)
+                VALUES (:ticker, :date, :open, :high, :low, :close, :volume)
+            """), row)
+        s.commit()
