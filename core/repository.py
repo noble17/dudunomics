@@ -174,6 +174,14 @@ def _init_schema(engine):
         tags         TEXT,
         updated_at   TIMESTAMP
     );
+
+    CREATE TABLE IF NOT EXISTS user_workspaces (
+        user_id     INTEGER NOT NULL,
+        name        TEXT NOT NULL DEFAULT 'default',
+        layout_json TEXT NOT NULL DEFAULT '{}',
+        updated_at  TIMESTAMP DEFAULT current_timestamp,
+        PRIMARY KEY (user_id, name)
+    );
     """
     with engine.connect() as conn:
         for stmt in ddl.strip().split(";"):
@@ -751,3 +759,27 @@ def get_ticker_note(user_id: int, ticker: str) -> dict | None:
             {"uid": user_id, "ticker": ticker},
         ).mappings().fetchone()
         return dict(row) if row else None
+
+
+# ── Workspace ─────────────────────────────────────────────────────────────────
+
+def get_workspace(user_id: int, name: str = "default") -> dict:
+    with session() as s:
+        row = s.execute(
+            text("SELECT layout_json FROM user_workspaces WHERE user_id = :uid AND name = :n"),
+            {"uid": user_id, "n": name},
+        ).fetchone()
+        return json.loads(row[0]) if row else {}
+
+
+def save_workspace(user_id: int, layout: dict, name: str = "default") -> None:
+    with session() as s:
+        payload = json.dumps(layout, ensure_ascii=False)
+        s.execute(text("""
+            INSERT INTO user_workspaces (user_id, name, layout_json, updated_at)
+            VALUES (:uid, :n, :payload, current_timestamp)
+            ON CONFLICT (user_id, name) DO UPDATE SET
+                layout_json = excluded.layout_json,
+                updated_at  = excluded.updated_at
+        """), {"uid": user_id, "n": name, "payload": payload})
+        s.commit()
