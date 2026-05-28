@@ -194,3 +194,16 @@ class TickerNoteIn(BaseModel):
 class TickerNoteOut(TickerNoteIn):
     ticker: str
     updated_at: datetime | None = None
+
+
+class QuoteItem(BaseModel):
+    price: float
+    change_abs: float
+    change_pct: float
+
+
+class QuotesOut(BaseModel):
+    SPY: QuoteItem | None = None
+    QQQ: QuoteItem | None = None
+    USDKRW: QuoteItem | None = None
+    BTC: QuoteItem | None = None
