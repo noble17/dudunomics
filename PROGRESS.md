@@ -149,6 +149,15 @@
 
 ---
 
+## M3 — IndexStrip 실시간 시세 연결 (2026-05-29)
+- [x] UpbitProvider (BTC/KRW)
+- [x] GET /api/quotes 배치 엔드포인트
+- [x] useQuotes 10초 폴링 훅
+- [x] IndexStrip 실제 데이터 연결 (가격 + 등락폭 + 등락률)
+- [x] 브라우저 검증 — SPY 754.99 ▲+4.56 (+0.68%), QQQ 735.47 ▲+6.87 (+0.83%), USD/KRW 1,497.0, BTC 108,478,000 ▼ 실시간 표시 확인
+
+---
+
 ## 검증
 - [x] frontend build & typecheck 통과
 - [x] curl /api/holdings/lookup/005930.KS → 삼성전자 정상
