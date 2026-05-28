@@ -156,3 +156,41 @@ class StrategiesOut(BaseModel):
     description: str = ""
     icon: str = "📊"
     tags: list[str] = []
+
+
+class QuantScoreOut(BaseModel):
+    ticker: str
+    universe: str
+    as_of: date
+    company_name: str | None = None
+    # 백분위 (0~1)
+    pct_momentum: float | None = None
+    pct_valuation: float | None = None
+    pct_eps_momentum: float | None = None
+    pct_quality: float | None = None
+    pct_technical: float | None = None
+    # Raw 값
+    raw_momentum: float | None = None
+    raw_fwd_pe: float | None = None
+    raw_pbr: float | None = None
+    raw_psr: float | None = None
+    raw_trailing_pe: float | None = None
+    raw_eps_ttm: float | None = None
+    raw_fwd_eps: float | None = None
+    raw_roe: float | None = None
+    raw_debt_ratio: float | None = None
+    raw_rsi: float | None = None
+    above_ma200: bool | None = None
+    cfo_positive: bool | None = None
+
+
+class TickerNoteIn(BaseModel):
+    opinion: str | None = None
+    target_price: float | None = None
+    memo: str | None = None
+    tags: str | None = None
+
+
+class TickerNoteOut(TickerNoteIn):
+    ticker: str
+    updated_at: datetime | None = None
