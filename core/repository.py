@@ -115,6 +115,40 @@ def _init_schema(engine):
         fetched_at TIMESTAMP,
         PRIMARY KEY (ticker, as_of)
     );
+
+    CREATE TABLE IF NOT EXISTS quant_scores (
+        ticker           TEXT,
+        universe         TEXT,
+        as_of            DATE,
+        pct_momentum     DOUBLE,
+        pct_valuation    DOUBLE,
+        pct_eps_momentum DOUBLE,
+        pct_quality      DOUBLE,
+        pct_technical    DOUBLE,
+        raw_momentum     DOUBLE,
+        raw_fwd_pe       DOUBLE,
+        raw_pbr          DOUBLE,
+        raw_psr          DOUBLE,
+        raw_trailing_pe  DOUBLE,
+        raw_eps_ttm      DOUBLE,
+        raw_fwd_eps      DOUBLE,
+        raw_roe          DOUBLE,
+        raw_debt_ratio   DOUBLE,
+        raw_rsi          DOUBLE,
+        above_ma200      BOOLEAN,
+        cfo_positive     BOOLEAN,
+        company_name     TEXT,
+        PRIMARY KEY (ticker, universe, as_of)
+    );
+
+    CREATE TABLE IF NOT EXISTS ticker_notes (
+        ticker       TEXT PRIMARY KEY,
+        opinion      TEXT,
+        target_price DOUBLE,
+        memo         TEXT,
+        tags         TEXT,
+        updated_at   TIMESTAMP
+    );
     """
     with engine.connect() as conn:
         for stmt in ddl.strip().split(";"):
@@ -130,6 +164,7 @@ def _init_schema(engine):
             "ALTER TABLE backtest_runs ADD COLUMN IF NOT EXISTS warnings_json JSON",
             "ALTER TABLE backtest_runs ADD COLUMN IF NOT EXISTS cagr DOUBLE",
             "ALTER TABLE backtest_runs ADD COLUMN IF NOT EXISTS risk_options_json JSON",
+            "CREATE INDEX IF NOT EXISTS idx_quant_scores_uni_date ON quant_scores (universe, as_of)",
         ]:
             try:
                 conn.execute(text(migration))
@@ -396,3 +431,92 @@ def upsert_ohlcv_rows(rows: list[dict]) -> None:
             VALUES (:ticker, :date, :open, :high, :low, :close, :volume)
         """), rows)
         s.commit()
+
+
+# ── Quant Scores ──────────────────────────────────────────────────────────────
+
+def upsert_quant_scores(rows: list[dict]) -> None:
+    if not rows:
+        return
+    with session() as s:
+        for r in rows:
+            s.execute(text("""
+                INSERT INTO quant_scores
+                    (ticker, universe, as_of,
+                     pct_momentum, pct_valuation, pct_eps_momentum, pct_quality, pct_technical,
+                     raw_momentum, raw_fwd_pe, raw_pbr, raw_psr, raw_trailing_pe,
+                     raw_eps_ttm, raw_fwd_eps, raw_roe, raw_debt_ratio, raw_rsi,
+                     above_ma200, cfo_positive, company_name)
+                VALUES
+                    (:ticker, :universe, :as_of,
+                     :pct_momentum, :pct_valuation, :pct_eps_momentum, :pct_quality, :pct_technical,
+                     :raw_momentum, :raw_fwd_pe, :raw_pbr, :raw_psr, :raw_trailing_pe,
+                     :raw_eps_ttm, :raw_fwd_eps, :raw_roe, :raw_debt_ratio, :raw_rsi,
+                     :above_ma200, :cfo_positive, :company_name)
+                ON CONFLICT (ticker, universe, as_of) DO UPDATE SET
+                    pct_momentum = excluded.pct_momentum,
+                    pct_valuation = excluded.pct_valuation,
+                    pct_eps_momentum = excluded.pct_eps_momentum,
+                    pct_quality = excluded.pct_quality,
+                    pct_technical = excluded.pct_technical,
+                    raw_momentum = excluded.raw_momentum,
+                    raw_fwd_pe = excluded.raw_fwd_pe,
+                    raw_pbr = excluded.raw_pbr,
+                    raw_psr = excluded.raw_psr,
+                    raw_trailing_pe = excluded.raw_trailing_pe,
+                    raw_eps_ttm = excluded.raw_eps_ttm,
+                    raw_fwd_eps = excluded.raw_fwd_eps,
+                    raw_roe = excluded.raw_roe,
+                    raw_debt_ratio = excluded.raw_debt_ratio,
+                    raw_rsi = excluded.raw_rsi,
+                    above_ma200 = excluded.above_ma200,
+                    cfo_positive = excluded.cfo_positive,
+                    company_name = excluded.company_name
+            """), r)
+        s.commit()
+
+
+def get_latest_quant_scores(universe: str) -> list[dict]:
+    """(universe, as_of) 인덱스를 타는 최신 배치 조회."""
+    with session() as s:
+        rows = s.execute(text("""
+            SELECT * FROM quant_scores
+            WHERE universe = :universe
+              AND as_of = (SELECT MAX(as_of) FROM quant_scores WHERE universe = :universe)
+            ORDER BY ticker
+        """), {"universe": universe}).mappings().all()
+        return [dict(r) for r in rows]
+
+
+def get_quant_ticker(ticker: str, universe: str) -> dict | None:
+    with session() as s:
+        row = s.execute(text("""
+            SELECT * FROM quant_scores
+            WHERE ticker = :ticker AND universe = :universe
+              AND as_of = (SELECT MAX(as_of) FROM quant_scores WHERE universe = :universe)
+        """), {"ticker": ticker, "universe": universe}).mappings().fetchone()
+        return dict(row) if row else None
+
+
+# ── Ticker Notes ──────────────────────────────────────────────────────────────
+
+def upsert_ticker_note(ticker: str, opinion: str | None, target_price: float | None,
+                       memo: str | None, tags: str | None) -> None:
+    with session() as s:
+        s.execute(text("""
+            INSERT INTO ticker_notes (ticker, opinion, target_price, memo, tags, updated_at)
+            VALUES (:ticker, :opinion, :target_price, :memo, :tags, :now)
+            ON CONFLICT (ticker) DO UPDATE SET
+                opinion = excluded.opinion, target_price = excluded.target_price,
+                memo = excluded.memo, tags = excluded.tags, updated_at = excluded.updated_at
+        """), {"ticker": ticker, "opinion": opinion, "target_price": target_price,
+               "memo": memo, "tags": tags, "now": datetime.now()})
+        s.commit()
+
+
+def get_ticker_note(ticker: str) -> dict | None:
+    with session() as s:
+        row = s.execute(
+            text("SELECT * FROM ticker_notes WHERE ticker = :ticker"), {"ticker": ticker}
+        ).mappings().fetchone()
+        return dict(row) if row else None
