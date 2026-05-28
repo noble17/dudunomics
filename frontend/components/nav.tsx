@@ -8,6 +8,7 @@ const links = [
   { href: "/holdings", label: "보유종목" },
   { href: "/backtest", label: "백테스트" },
   { href: "/screener", label: "종목분석" },
+  { href: "/terminal", label: "터미널" },
 ];
 
 export function Nav() {
