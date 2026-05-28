@@ -1,24 +1,54 @@
 "use client";
 
-const INDICES = [
-  { label: "SPY", value: "—", change: null },
-  { label: "QQQ", value: "—", change: null },
-  { label: "USD/KRW", value: "—", change: null },
-  { label: "BTC", value: "—", change: null },
-];
+import { useQuotes } from "@/hooks/useQuotes";
+import type { QuoteItem } from "@/lib/types";
+
+function fmt(value: number, decimals: number): string {
+  return value.toLocaleString("ko-KR", {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  });
+}
+
+function QuoteCell({ label, item, decimals }: {
+  label: string;
+  item: QuoteItem | null | undefined;
+  decimals: number;
+}) {
+  const up = item && item.change_pct > 0;
+  const down = item && item.change_pct < 0;
+  const changeColor = up
+    ? "text-[var(--color-gain)]"
+    : down
+    ? "text-[var(--color-loss)]"
+    : "text-[var(--color-text-secondary)]";
+  const arrow = up ? "▲" : down ? "▼" : "";
+
+  return (
+    <div className="flex items-center gap-1.5 text-xs shrink-0">
+      <span className="text-[var(--color-text-secondary)] font-medium">{label}</span>
+      <span className="text-[var(--color-text-primary)] font-mono">
+        {item ? fmt(item.price, decimals) : "—"}
+      </span>
+      {item && (
+        <span className={`font-mono text-[10px] ${changeColor}`}>
+          {arrow}{item.change_abs >= 0 ? "+" : ""}{fmt(item.change_abs, decimals)}{" "}
+          ({item.change_pct >= 0 ? "+" : ""}{item.change_pct.toFixed(2)}%)
+        </span>
+      )}
+    </div>
+  );
+}
 
 export function IndexStrip() {
+  const quotes = useQuotes();
+
   return (
     <div className="flex items-center gap-6 px-4 h-8 border-b border-[var(--color-border)] bg-[var(--color-bg-secondary)] shrink-0 overflow-x-auto">
-      {INDICES.map(idx => (
-        <div key={idx.label} className="flex items-center gap-1.5 text-xs shrink-0">
-          <span className="text-[var(--color-text-secondary)] font-medium">{idx.label}</span>
-          <span className="text-[var(--color-text-primary)] font-mono">
-            {idx.value}
-          </span>
-          <span className="text-[var(--color-text-secondary)] text-[10px]">M3에서 실시간 연결</span>
-        </div>
-      ))}
+      <QuoteCell label="SPY"     item={quotes?.SPY}    decimals={2} />
+      <QuoteCell label="QQQ"     item={quotes?.QQQ}    decimals={2} />
+      <QuoteCell label="USD/KRW" item={quotes?.USDKRW} decimals={1} />
+      <QuoteCell label="BTC"     item={quotes?.BTC}    decimals={0} />
     </div>
   );
 }
