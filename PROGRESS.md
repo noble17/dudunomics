@@ -96,6 +96,29 @@
 - [x] D5-5. /backtest 시각: 라이트 배경 + Tooltip 코드 확인 (차트는 실행 시 검증)
 - [x] D5-6. portfolio 에러 상태: 에러 메시지가 빨강 (#DD3C44)
 
+## M1 — 멀티유저 JWT 인증 (커밋 a5c353a, 2026-05-28)
+
+### M1.17 pytest (auth 라우터)
+- [x] test_me_unauthenticated — 쿠키 없음 → 401
+- [x] test_signup_success — 201 + Set-Cookie
+- [x] test_signup_duplicate_email — 409
+- [x] test_signup_short_password — 422
+- [x] test_login_success — 200 + Set-Cookie
+- [x] test_login_wrong_password — 401
+- [x] test_me_after_login — 200 + 이메일 반환
+- [x] test_user_data_isolation — user2 holdings → []
+
+### M1.18~19 브라우저 검증
+- [x] /login — 이메일/비밀번호 폼, 회원가입 링크 렌더링 확인
+- [x] /signup — 이메일/비밀번호(6자 이상) 폼, 로그인 링크 렌더링 확인
+- [x] LEGACY 계정(noble8543@gmail.com) 로그인 → /portfolio 리다이렉트 + 기존 종목 표시
+
+### M1.20 부가 수정
+- [x] core/repository.py: LEGACY 사용자 삽입 후 users_id_seq 진행 (nextval 호출)
+- [x] tests/conftest 패턴 확장: LEGACY_USER_EMAIL/PASSWORD monkeypatch 삭제
+
+---
+
 ## 검증
 - [x] frontend build & typecheck 통과
 - [x] curl /api/holdings/lookup/005930.KS → 삼성전자 정상

@@ -309,6 +309,8 @@ def _run_migrations(conn):
                 INSERT INTO users (id, email, password_hash, created_at, is_active)
                 VALUES (1, :email, :pw_hash, current_timestamp, true)
             """), {"email": legacy_email, "pw_hash": hash_password(legacy_pw)})
+            # id=1을 직접 삽입했으므로 시퀀스를 2로 진행
+            conn.execute(text("SELECT nextval('users_id_seq')"))
 
     conn.commit()
 
