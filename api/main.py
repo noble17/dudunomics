@@ -15,6 +15,7 @@ from api.routers.portfolio import router as portfolio_router
 from api.routers.fx import router as fx_router
 from api.routers.backtest import router as backtest_router
 from api.routers.screener import router as screener_router
+from api.routers.workspace import router as workspace_router
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
@@ -47,6 +48,7 @@ app.include_router(portfolio_router)
 app.include_router(fx_router)
 app.include_router(backtest_router)
 app.include_router(screener_router)
+app.include_router(workspace_router)
 
 @app.get("/health")
 def health():
