@@ -186,3 +186,16 @@ export interface WorkspaceLayout {
   left_widget?: string | null;
   right_widget?: string | null;
 }
+
+export interface QuoteItem {
+  price: number
+  change_abs: number
+  change_pct: number
+}
+
+export interface QuotesOut {
+  SPY: QuoteItem | null
+  QQQ: QuoteItem | null
+  USDKRW: QuoteItem | null
+  BTC: QuoteItem | null
+}

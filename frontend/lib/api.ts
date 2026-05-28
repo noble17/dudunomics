@@ -5,6 +5,7 @@ import type {
   TickerLookupOut, TickerSearchHit,
   QuantScore, TickerNote,
   WorkspaceLayout,
+  QuotesOut,
 } from "./types";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -84,4 +85,8 @@ export const workspaceApi = {
       method: "PUT",
       body: JSON.stringify({ layout, name }),
     }),
+};
+
+export const quotesApi = {
+  get: () => request<QuotesOut>("/api/quotes"),
 };
