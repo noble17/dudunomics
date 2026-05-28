@@ -326,7 +326,7 @@ function normalizeWeights(w: FactorWeights): FactorWeights {
 | Fwd EPS vs TTM | > +10% | < 0% |
 | ROE | > 15% | < 5% |
 | D/E Ratio | < 0.5 | > 2.0 |
-| RSI | 40–60 (중립) | > 70 또는 < 30 |
+| RSI | 40–70 (건전 추세) | ≥ 70 (과열) 또는 ≤ 30 (과매도) |
 
 ---
 
@@ -365,4 +365,87 @@ GET /api/screener/scores?universe=sp500
 ## 11. 의존성 추가 필요
 
 - `pandas_datareader` 또는 `requests` (S&P 500 티커 목록 파싱)
+- `scipy` — Winsorizing (`scipy.stats.mstats.winsorize`) 및 백분위 계산
 - 프론트엔드 레이더 차트: 순수 SVG 직접 구현 (외부 차트 라이브러리 불필요, 기존 패턴 유지)
+
+---
+
+## 12. 아키텍처 보정 사항 (퀀트 매니저 피드백)
+
+### 12-1. 밸류에이션 아웃라이어 왜곡 방지 (`core/factors/valuation.py`)
+
+**문제:** S&P 500에는 Forward PER 수백~수천 배 극단 아웃라이어가 존재한다. 단순 Z-score 적용 시 평균·표준편차가 왜곡되어 정상 종목들의 변동성이 뭉개진다.
+
+**해결 — Winsorizing + Rank-based Fallback:**
+
+```python
+# Step 1: 윈저라이징 — 하위 1%, 상위 99%로 강제 클리핑
+from scipy.stats.mstats import winsorize
+winsorized_pe = winsorize(raw_fwd_pe_series, limits=[0.01, 0.01])
+
+# Step 2: 윈저라이징된 값으로 Z-score 계산
+z_fwd_pe = (winsorized_pe - winsorized_pe.mean()) / winsorized_pe.std()
+
+# Fallback: 아웃라이어가 극심해 std ≈ 0 이면 rank 기반 표준화로 전환
+if winsorized_pe.std() < 1e-6:
+    z_fwd_pe = winsorized_pe.rank(pct=True) * 2 - 1  # [-1, 1] 범위
+```
+
+적용 대상: `raw_fwd_pe`, `raw_pbr` 모두 동일 처리.
+
+---
+
+### 12-2. DB 조회 성능 최적화 (`core/repository.py`)
+
+**문제:** `quant_scores`는 날짜 누적 시계열 테이블. 단순 `SELECT * WHERE universe=?` 시 수년치 스캔.
+
+**해결 — Composite Index + 최신 날짜 서브쿼리:**
+
+```sql
+-- 마이그레이션 시 1회 실행
+CREATE INDEX IF NOT EXISTS idx_quant_scores_universe_date
+ON quant_scores (universe, as_of);
+
+-- 조회 쿼리: MAX(as_of) 서브쿼리로 최신 배치만 정확히 인덱싱
+SELECT * FROM quant_scores
+WHERE universe = ? AND as_of = (
+    SELECT MAX(as_of) FROM quant_scores WHERE universe = ?
+);
+```
+
+`_init_schema()`에 인덱스 생성 DDL 포함. 최초 1회만 실행되므로 부담 없음.
+
+---
+
+### 12-3. RSI 정규화 보정 및 프론트엔드 컬러링 기준 수정
+
+**문제:** `rsi / 100.0`은 단순 스케일 변환. 모멘텀이 강하게 분출하는 RSI 60~70 종목이 RSI 50 중립 종목보다 낮은 점수를 받는 역설 발생.
+
+**백엔드 수정 (`core/factors/technical.py`):**
+
+```python
+# RSI를 유니버스 내 백분위 순위로 가공 — 상대적 모멘텀 강도 반영
+rsi_percentile = pd.Series(rsi_values).rank(pct=True)  # 0~1
+technical_raw = 0.6 * above_ma200 + 0.4 * rsi_percentile
+```
+
+**프론트엔드 컬러링 기준 수정 (`components/screener/metric-grid.tsx`):**
+
+| RSI 구간 | 컬러 | 의미 |
+|----------|------|------|
+| 40 이상 70 미만 | 초록 | 건전한 상승 추세 (장기 정배열 구간) |
+| 30 이하 | 빨강 | 극단적 과매도 |
+| 70 이상 | 빨강 | 과열 권역 |
+| 30~40 | 노랑 | 약세 경계 |
+
+```typescript
+// metric-grid.tsx 컬러링 함수
+function rsiColor(rsi: number): 'green' | 'yellow' | 'red' {
+  if (rsi >= 40 && rsi < 70) return 'green'   // 건전 추세
+  if (rsi >= 30 && rsi < 40) return 'yellow'  // 경계
+  return 'red'                                 // 과열(≥70) 또는 과매도(≤30)
+}
+```
+
+**설계 문서 섹션 9 컬러링 기준 수정:**  
+RSI 항목을 `40–70 → 초록 / 70 이상·30 이하 → 빨강 / 30–40 → 노랑`으로 교체.
