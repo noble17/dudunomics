@@ -119,6 +119,36 @@
 
 ---
 
+## M2 — Bloomberg 터미널 셸 (2026-05-28, 브랜치: feat/nextjs-fastapi-migration)
+
+### 구현 완료 (Task 1~15)
+- [x] react-grid-layout, react-resizable-panels, zustand, cmdk 패키지 설치
+- [x] middleware.ts → proxy.ts 리네임 (Next.js 16 규약)
+- [x] user_workspaces 테이블 DDL + get/save_workspace 레포 함수
+- [x] GET/PUT /api/workspace 엔드포인트
+- [x] pytest: workspace API (empty/roundtrip/isolation)
+- [x] WorkspaceLayout 타입 + workspaceApi
+- [x] Zustand workspace store (debounced API save)
+- [x] Zustand command store (palette open state + focused ticker)
+- [x] WidgetFrame + WidgetRegistry
+- [x] 4개 터미널 위젯 (Portfolio/Watchlist/Screener/Backtest) + registry
+- [x] IndexStrip placeholder (M3에서 실시간 데이터 연결 예정)
+- [x] CommandPalette (Cmd+K 단축키 + 위젯 추가 명령)
+- [x] 터미널 GlobalNav (Cmd+K 버튼 + 유저 메뉴)
+- [x] Shell (react-resizable-panels 3분할 + react-grid-layout 중앙 그리드)
+- [x] /terminal 페이지 (full-screen shell + GlobalNav + IndexStrip + CommandPalette)
+
+### Task 16 — 브라우저 검증 (2026-05-28)
+- [x] noble8543@gmail.com 로그인 → /terminal 접속 성공
+- [x] GlobalNav(명령창 ⌘K 버튼 + 유저 메뉴) + IndexStrip(SPY/QQQ/USD-KRW/BTC) 렌더링 확인
+- [x] 3분할 패널(좌측 워치리스트 / 중앙 그리드 / 우측 AI뉴스) + 위젯(포트폴리오/워치리스트/종목분석) 렌더링 확인
+- [x] Cmd+K 버튼 클릭 → 명령창 오픈 (포트폴리오/워치리스트/종목분석/백테스트 추가 명령 표시)
+- [x] Meta+K 키보드 단축키 → 명령창 오픈 확인
+- [x] 명령창에서 "백테스트 추가" 선택 → 위젯 추가 확인
+- [x] 새로고침 후 레이아웃 복원 확인 (Workspace API persistence 동작)
+
+---
+
 ## 검증
 - [x] frontend build & typecheck 통과
 - [x] curl /api/holdings/lookup/005930.KS → 삼성전자 정상
