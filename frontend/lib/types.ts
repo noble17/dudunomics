@@ -170,3 +170,19 @@ export interface TickerNote {
   tags: string | null;
   updated_at: string | null;
 }
+
+export interface WidgetItem {
+  i: string;
+  type: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+export interface WorkspaceLayout {
+  panels?: [number, number, number];
+  center_widgets?: WidgetItem[];
+  left_widget?: string | null;
+  right_widget?: string | null;
+}

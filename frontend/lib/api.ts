@@ -4,6 +4,7 @@ import type {
   SnapshotHistory, StrategyDef,
   TickerLookupOut, TickerSearchHit,
   QuantScore, TickerNote,
+  WorkspaceLayout,
 } from "./types";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -72,5 +73,15 @@ export const screenerApi = {
     request<TickerNote>(`/api/screener/notes/${ticker}`, {
       method: "PUT",
       body: JSON.stringify(body),
+    }),
+};
+
+export const workspaceApi = {
+  get: (name = "default") =>
+    request<{ layout: WorkspaceLayout; name: string }>(`/api/workspace?name=${name}`),
+  save: (layout: WorkspaceLayout, name = "default") =>
+    request<{ ok: boolean }>("/api/workspace", {
+      method: "PUT",
+      body: JSON.stringify({ layout, name }),
     }),
 };
