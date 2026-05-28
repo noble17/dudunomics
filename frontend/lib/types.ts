@@ -129,3 +129,44 @@ export interface BacktestRunOut {
   rebalance_log?: Array<Record<string, unknown>>;
   warnings?: string[];
 }
+
+export interface QuantScore {
+  ticker: string;
+  universe: string;
+  as_of: string;
+  company_name: string | null;
+  pct_momentum: number | null;
+  pct_valuation: number | null;
+  pct_eps_momentum: number | null;
+  pct_quality: number | null;
+  pct_technical: number | null;
+  raw_momentum: number | null;
+  raw_fwd_pe: number | null;
+  raw_pbr: number | null;
+  raw_psr: number | null;
+  raw_trailing_pe: number | null;
+  raw_eps_ttm: number | null;
+  raw_fwd_eps: number | null;
+  raw_roe: number | null;
+  raw_debt_ratio: number | null;
+  raw_rsi: number | null;
+  above_ma200: boolean | null;
+  cfo_positive: boolean | null;
+}
+
+export interface FactorWeights {
+  momentum: number;
+  valuation: number;
+  eps_momentum: number;
+  quality: number;
+  technical: number;
+}
+
+export interface TickerNote {
+  ticker: string;
+  opinion: string | null;
+  target_price: number | null;
+  memo: string | null;
+  tags: string | null;
+  updated_at: string | null;
+}

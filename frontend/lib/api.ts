@@ -3,6 +3,7 @@ import type {
   HoldingIn, HoldingOut, PortfolioSnapshot,
   SnapshotHistory, StrategyDef,
   TickerLookupOut, TickerSearchHit,
+  QuantScore, TickerNote,
 } from "./types";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -49,4 +50,20 @@ export const backtestApi = {
   strategies: () => request<StrategyDef[]>("/api/backtest/strategies"),
   run: (body: BacktestRunIn) =>
     request<BacktestRunOut>("/api/backtest/run", { method: "POST", body: JSON.stringify(body) }),
+};
+
+export const screenerApi = {
+  scores: (universe = "sp500") =>
+    request<QuantScore[]>(`/api/screener/scores?universe=${universe}`),
+  ticker: (ticker: string, universe = "sp500") =>
+    request<QuantScore>(`/api/screener/ticker/${ticker}?universe=${universe}`),
+  refresh: (universe = "sp500") =>
+    request<{ status: string }>(`/api/screener/refresh?universe=${universe}`, { method: "POST" }),
+  getNote: (ticker: string) =>
+    request<TickerNote | null>(`/api/screener/notes/${ticker}`),
+  upsertNote: (ticker: string, body: Omit<TickerNote, "ticker" | "updated_at">) =>
+    request<TickerNote>(`/api/screener/notes/${ticker}`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    }),
 };
