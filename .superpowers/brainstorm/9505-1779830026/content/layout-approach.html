@@ -1,0 +1,154 @@
+<h2>자산 추이 차트 — 레이아웃 방식</h2>
+<p class="subtitle">시간 범위 필터, 줌, 이벤트 기능을 어떻게 배치할까요?</p>
+
+<div class="cards">
+
+  <!-- Option A -->
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="background:#f8f9fb;border:1px solid #e0e2e7;border-radius:6px;padding:12px;font-family:monospace;font-size:11px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <span style="font-weight:600;font-size:12px;">자산 추이</span>
+          <div style="display:flex;gap:4px;">
+            <span style="padding:2px 7px;border:1px solid #1375EC;border-radius:3px;color:#1375EC;font-size:10px;">1H</span>
+            <span style="padding:2px 7px;border:1px solid #e0e2e7;border-radius:3px;color:#666;font-size:10px;">6H</span>
+            <span style="padding:2px 7px;border:1px solid #e0e2e7;border-radius:3px;color:#666;font-size:10px;">24H</span>
+            <span style="padding:2px 7px;border:1px solid #e0e2e7;border-radius:3px;color:#666;font-size:10px;">7D</span>
+            <span style="padding:2px 7px;border:1px solid #e0e2e7;border-radius:3px;color:#666;font-size:10px;">30D</span>
+          </div>
+        </div>
+        <div style="background:#fff;border:1px solid #e0e2e7;height:110px;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;border-radius:4px;">
+          <svg width="100%" height="100%" viewBox="0 0 320 90" preserveAspectRatio="none">
+            <defs><linearGradient id="g1" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#1375EC" stop-opacity="0.15"/><stop offset="100%" stop-color="#1375EC" stop-opacity="0"/></linearGradient></defs>
+            <path d="M0,80 C30,70 60,40 100,35 C140,30 160,32 200,30 C220,29 250,31 280,28 L320,26 L320,90 L0,90 Z" fill="url(#g1)"/>
+            <path d="M0,80 C30,70 60,40 100,35 C140,30 160,32 200,30 C220,29 250,31 280,28 L320,26" fill="none" stroke="#1375EC" stroke-width="2"/>
+            <!-- event line -->
+            <line x1="160" y1="5" x2="160" y2="85" stroke="#E8812A" stroke-width="1.5" stroke-dasharray="4 3"/>
+            <rect x="145" y="3" width="30" height="14" rx="3" fill="#fff" stroke="#E8812A" stroke-width="1"/>
+            <text x="160" y="13" text-anchor="middle" font-size="8" fill="#E8812A">월급</text>
+            <!-- dashed total line -->
+            <path d="M0,60 C30,55 60,30 100,28 C140,26 200,24 320,22" fill="none" stroke="#BEC1C6" stroke-width="1.5" stroke-dasharray="4 2"/>
+          </svg>
+        </div>
+        <!-- zoom/brush area -->
+        <div style="margin-top:6px;background:#fff;border:1px solid #e0e2e7;height:24px;border-radius:3px;display:flex;align-items:center;padding:0 6px;gap:4px;position:relative;overflow:hidden;">
+          <svg width="100%" height="16" viewBox="0 0 300 16" preserveAspectRatio="none">
+            <path d="M0,14 C40,10 80,6 120,5 C160,4 200,5 300,4" fill="none" stroke="#BEC1C6" stroke-width="1"/>
+            <rect x="80" y="0" width="100" height="16" fill="#1375EC" fill-opacity="0.15" rx="2"/>
+            <line x1="80" y1="0" x2="80" y2="16" stroke="#1375EC" stroke-width="2"/>
+            <line x1="180" y1="0" x2="180" y2="16" stroke="#1375EC" stroke-width="2"/>
+          </svg>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-top:6px;">
+          <span style="font-size:9px;color:#999;">+ 이벤트 추가</span>
+          <span style="font-size:9px;color:#999;">🔍 줌 리셋</span>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A. 인라인 확장형</h3>
+      <p>현재 위치 유지, 범위 버튼 + 줌 브러시 + 이벤트를 페이지 내에서 모두 처리. 페이지 흐름이 자연스럽고 항상 보임.</p>
+    </div>
+  </div>
+
+  <!-- Option B -->
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="background:#f8f9fb;border:1px solid #e0e2e7;border-radius:6px;padding:12px;font-family:monospace;font-size:11px;">
+        <!-- compact inline card -->
+        <div style="background:#fff;border:1px solid #e0e2e7;border-radius:4px;padding:8px;margin-bottom:8px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+            <span style="font-weight:600;font-size:11px;">자산 추이</span>
+            <span style="font-size:10px;color:#1375EC;cursor:pointer;">⤢ 상세 보기</span>
+          </div>
+          <div style="height:60px;background:#f0f4ff;border-radius:3px;display:flex;align-items:center;justify-content:center;overflow:hidden;">
+            <svg width="100%" height="50" viewBox="0 0 300 50" preserveAspectRatio="none">
+              <path d="M0,45 C40,35 80,15 140,12 C180,10 220,11 300,9" fill="none" stroke="#1375EC" stroke-width="2"/>
+              <path d="M0,38 C40,30 80,12 140,10 C180,8 220,9 300,7" fill="none" stroke="#BEC1C6" stroke-width="1.5" stroke-dasharray="3 2"/>
+            </svg>
+          </div>
+        </div>
+        <!-- modal overlay mockup -->
+        <div style="background:rgba(0,0,0,0.5);border-radius:6px;padding:2px;">
+          <div style="background:#fff;border-radius:5px;padding:10px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+              <span style="font-weight:600;font-size:11px;">📊 실시간 자산 변동</span>
+              <div style="display:flex;gap:3px;align-items:center;">
+                <span style="padding:1px 5px;border:1px solid #1375EC;border-radius:2px;color:#1375EC;font-size:9px;">1H</span>
+                <span style="padding:1px 5px;border:1px solid #ccc;border-radius:2px;color:#666;font-size:9px;">7D</span>
+                <span style="font-size:11px;color:#999;margin-left:4px;">✕</span>
+              </div>
+            </div>
+            <div style="display:flex;gap:8px;margin-bottom:6px;font-size:9px;color:#666;">
+              <span>현재 <b style="color:#111">₩262M</b></span>
+              <span>변동 <b style="color:#1AAD5E">+2621만</b></span>
+              <span>최고 <b style="color:#111">₩265M</b></span>
+            </div>
+            <div style="height:60px;background:#f8f9fb;border-radius:3px;overflow:hidden;">
+              <svg width="100%" height="55" viewBox="0 0 300 55" preserveAspectRatio="none">
+                <defs><linearGradient id="g2" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#1375EC" stop-opacity="0.2"/><stop offset="100%" stop-color="#1375EC" stop-opacity="0"/></linearGradient></defs>
+                <path d="M0,48 C40,42 80,28 130,20 C160,15 190,18 220,16 C250,14 270,16 300,14 L300,55 L0,55 Z" fill="url(#g2)"/>
+                <path d="M0,48 C40,42 80,28 130,20 C160,15 190,18 220,16 C250,14 270,16 300,14" fill="none" stroke="#1375EC" stroke-width="1.5"/>
+                <line x1="145" y1="3" x2="145" y2="52" stroke="#E8812A" stroke-width="1.5" stroke-dasharray="3 2"/>
+                <rect x="130" y="1" width="30" height="13" rx="2" fill="#fff" stroke="#E8812A" stroke-width="1"/>
+                <text x="145" y="10" text-anchor="middle" font-size="8" fill="#E8812A">월급</text>
+              </svg>
+            </div>
+            <div style="margin-top:6px;font-size:9px;color:#666;display:flex;justify-content:space-between;">
+              <span>이벤트</span>
+              <span style="color:#1375EC;">+ 이벤트 추가</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B. 모달 팝업형</h3>
+      <p>페이지엔 미니 차트만, "상세 보기" 클릭 시 풀 기능 모달 오픈. 기준 이미지와 동일. 공간 절약, 기능 집중.</p>
+    </div>
+  </div>
+
+  <!-- Option C -->
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="background:#f8f9fb;border:1px solid #e0e2e7;border-radius:6px;padding:12px;font-family:monospace;font-size:11px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <span style="font-weight:600;font-size:12px;">자산 추이</span>
+          <div style="display:flex;gap:4px;">
+            <span style="padding:2px 7px;border:1px solid #1375EC;border-radius:3px;color:#1375EC;font-size:10px;background:#EEF5FF;">1H</span>
+            <span style="padding:2px 7px;border:1px solid #e0e2e7;border-radius:3px;color:#666;font-size:10px;">7D</span>
+            <span style="padding:2px 7px;border:1px solid #e0e2e7;border-radius:3px;color:#666;font-size:10px;">30D</span>
+          </div>
+        </div>
+        <!-- stats row -->
+        <div style="display:flex;gap:10px;margin-bottom:8px;padding:6px;background:#fff;border:1px solid #e0e2e7;border-radius:3px;">
+          <div style="text-align:center;"><div style="font-size:8px;color:#999;">현재</div><div style="font-size:10px;font-weight:600;">₩263M</div></div>
+          <div style="text-align:center;"><div style="font-size:8px;color:#999;">변동</div><div style="font-size:10px;color:#1AAD5E;font-weight:600;">+2621만</div></div>
+          <div style="text-align:center;"><div style="font-size:8px;color:#999;">최고</div><div style="font-size:10px;font-weight:600;">₩265M</div></div>
+          <div style="text-align:center;"><div style="font-size:8px;color:#999;">최저</div><div style="font-size:10px;font-weight:600;">₩235M</div></div>
+        </div>
+        <!-- chart -->
+        <div style="background:#fff;border:1px solid #e0e2e7;height:80px;border-radius:4px;overflow:hidden;">
+          <svg width="100%" height="75" viewBox="0 0 320 75" preserveAspectRatio="none">
+            <defs><linearGradient id="g3" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#1375EC" stop-opacity="0.15"/><stop offset="100%" stop-color="#1375EC" stop-opacity="0"/></linearGradient></defs>
+            <path d="M0,65 C40,55 80,30 140,22 C180,18 220,20 280,18 L320,16 L320,75 L0,75 Z" fill="url(#g3)"/>
+            <path d="M0,65 C40,55 80,30 140,22 C180,18 220,20 280,18 L320,16" fill="none" stroke="#1375EC" stroke-width="2"/>
+            <line x1="165" y1="3" x2="165" y2="72" stroke="#E8812A" stroke-width="1.5" stroke-dasharray="4 3"/>
+            <rect x="150" y="2" width="30" height="13" rx="2" fill="#fff" stroke="#E8812A" stroke-width="1"/>
+            <text x="165" y="11" text-anchor="middle" font-size="8" fill="#E8812A">월급</text>
+          </svg>
+        </div>
+        <!-- event list inline -->
+        <div style="margin-top:6px;background:#fff;border:1px solid #e0e2e7;border-radius:3px;padding:5px 8px;">
+          <div style="display:flex;justify-content:space-between;font-size:9px;color:#666;margin-bottom:3px;"><span>이벤트</span><span style="color:#1375EC;">+ 추가</span></div>
+          <div style="font-size:9px;color:#333;border-top:1px solid #f0f0f0;padding-top:3px;display:flex;justify-content:space-between;"><span>💰 5월 월급 · 05-23</span><span style="color:#1AAD5E;">+790만</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C. 인라인 올인원형</h3>
+      <p>모달 없이 페이지 내 카드를 세로로 확장. 통계 행 + 차트 + 이벤트 목록 모두 한 카드에. 페이지 스크롤 증가하지만 한눈에 파악.</p>
+    </div>
+  </div>
+
+</div>

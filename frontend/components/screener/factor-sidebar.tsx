@@ -53,6 +53,9 @@ export function FactorSidebar({
           className="w-full rounded border border-border bg-muted px-2 py-1 text-sm"
         >
           <option value="sp500">S&amp;P 500</option>
+          <option value="nasdaq100">Nasdaq 100</option>
+          <option value="kospi200">KOSPI 200</option>
+          <option value="kosdaq150">KOSDAQ 150</option>
         </select>
       </div>
 

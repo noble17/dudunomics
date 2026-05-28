@@ -2,58 +2,48 @@ from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
 import pandas as pd
-import yfinance as yf
 from backtesting import Backtest
 
-from api.auth import require_auth
+from core.auth.deps import current_user, CurrentUser
 from api.models import BacktestRunIn, BacktestRunOut, StrategiesOut
 import core.repository as repo
 from core.strategies.base import get_strategy, list_strategies
 import core.strategies.sma_crossover        # noqa: F401 — registers SMA Crossover
 import core.strategies.equal_weight         # noqa: F401 — registers Equal Weight
 import core.strategies.factor_rebalance     # noqa: F401 — registers Forward 팩터 리밸런싱
+import core.strategies.hybrid_factor_sma    # noqa: F401 — registers 하이브리드 (펀더멘탈+SMA)
 from core.data.prices_provider import fetch_ohlcv
 from core.engines.portfolio_engine import BacktestContext
 
-router = APIRouter(prefix="/api/backtest", tags=["backtest"], dependencies=[Depends(require_auth)])
+router = APIRouter(prefix="/api/backtest", tags=["backtest"])
 
 
 @router.get("/strategies", response_model=list[StrategiesOut])
-def get_strategies():
+def get_strategies(user: CurrentUser = Depends(current_user)):
     return list_strategies()
 
 
 @router.post("/run", response_model=BacktestRunOut)
-def run_backtest(body: BacktestRunIn):
+def run_backtest(body: BacktestRunIn, user: CurrentUser = Depends(current_user)):
     try:
         strat = get_strategy(body.strategy)
-
         if strat.engine == "portfolio":
-            return _run_portfolio(body, strat)
+            return _run_portfolio(body, strat, user.id)
         else:
-            return _run_backtesting(body, strat)
-
+            return _run_backtesting(body, strat, user.id)
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-def _run_backtesting(body: BacktestRunIn, strat) -> BacktestRunOut:
-    """기존 backtesting.py 라이브러리 경로 — 단일 티커 SMA 등."""
-    df = yf.download(
-        body.ticker,
-        start=str(body.period_start),
-        end=str(body.period_end),
-        progress=False,
-        auto_adjust=True,
-    )
-    if df.empty:
-        raise HTTPException(status_code=422, detail=f"{body.ticker} 데이터 없음")
+def _run_backtesting(body: BacktestRunIn, strat, user_id: int) -> BacktestRunOut:
+    prices, warns = fetch_ohlcv([body.ticker], body.period_start, body.period_end)
+    if prices.empty:
+        detail = warns[0] if warns else f"{body.ticker} 데이터 없음"
+        raise HTTPException(status_code=422, detail=detail)
 
-    df.columns = [c[0] if isinstance(c, tuple) else c for c in df.columns]
-    df = df[["Open", "High", "Low", "Close", "Volume"]].dropna()
-
+    df = prices[body.ticker][["Open", "High", "Low", "Close", "Volume"]].dropna()
     bt_class = strat.to_backtesting_class(body.params)
     bt_obj = Backtest(df, bt_class, cash=10_000_000, commission=0.002)
     stats = bt_obj.run()
@@ -62,6 +52,7 @@ def _run_backtesting(body: BacktestRunIn, strat) -> BacktestRunOut:
     curve_data = [{"ts": str(t.date()), "equity": float(v)} for t, v in equity.items()]
 
     run_id = repo.insert_backtest_run(
+        user_id=user_id,
         strategy=body.strategy,
         params=body.params,
         ticker=body.ticker,
@@ -72,7 +63,6 @@ def _run_backtesting(body: BacktestRunIn, strat) -> BacktestRunOut:
         sharpe=float(stats.get("Sharpe Ratio") or 0),
         equity_curve=curve_data,
     )
-
     return BacktestRunOut(
         id=run_id,
         ticker=body.ticker,
@@ -89,14 +79,12 @@ def _run_backtesting(body: BacktestRunIn, strat) -> BacktestRunOut:
     )
 
 
-def _run_portfolio(body: BacktestRunIn, strat) -> BacktestRunOut:
-    """자체 portfolio 엔진 경로 — Equal Weight 등 멀티 자산 전략."""
+def _run_portfolio(body: BacktestRunIn, strat, user_id: int) -> BacktestRunOut:
     tickers = body.tickers or []
     if not tickers:
         raise HTTPException(status_code=422, detail="tickers 필수")
 
     prices, warns = fetch_ohlcv(tickers, body.period_start, body.period_end)
-
     if prices.empty:
         detail = "; ".join(warns) if warns else "가격 데이터 없음"
         raise HTTPException(status_code=422, detail=detail)
@@ -107,21 +95,14 @@ def _run_portfolio(body: BacktestRunIn, strat) -> BacktestRunOut:
         index_sym = resolve_index_symbol(tickers, body.risk_options.market_filter_index)
         market_index = fetch_market_index(index_sym, body.period_start, body.period_end)
 
-    ctx = BacktestContext(
-        prices=prices,
-        risk_options=body.risk_options,
-        market_index=market_index,
-    )
+    ctx = BacktestContext(prices=prices, risk_options=body.risk_options, market_index=market_index)
     result = strat.run_portfolio(ctx, body.params)
     result.warnings = warns + result.warnings
 
-    # equity curve 직렬화
     curve_data = [
         {"ts": str(t.date()), "equity": float(v)}
         for t, v in result.equity_curve.items()
     ]
-
-    # weights_history 직렬화 (날짜 + 종목별 비중)
     wh_data: list[dict] = []
     for ts, row in result.weights_history.iterrows():
         entry = {"ts": str(ts.date())}
@@ -130,6 +111,7 @@ def _run_portfolio(body: BacktestRunIn, strat) -> BacktestRunOut:
 
     m = result.metrics
     run_id = repo.insert_backtest_run(
+        user_id=user_id,
         strategy=body.strategy,
         params=body.params,
         ticker=tickers[0],
@@ -146,7 +128,6 @@ def _run_portfolio(body: BacktestRunIn, strat) -> BacktestRunOut:
         warnings=result.warnings,
         risk_options=body.risk_options.model_dump() if body.risk_options else None,
     )
-
     return BacktestRunOut(
         id=run_id,
         ticker=tickers[0],

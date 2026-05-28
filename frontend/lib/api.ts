@@ -9,8 +9,13 @@ import type {
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
     headers: { "Content-Type": "application/json", ...init?.headers },
+    credentials: "include",
     ...init,
   });
+  if (res.status === 401 && typeof window !== "undefined") {
+    window.location.href = "/login";
+    throw new Error("인증이 필요합니다.");
+  }
   if (!res.ok) {
     const text = await res.text();
     throw new Error(`API ${res.status}: ${text}`);
@@ -59,6 +64,8 @@ export const screenerApi = {
     request<QuantScore>(`/api/screener/ticker/${ticker}?universe=${universe}`),
   refresh: (universe = "sp500") =>
     request<{ status: string }>(`/api/screener/refresh?universe=${universe}`, { method: "POST" }),
+  status: (universe = "sp500") =>
+    request<{ status: string; step: string; done: number; total: number }>(`/api/screener/status?universe=${universe}`),
   getNote: (ticker: string) =>
     request<TickerNote | null>(`/api/screener/notes/${ticker}`),
   upsertNote: (ticker: string, body: Omit<TickerNote, "ticker" | "updated_at">) =>

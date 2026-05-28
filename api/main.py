@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from core.repository import get_engine
 from core.scheduler import create_scheduler
+from api.routers.auth import router as auth_router
 from api.routers.holdings import router as holdings_router
 from api.routers.portfolio import router as portfolio_router
 from api.routers.fx import router as fx_router
@@ -40,6 +41,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth_router)
 app.include_router(holdings_router)
 app.include_router(portfolio_router)
 app.include_router(fx_router)

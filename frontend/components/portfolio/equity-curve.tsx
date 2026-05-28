@@ -17,6 +17,9 @@ const RANGE_MS: Record<Range, number> = {
   "1H": 3_600_000, "6H": 21_600_000, "24H": 86_400_000,
   "3D": 259_200_000, "7D": 604_800_000, "30D": 2_592_000_000,
 };
+const RANGE_TICK_GAP: Record<Range, number> = {
+  "1H": 8, "6H": 12, "24H": 16, "3D": 20, "7D": 28, "30D": 40,
+};
 
 const MONO = "var(--font-roboto-mono, 'Roboto Mono', monospace)";
 const EVENT_ICON: Record<string, string> = { "입금": "💰", "출금": "💳", "기타": "📌" };
@@ -189,7 +192,7 @@ export function EquityCurve({ history }: Props) {
           <XAxis
             dataKey="ts"
             tick={<TwoLineTick />}
-            minTickGap={55}
+            minTickGap={RANGE_TICK_GAP[range]}
             height={36}
           />
           <YAxis

@@ -1,5 +1,15 @@
 """종목 ID 정규화 — DB/UI는 yfinance 형식, KIS 호출 직전에만 변환."""
 
+# yfinance 서픽스 → pykis MARKET_TYPE
+_YF_SUFFIX_TO_PYKIS_MARKET: dict[str, str] = {
+    ".T":   "TYO",
+    ".HK":  "HKEX",
+    ".SS":  "SSE",
+    ".SZ":  "SZSE",
+    ".HNX": "HNX",
+    ".VN":  "HSX",
+}
+
 
 def to_yf(ticker: str) -> str:
     """KIS 형식 → yfinance 형식.
@@ -31,15 +41,31 @@ def to_kis_domestic(ticker: str) -> tuple[str, str]:
     raise ValueError(f"국내 종목이 아닙니다: {ticker}")
 
 
-def to_kis_overseas(ticker: str) -> tuple[str, str]:
-    """yfinance 형식 → KIS 해외 (거래소코드, 종목코드).
+def to_kis_overseas(ticker: str, market: str | None = None) -> tuple[str, str]:
+    """yfinance 형식 → (pykis MARKET_TYPE, 종목코드).
 
-    'AAPL'  → ('NASD', 'AAPL')
-    'MSFT'  → ('NASD', 'MSFT')
-    현재는 미국 나스닥 기본값; 필요 시 거래소 매핑 테이블 확장.
+    'AAPL'           → ('NASDAQ', 'AAPL')   market 미지정 시 NASDAQ 기본
+    'AAPL', 'NYSE'   → ('NYSE', 'AAPL')
+    'TM.T'           → ('TYO', 'TM')
     """
     t = ticker.strip().upper()
-    return "NASD", t
+    for suffix, mkt in _YF_SUFFIX_TO_PYKIS_MARKET.items():
+        if t.endswith(suffix.upper()):
+            return mkt, t[: -len(suffix)]
+    if market:
+        return market.upper(), t
+    return "NASDAQ", t
+
+
+def market_from_ticker(ticker: str) -> str | None:
+    """티커에서 pykis MARKET_TYPE 추론. 알 수 없으면 None."""
+    t = ticker.strip().upper()
+    if t.endswith(".KS") or t.endswith(".KQ"):
+        return "KRX"
+    for suffix, mkt in _YF_SUFFIX_TO_PYKIS_MARKET.items():
+        if t.endswith(suffix.upper()):
+            return mkt
+    return None
 
 
 def detect_currency(ticker: str) -> str:

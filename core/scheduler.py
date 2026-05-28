@@ -1,5 +1,4 @@
 """APScheduler 잡 정의 — snapshot(5분), fundamentals(1일, Phase β), universe(1일, γ)."""
-import json
 import logging
 from datetime import datetime
 
@@ -16,18 +15,36 @@ _fx_provider = get_fx_provider()
 
 
 def snapshot_job():
-    """보유 종목 현재가 + 환율 → portfolio_snapshots (5분 주기)."""
+    """보유 종목 있는 사용자 전원에 대해 현재가 + 환율 → portfolio_snapshots (5분 주기)."""
     try:
-        holdings = repo.get_holdings()
+        usdkrw = _fx_provider.get_rate("USDKRW")
+        ts = datetime.now().replace(second=0, microsecond=0)
+        repo.insert_fx_rate(ts=ts, pair="USDKRW", rate=usdkrw)
+
+        user_ids = repo.get_active_user_ids_with_holdings()
+        if not user_ids:
+            return
+
+        for user_id in user_ids:
+            _snapshot_for_user(user_id, usdkrw, ts)
+
+        log.info("snapshot_job 완료: 사용자 %d명", len(user_ids))
+    except Exception as e:
+        log.error("snapshot_job 오류: %s", e)
+
+
+def _snapshot_for_user(user_id: int, usdkrw: float, ts: datetime):
+    try:
+        holdings = repo.get_holdings(user_id)
         if not holdings:
             return
 
         tickers = [h["ticker"] for h in holdings]
-        prices = _price_provider.get_current_prices(tickers)
+        markets = {h["ticker"]: h.get("market") for h in holdings}
+        prices = _price_provider.get_current_prices(tickers, markets=markets)
 
-        usdkrw = _fx_provider.get_rate("USDKRW")
-        cash_krw = float(repo.get_meta("cash_krw") or 0)
-        cash_usd = float(repo.get_meta("cash_usd") or 0)
+        cash_krw = float(repo.get_meta(user_id, "cash_krw") or 0)
+        cash_usd = float(repo.get_meta(user_id, "cash_usd") or 0)
 
         total_equity_krw = 0.0
         total_equity_usd = 0.0
@@ -40,11 +57,9 @@ def snapshot_job():
             p = prices[ticker]
             mv = p.current * h["quantity"]
             if p.currency == "KRW":
-                mv_krw = mv
-                mv_usd = mv / usdkrw
+                mv_krw, mv_usd = mv, mv / usdkrw
             else:
-                mv_krw = mv * usdkrw
-                mv_usd = mv
+                mv_krw, mv_usd = mv * usdkrw, mv
             total_equity_krw += mv_krw
             total_equity_usd += mv_usd
             holdings_snapshot.append({
@@ -55,8 +70,8 @@ def snapshot_job():
         cash_total_krw = cash_krw + cash_usd * usdkrw
         cash_total_usd = cash_krw / usdkrw + cash_usd
 
-        ts = datetime.now().replace(second=0, microsecond=0)
         repo.insert_snapshot(
+            user_id=user_id,
             ts=ts,
             total_equity_krw=total_equity_krw,
             total_with_cash_krw=total_equity_krw + cash_total_krw,
@@ -67,14 +82,12 @@ def snapshot_job():
             usdkrw=usdkrw,
             holdings_json=holdings_snapshot,
         )
-        repo.insert_fx_rate(ts=ts, pair="USDKRW", rate=usdkrw)
-        log.info("snapshot_job 완료: 총평가액 ₩%,.0f", total_equity_krw)
     except Exception as e:
-        log.error("snapshot_job 오류: %s", e)
+        log.error("_snapshot_for_user(user_id=%d) 오류: %s", user_id, e)
 
 
 def create_scheduler() -> BackgroundScheduler:
     scheduler = BackgroundScheduler(timezone="Asia/Seoul")
     scheduler.add_job(snapshot_job, "interval", minutes=5, id="snapshot",
-                      next_run_time=datetime.now())  # 시작 직후 1회 실행
+                      next_run_time=datetime.now())
     return scheduler

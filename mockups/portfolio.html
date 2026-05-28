@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dudunomics — 포트폴리오</title>
+  <link rel="stylesheet" href="tokens.css">
+  <style>
+    /* KPI Card 특화 */
+    .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
+    .kpi-card { background: var(--surface-card); border: 1px solid var(--border-line); border-radius: var(--radius); padding: 16px 20px; }
+    .kpi-label { font-size: 11px; color: var(--text-muted); margin-bottom: 8px; }
+    .kpi-value { font-family: var(--font-mono); font-size: 20px; color: var(--text-primary); font-feature-settings: "tnum"; }
+    .kpi-sub   { font-family: var(--font-mono); font-size: 12px; color: var(--text-muted); margin-top: 4px; font-feature-settings: "tnum"; }
+
+    /* Two-column layout */
+    .main-grid { display: grid; grid-template-columns: 320px 1fr; gap: 16px; }
+
+    /* Pie chart */
+    .pie-card { background: var(--surface-card); border: 1px solid var(--border-line); border-radius: var(--radius); padding: 20px; }
+    .pie-legend { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; }
+    .pie-legend-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; }
+    .pie-legend-left { display: flex; align-items: center; gap: 8px; }
+    .pie-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .pie-legend-name { color: var(--text-body); }
+    .pie-legend-pct { font-family: var(--font-mono); color: var(--text-muted); font-size: 11px; }
+    .pie-legend-val { font-family: var(--font-mono); color: var(--text-body); font-size: 11px; font-feature-settings: "tnum"; }
+
+    /* Holdings panels */
+    .panel-title { font-size: 13px; font-weight: 500; color: var(--text-primary); margin-bottom: 10px; }
+    .holdings-right { display: flex; flex-direction: column; gap: 16px; }
+  </style>
+</head>
+<body>
+  <nav class="nav">
+    <a href="index.html" class="nav-logo">Dudunomics</a>
+    <div class="nav-links">
+      <a href="index.html" class="nav-link">토큰</a>
+      <a href="portfolio.html" class="nav-link active">포트폴리오</a>
+      <a href="holdings.html" class="nav-link">보유종목</a>
+      <a href="backtest.html" class="nav-link">백테스트</a>
+    </div>
+  </nav>
+
+  <div class="container">
+    <h1 class="page-title">포트폴리오</h1>
+
+    <!-- Tabs -->
+    <div class="tabs">
+      <div class="tab active">전체</div>
+      <div class="tab">국내</div>
+      <div class="tab">해외</div>
+      <div class="tab">섹터</div>
+    </div>
+
+    <!-- KPI Cards -->
+    <div class="kpi-grid">
+      <div class="kpi-card">
+        <div class="kpi-label">총 평가금액</div>
+        <div class="kpi-value">42,350,000원</div>
+        <div class="kpi-sub">투자원금 38,000,000원</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">평가손익</div>
+        <div class="kpi-value text-rise">+4,350,000원</div>
+        <div class="kpi-sub text-rise">+11.45%</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">오늘 손익</div>
+        <div class="kpi-value text-rise">+125,300원</div>
+        <div class="kpi-sub text-rise">+0.30%</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">최대 낙폭 (MDD)</div>
+        <div class="kpi-value text-fall">-8.24%</div>
+        <div class="kpi-sub text-muted">2024-08-05</div>
+      </div>
+    </div>
+
+    <!-- Main: Pie + Holdings Tables -->
+    <div class="main-grid">
+      <!-- Donut Chart -->
+      <div class="pie-card">
+        <div class="panel-title">섹터 비중</div>
+        <svg viewBox="0 0 200 200" width="200" height="200" style="display:block;margin:0 auto">
+          <!-- Donut slices (precomputed for demo) -->
+          <!-- IT: 38% → 0-136.8deg -->
+          <path d="M100,100 L100,18 A82,82 0 0,1 182,100 Z" fill="#1375EC"/>
+          <!-- 금융: 22% → 136.8-216.8deg -->
+          <path d="M100,100 L182,100 A82,82 0 0,1 58.9,168.6 Z" fill="#DD3C44"/>
+          <!-- 에너지: 17% → 216.8-277.9deg -->
+          <path d="M100,100 L58.9,168.6 A82,82 0 0,1 18,100 Z" fill="#003597" transform="rotate(0,100,100)"/>
+          <!-- 소비재: 13% → 277.9-324.7deg -->
+          <path d="M100,100 L18,100 A82,82 0 0,1 61.4,31.4 Z" fill="#666666"/>
+          <!-- 기타: 10% → 324.7-360deg -->
+          <path d="M100,100 L61.4,31.4 A82,82 0 0,1 100,18 Z" fill="#BEC1C6"/>
+          <!-- Inner white circle (donut hole) -->
+          <circle cx="100" cy="100" r="50" fill="#FFFFFF"/>
+          <!-- Center label -->
+          <text x="100" y="96" text-anchor="middle" font-family="'Roboto Mono', monospace" font-size="11" fill="#666">총 평가</text>
+          <text x="100" y="112" text-anchor="middle" font-family="'Roboto Mono', monospace" font-size="13" fill="#1A2434" font-feature-settings='"tnum"'>4,235만</text>
+        </svg>
+
+        <div class="pie-legend">
+          <div class="pie-legend-row">
+            <div class="pie-legend-left">
+              <div class="pie-dot" style="background:#1375EC"></div>
+              <span class="pie-legend-name">IT</span>
+            </div>
+            <div class="flex gap-2">
+              <span class="pie-legend-pct">38%</span>
+              <span class="pie-legend-val">1,609만원</span>
+            </div>
+          </div>
+          <div class="pie-legend-row">
+            <div class="pie-legend-left">
+              <div class="pie-dot" style="background:#DD3C44"></div>
+              <span class="pie-legend-name">금융</span>
+            </div>
+            <div class="flex gap-2">
+              <span class="pie-legend-pct">22%</span>
+              <span class="pie-legend-val">931만원</span>
+            </div>
+          </div>
+          <div class="pie-legend-row">
+            <div class="pie-legend-left">
+              <div class="pie-dot" style="background:#003597"></div>
+              <span class="pie-legend-name">에너지</span>
+            </div>
+            <div class="flex gap-2">
+              <span class="pie-legend-pct">17%</span>
+              <span class="pie-legend-val">720만원</span>
+            </div>
+          </div>
+          <div class="pie-legend-row">
+            <div class="pie-legend-left">
+              <div class="pie-dot" style="background:#666666"></div>
+              <span class="pie-legend-name">소비재</span>
+            </div>
+            <div class="flex gap-2">
+              <span class="pie-legend-pct">13%</span>
+              <span class="pie-legend-val">551만원</span>
+            </div>
+          </div>
+          <div class="pie-legend-row">
+            <div class="pie-legend-left">
+              <div class="pie-dot" style="background:#BEC1C6"></div>
+              <span class="pie-legend-name">기타</span>
+            </div>
+            <div class="flex gap-2">
+              <span class="pie-legend-pct">10%</span>
+              <span class="pie-legend-val">424만원</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Holdings Tables -->
+      <div class="holdings-right">
+
+        <!-- 국내 -->
+        <div>
+          <div class="panel-title">국내 종목</div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th style="text-align:left">종목</th>
+                  <th>섹터</th>
+                  <th>보유수량</th>
+                  <th>평균단가</th>
+                  <th>현재가</th>
+                  <th>평가금액</th>
+                  <th>평가손익</th>
+                  <th>수익률</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="td-name">삼성전자<br><span style="font-size:11px;color:var(--text-muted)">005930.KS</span></td>
+                  <td style="text-align:right"><span class="badge badge-sector">IT</span></td>
+                  <td>100</td>
+                  <td>75,000</td>
+                  <td>78,500</td>
+                  <td>7,850,000</td>
+                  <td class="rise">+350,000</td>
+                  <td class="rise">+4.67%</td>
+                </tr>
+                <tr>
+                  <td class="td-name">SK하이닉스<br><span style="font-size:11px;color:var(--text-muted)">000660.KS</span></td>
+                  <td style="text-align:right"><span class="badge badge-sector">IT</span></td>
+                  <td>50</td>
+                  <td>163,600</td>
+                  <td>188,000</td>
+                  <td>9,400,000</td>
+                  <td class="rise">+1,220,000</td>
+                  <td class="rise">+14.92%</td>
+                </tr>
+                <tr>
+                  <td class="td-name">NAVER<br><span style="font-size:11px;color:var(--text-muted)">035420.KS</span></td>
+                  <td style="text-align:right"><span class="badge badge-sector">IT</span></td>
+                  <td>30</td>
+                  <td>198,000</td>
+                  <td>192,000</td>
+                  <td>5,760,000</td>
+                  <td class="fall">-180,000</td>
+                  <td class="fall">-3.03%</td>
+                </tr>
+                <tr>
+                  <td class="td-name">KB금융<br><span style="font-size:11px;color:var(--text-muted)">105560.KS</span></td>
+                  <td style="text-align:right"><span class="badge badge-sector">금융</span></td>
+                  <td>200</td>
+                  <td>68,400</td>
+                  <td>72,100</td>
+                  <td>14,420,000</td>
+                  <td class="rise">+740,000</td>
+                  <td class="rise">+5.41%</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 해외 -->
+        <div>
+          <div class="panel-title">해외 종목</div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th style="text-align:left">종목</th>
+                  <th>섹터</th>
+                  <th>보유수량</th>
+                  <th>평균단가(USD)</th>
+                  <th>현재가(USD)</th>
+                  <th>평가금액</th>
+                  <th>평가손익</th>
+                  <th>수익률</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="td-name">Apple<br><span style="font-size:11px;color:var(--text-muted)">AAPL · NASDAQ</span></td>
+                  <td style="text-align:right"><span class="badge badge-sector">IT</span></td>
+                  <td>15</td>
+                  <td>180.50</td>
+                  <td>196.45</td>
+                  <td>4,243,275원</td>
+                  <td class="rise">+344,025원</td>
+                  <td class="rise">+8.84%</td>
+                </tr>
+                <tr>
+                  <td class="td-name">ExxonMobil<br><span style="font-size:11px;color:var(--text-muted)">XOM · NYSE</span></td>
+                  <td style="text-align:right"><span class="badge badge-sector">에너지</span></td>
+                  <td>40</td>
+                  <td>115.20</td>
+                  <td>109.80</td>
+                  <td>5,875,200원</td>
+                  <td class="fall">-289,200원</td>
+                  <td class="fall">-4.69%</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</body>
+</html>

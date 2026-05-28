@@ -7,8 +7,10 @@ from core.strategies.base import Strategy, register
 
 
 def _sma(arr, n):
-    """backtesting.py용 SMA 계산 — btlib.SMA 대체."""
-    return np.convolve(arr, np.ones(n) / n, mode="full")[: len(arr)]
+    result = np.full(len(arr), np.nan)
+    for i in range(n - 1, len(arr)):
+        result[i] = arr[i - n + 1:i + 1].mean()
+    return result
 
 
 class _SMACrossoverBt(bt.Strategy):
@@ -21,9 +23,11 @@ class _SMACrossoverBt(bt.Strategy):
 
     def next(self):
         if btlib.crossover(self.sma_fast, self.sma_slow):
-            self.buy()
+            if not self.position:
+                self.buy()
         elif btlib.crossover(self.sma_slow, self.sma_fast):
-            self.sell()
+            if self.position:
+                self.position.close()
 
 
 class SMACrossover(Strategy):

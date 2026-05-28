@@ -1,0 +1,190 @@
+<h2>페이지 2 — 종목 상세 레이아웃 (두 가지 안)</h2>
+<p class="subtitle">레이더 차트와 팩터 상세, 메모 입력폼의 배치 방식을 선택해주세요</p>
+
+<div class="split">
+  <!-- A안 -->
+  <div class="mockup">
+    <div class="mockup-header">A안 — 좌(차트/점수) + 우(메모) 분할</div>
+    <div class="mockup-body" style="display:flex;flex-direction:column;gap:10px;min-height:400px;">
+      <!-- 헤더 -->
+      <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px 14px;display:flex;align-items:center;gap:12px;">
+        <input class="mock-input" style="width:160px;font-size:13px;" placeholder="티커 검색 (예: AAPL)">
+        <div style="font-size:18px;font-weight:800;color:#1e293b;">NVDA</div>
+        <div style="font-size:13px;color:#64748b;">NVIDIA Corporation</div>
+        <div style="margin-left:auto;background:#dbeafe;color:#1d4ed8;border-radius:6px;padding:4px 12px;font-size:13px;font-weight:700;">종합 0.94 <span style="font-size:10px;color:#64748b">/ S&P500 상위 2%</span></div>
+      </div>
+
+      <!-- 메인 2열 -->
+      <div style="display:flex;gap:10px;flex:1;">
+        <!-- 좌: 레이더 + 팩터 바 -->
+        <div style="flex:1;display:flex;flex-direction:column;gap:8px;">
+          <!-- 레이더 차트 자리 -->
+          <div style="background:#f1f5f9;border-radius:8px;height:170px;display:flex;align-items:center;justify-content:center;position:relative;">
+            <svg width="150" height="150" viewBox="-1 -1 2 2">
+              <!-- 레이더 배경 -->
+              <polygon points="0,-0.8 0.76,-0.25 0.47,0.65 -0.47,0.65 -0.76,-0.25" fill="none" stroke="#cbd5e1" stroke-width="0.03"/>
+              <polygon points="0,-0.5 0.48,-0.15 0.29,0.4 -0.29,0.4 -0.48,-0.15" fill="none" stroke="#cbd5e1" stroke-width="0.02"/>
+              <polygon points="0,-0.25 0.24,-0.08 0.15,0.2 -0.15,0.2 -0.24,-0.08" fill="none" stroke="#cbd5e1" stroke-width="0.02"/>
+              <!-- 축 -->
+              <line x1="0" y1="0" x2="0" y2="-0.8" stroke="#cbd5e1" stroke-width="0.02"/>
+              <line x1="0" y1="0" x2="0.76" y2="-0.25" stroke="#cbd5e1" stroke-width="0.02"/>
+              <line x1="0" y1="0" x2="0.47" y2="0.65" stroke="#cbd5e1" stroke-width="0.02"/>
+              <line x1="0" y1="0" x2="-0.47" y2="0.65" stroke="#cbd5e1" stroke-width="0.02"/>
+              <line x1="0" y1="0" x2="-0.76" y2="-0.25" stroke="#cbd5e1" stroke-width="0.02"/>
+              <!-- NVDA 데이터 (높은 모멘텀, 낮은 밸류, 높은 EPS, 높은 퀄리티, 높은 기술) -->
+              <polygon points="0,-0.78 0.24,-0.08 0.45,0.62 -0.43,0.59 -0.58,-0.19"
+                       fill="rgba(59,130,246,0.2)" stroke="#3b82f6" stroke-width="0.04"/>
+              <!-- 레이블 -->
+              <text x="0" y="-0.88" text-anchor="middle" font-size="0.12" fill="#475569">모멘텀</text>
+              <text x="0.9" y="-0.28" text-anchor="start" font-size="0.12" fill="#475569">밸류</text>
+              <text x="0.55" y="0.78" text-anchor="middle" font-size="0.12" fill="#475569">EPS</text>
+              <text x="-0.55" y="0.78" text-anchor="middle" font-size="0.12" fill="#475569">퀄리티</text>
+              <text x="-0.92" y="-0.28" text-anchor="end" font-size="0.12" fill="#475569">기술적</text>
+            </svg>
+          </div>
+
+          <!-- 팩터별 바 -->
+          <div style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:10px 12px;">
+            <div style="font-size:11px;font-weight:700;color:#64748b;margin-bottom:8px;letter-spacing:.06em;">팩터별 백분위 (vs S&P 500)</div>
+            <div style="display:flex;flex-direction:column;gap:6px;">
+              <div>
+                <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:2px;"><span>가격 모멘텀 <span style="color:#94a3b8;font-size:10px">12-1M</span></span><span style="font-weight:700;color:#16a34a;">0.98</span></div>
+                <div style="background:#f1f5f9;border-radius:4px;height:6px;"><div style="background:#22c55e;width:98%;height:100%;border-radius:4px;"></div></div>
+              </div>
+              <div>
+                <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:2px;"><span>밸류에이션 <span style="color:#94a3b8;font-size:10px">FWD PER+PBR</span></span><span style="font-weight:700;color:#dc2626;">0.31</span></div>
+                <div style="background:#f1f5f9;border-radius:4px;height:6px;"><div style="background:#ef4444;width:31%;height:100%;border-radius:4px;"></div></div>
+              </div>
+              <div>
+                <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:2px;"><span>EPS 모멘텀 <span style="color:#94a3b8;font-size:10px">1M+3M 추세</span></span><span style="font-weight:700;color:#16a34a;">0.96</span></div>
+                <div style="background:#f1f5f9;border-radius:4px;height:6px;"><div style="background:#22c55e;width:96%;height:100%;border-radius:4px;"></div></div>
+              </div>
+              <div>
+                <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:2px;"><span>퀄리티 <span style="color:#94a3b8;font-size:10px">ROE+부채</span></span><span style="font-weight:700;color:#16a34a;">0.91</span></div>
+                <div style="background:#f1f5f9;border-radius:4px;height:6px;"><div style="background:#22c55e;width:91%;height:100%;border-radius:4px;"></div></div>
+              </div>
+              <div>
+                <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:2px;"><span>기술적 지표 <span style="color:#94a3b8;font-size:10px">RSI+200MA</span></span><span style="font-weight:700;color:#16a34a;">0.88</span></div>
+                <div style="background:#f1f5f9;border-radius:4px;height:6px;"><div style="background:#22c55e;width:88%;height:100%;border-radius:4px;"></div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 우: 메모 폼 -->
+        <div style="width:200px;flex-shrink:0;background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:8px;">
+          <div style="font-size:11px;font-weight:700;color:#64748b;letter-spacing:.06em;">투자 의견 기록</div>
+          <div>
+            <div style="font-size:10px;color:#94a3b8;margin-bottom:3px;">투자 의견</div>
+            <select style="width:100%;padding:5px 8px;font-size:12px;border:1px solid #e2e8f0;border-radius:4px;background:#f8fafc;">
+              <option>매수 검토</option>
+              <option>보유</option>
+              <option>관망</option>
+              <option>매도 검토</option>
+            </select>
+          </div>
+          <div>
+            <div style="font-size:10px;color:#94a3b8;margin-bottom:3px;">목표가 (USD)</div>
+            <input class="mock-input" style="width:100%;font-size:12px;" placeholder="예: 180.00">
+          </div>
+          <div>
+            <div style="font-size:10px;color:#94a3b8;margin-bottom:3px;">메모</div>
+            <textarea style="width:100%;height:80px;padding:6px 8px;font-size:11px;border:1px solid #e2e8f0;border-radius:4px;resize:none;background:#f8fafc;" placeholder="투자 근거, 주요 리스크 등..."></textarea>
+          </div>
+          <div>
+            <div style="font-size:10px;color:#94a3b8;margin-bottom:3px;">태그</div>
+            <input class="mock-input" style="width:100%;font-size:12px;" placeholder="AI, 반도체, 성장주...">
+          </div>
+          <button class="mock-button" style="width:100%;font-size:12px;padding:6px;">저장</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- B안 -->
+  <div class="mockup">
+    <div class="mockup-header">B안 — 상단(차트+바) + 하단(메모) 세로 배치</div>
+    <div class="mockup-body" style="display:flex;flex-direction:column;gap:8px;min-height:400px;">
+      <!-- 헤더 -->
+      <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px 14px;display:flex;align-items:center;gap:12px;">
+        <input class="mock-input" style="width:160px;font-size:13px;" placeholder="티커 검색 (예: AAPL)">
+        <div style="font-size:18px;font-weight:800;color:#1e293b;">NVDA</div>
+        <div style="font-size:13px;color:#64748b;">NVIDIA Corporation</div>
+        <div style="margin-left:auto;background:#dbeafe;color:#1d4ed8;border-radius:6px;padding:4px 12px;font-size:13px;font-weight:700;">종합 0.94 <span style="font-size:10px;color:#64748b">/ S&P500 상위 2%</span></div>
+      </div>
+
+      <!-- 상단: 레이더 + 팩터 바 가로 배치 -->
+      <div style="display:flex;gap:8px;">
+        <div style="background:#f1f5f9;border-radius:8px;width:160px;height:150px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+          <svg width="130" height="130" viewBox="-1 -1 2 2">
+            <polygon points="0,-0.8 0.76,-0.25 0.47,0.65 -0.47,0.65 -0.76,-0.25" fill="none" stroke="#cbd5e1" stroke-width="0.03"/>
+            <polygon points="0,-0.5 0.48,-0.15 0.29,0.4 -0.29,0.4 -0.48,-0.15" fill="none" stroke="#cbd5e1" stroke-width="0.02"/>
+            <line x1="0" y1="0" x2="0" y2="-0.8" stroke="#cbd5e1" stroke-width="0.02"/>
+            <line x1="0" y1="0" x2="0.76" y2="-0.25" stroke="#cbd5e1" stroke-width="0.02"/>
+            <line x1="0" y1="0" x2="0.47" y2="0.65" stroke="#cbd5e1" stroke-width="0.02"/>
+            <line x1="0" y1="0" x2="-0.47" y2="0.65" stroke="#cbd5e1" stroke-width="0.02"/>
+            <line x1="0" y1="0" x2="-0.76" y2="-0.25" stroke="#cbd5e1" stroke-width="0.02"/>
+            <polygon points="0,-0.78 0.24,-0.08 0.45,0.62 -0.43,0.59 -0.58,-0.19"
+                     fill="rgba(59,130,246,0.2)" stroke="#3b82f6" stroke-width="0.04"/>
+            <text x="0" y="-0.88" text-anchor="middle" font-size="0.14" fill="#475569">모멘텀</text>
+            <text x="0.92" y="-0.28" text-anchor="start" font-size="0.14" fill="#475569">밸류</text>
+            <text x="0.55" y="0.78" text-anchor="middle" font-size="0.14" fill="#475569">EPS</text>
+            <text x="-0.55" y="0.78" text-anchor="middle" font-size="0.14" fill="#475569">퀄리티</text>
+            <text x="-0.95" y="-0.28" text-anchor="end" font-size="0.14" fill="#475569">기술적</text>
+          </svg>
+        </div>
+        <div style="flex:1;background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:10px 12px;">
+          <div style="font-size:10px;font-weight:700;color:#64748b;margin-bottom:8px;letter-spacing:.06em;">팩터별 백분위</div>
+          <div style="display:flex;flex-direction:column;gap:5px;">
+            <div><div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:1px;"><span>가격 모멘텀</span><span style="font-weight:700;color:#16a34a;">0.98</span></div><div style="background:#f1f5f9;border-radius:4px;height:5px;"><div style="background:#22c55e;width:98%;height:100%;border-radius:4px;"></div></div></div>
+            <div><div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:1px;"><span>밸류에이션</span><span style="font-weight:700;color:#dc2626;">0.31</span></div><div style="background:#f1f5f9;border-radius:4px;height:5px;"><div style="background:#ef4444;width:31%;height:100%;border-radius:4px;"></div></div></div>
+            <div><div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:1px;"><span>EPS 모멘텀</span><span style="font-weight:700;color:#16a34a;">0.96</span></div><div style="background:#f1f5f9;border-radius:4px;height:5px;"><div style="background:#22c55e;width:96%;height:100%;border-radius:4px;"></div></div></div>
+            <div><div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:1px;"><span>퀄리티</span><span style="font-weight:700;color:#16a34a;">0.91</span></div><div style="background:#f1f5f9;border-radius:4px;height:5px;"><div style="background:#22c55e;width:91%;height:100%;border-radius:4px;"></div></div></div>
+            <div><div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:1px;"><span>기술적 지표</span><span style="font-weight:700;color:#16a34a;">0.88</span></div><div style="background:#f1f5f9;border-radius:4px;height:5px;"><div style="background:#22c55e;width:88%;height:100%;border-radius:4px;"></div></div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 하단: 메모 폼 가로 배치 -->
+      <div style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:10px 12px;">
+        <div style="font-size:10px;font-weight:700;color:#64748b;margin-bottom:8px;letter-spacing:.06em;">투자 의견 기록</div>
+        <div style="display:flex;gap:10px;align-items:flex-start;">
+          <div style="flex:0 0 120px;">
+            <div style="font-size:10px;color:#94a3b8;margin-bottom:3px;">투자 의견</div>
+            <select style="width:100%;padding:5px 8px;font-size:12px;border:1px solid #e2e8f0;border-radius:4px;background:#f8fafc;"><option>매수 검토</option></select>
+          </div>
+          <div style="flex:0 0 120px;">
+            <div style="font-size:10px;color:#94a3b8;margin-bottom:3px;">목표가 (USD)</div>
+            <input class="mock-input" style="width:100%;font-size:12px;" placeholder="180.00">
+          </div>
+          <div style="flex:1;">
+            <div style="font-size:10px;color:#94a3b8;margin-bottom:3px;">메모</div>
+            <input class="mock-input" style="width:100%;font-size:12px;" placeholder="투자 근거, 리스크...">
+          </div>
+          <div style="flex:0 0 100px;">
+            <div style="font-size:10px;color:#94a3b8;margin-bottom:3px;">태그</div>
+            <input class="mock-input" style="width:100%;font-size:12px;" placeholder="AI, 반도체...">
+          </div>
+          <button class="mock-button" style="font-size:12px;padding:6px 14px;align-self:flex-end;">저장</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="options" style="margin-top:20px;">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>좌우 분할</h3>
+      <p>차트+점수 왼쪽, 메모 오른쪽. 분석과 기록을 동시에 보는 구조. 화면을 넓게 활용.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>상하 배치</h3>
+      <p>분석 영역 상단, 메모 하단 한 줄. 스크롤 없이 한 화면에 담기는 컴팩트한 구조.</p>
+    </div>
+  </div>
+</div>

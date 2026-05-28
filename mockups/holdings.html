@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dudunomics — 보유종목</title>
+  <link rel="stylesheet" href="tokens.css">
+  <style>
+    .editor-wrap {
+      background: var(--surface-card);
+      border: 1px solid var(--border-line);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+
+    .editor-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--border-line);
+      background: var(--surface-card);
+    }
+
+    /* Editor table overrides */
+    .editor-table th  { padding: 0 10px; font-size: 11px; text-align: left; }
+    .editor-table td  { padding: 0 6px; height: 45px; text-align: left; font-family: var(--font-sans); }
+    .editor-table td.td-num { font-family: var(--font-mono); text-align: right; font-feature-settings: "tnum"; }
+
+    .editor-table input.cell-input {
+      background: transparent;
+      border: none;
+      border-radius: 0;
+      height: 32px;
+      font-size: 13px;
+      padding: 0 4px;
+      color: var(--text-body);
+      width: 100%;
+      outline: none;
+    }
+    .editor-table input.cell-input:focus {
+      background: var(--fall-soft);
+      border-bottom: 1px solid var(--brand-primary);
+    }
+
+    .editor-table input.cell-input-ticker {
+      font-family: var(--font-mono);
+      font-weight: 500;
+      color: var(--text-primary);
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
+    }
+
+    .search-wrap { position: relative; }
+
+    /* Dropdown shown inline for demo */
+    .dropdown-demo {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      z-index: 100;
+      background: var(--surface-card);
+      border: 1px solid var(--border-strong);
+      border-top: none;
+      border-radius: 0 0 var(--radius) var(--radius);
+      box-shadow: 0 4px 12px rgba(26,36,52,0.12);
+    }
+
+    .dropdown-demo .di {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 9px 12px;
+      cursor: pointer;
+      font-size: 12px;
+      border-bottom: 1px solid var(--border-line);
+    }
+    .dropdown-demo .di:last-child { border-bottom: none; }
+    .dropdown-demo .di:hover { background: var(--surface-table-alt); }
+    .dropdown-demo .di.selected { background: var(--fall-soft); }
+    .dropdown-demo .di .left { display: flex; align-items: center; gap: 8px; }
+    .dropdown-demo .di .ticker { font-family: var(--font-mono); font-weight: 500; color: var(--brand-primary); font-size: 13px; }
+    .dropdown-demo .di .name  { color: var(--text-body); }
+    .dropdown-demo .di .right { display: flex; align-items: center; gap: 8px; font-size: 11px; }
+    .dropdown-demo .di .market { color: var(--text-muted); }
+    .dropdown-demo .di .price  { font-family: var(--font-mono); color: var(--text-subtle); font-feature-settings: "tnum"; }
+
+    .status-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 16px;
+      border-top: 1px solid var(--border-line);
+      background: var(--surface-card);
+      font-size: 12px;
+    }
+
+    .badge-unsaved {
+      color: var(--brand-primary);
+      border: 1px solid var(--brand-primary);
+      background: rgba(19,117,236,0.06);
+      font-size: 11px;
+      padding: 2px 7px;
+      border-radius: var(--radius);
+    }
+  </style>
+</head>
+<body>
+  <nav class="nav">
+    <a href="index.html" class="nav-logo">Dudunomics</a>
+    <div class="nav-links">
+      <a href="index.html" class="nav-link">토큰</a>
+      <a href="portfolio.html" class="nav-link">포트폴리오</a>
+      <a href="holdings.html" class="nav-link active">보유종목</a>
+      <a href="backtest.html" class="nav-link">백테스트</a>
+    </div>
+  </nav>
+
+  <div class="container">
+    <h1 class="page-title">보유 종목 편집</h1>
+
+    <div class="editor-wrap">
+
+      <!-- Toolbar -->
+      <div class="editor-toolbar">
+        <div class="flex items-center gap-3">
+          <span style="font-size:13px;color:var(--text-muted)">5개 종목</span>
+          <span class="badge-unsaved">● 미저장</span>
+        </div>
+        <div class="flex gap-2">
+          <button class="btn btn-secondary">+ 행 추가</button>
+          <button class="btn btn-primary">저장</button>
+        </div>
+      </div>
+
+      <!-- Editor Table -->
+      <table class="editor-table">
+        <thead>
+          <tr>
+            <th style="width:180px">종목 검색</th>
+            <th style="width:100px">종목명</th>
+            <th style="width:80px">마켓</th>
+            <th style="width:80px">섹터</th>
+            <th style="width:100px;text-align:right">보유수량</th>
+            <th style="width:120px;text-align:right">평균단가</th>
+            <th style="width:50px"></th>
+          </tr>
+        </thead>
+        <tbody>
+
+          <!-- Row 1: Normal saved row -->
+          <tr>
+            <td>
+              <div class="flex items-center gap-2">
+                <span style="font-family:var(--font-mono);font-weight:500;color:var(--text-primary);font-size:13px">005930.KS</span>
+                <span style="font-size:11px;color:var(--text-muted)">KS</span>
+              </div>
+            </td>
+            <td style="font-size:13px;color:var(--text-body)">삼성전자</td>
+            <td><span class="badge badge-market">KRX</span></td>
+            <td><span class="badge badge-sector">IT</span></td>
+            <td class="td-num">100</td>
+            <td class="td-num">75,000</td>
+            <td style="text-align:center">
+              <button class="btn btn-destructive" style="width:28px;height:28px;padding:0">✕</button>
+            </td>
+          </tr>
+
+          <!-- Row 2: Normal saved row -->
+          <tr>
+            <td>
+              <div class="flex items-center gap-2">
+                <span style="font-family:var(--font-mono);font-weight:500;color:var(--text-primary);font-size:13px">000660.KS</span>
+              </div>
+            </td>
+            <td style="font-size:13px;color:var(--text-body)">SK하이닉스</td>
+            <td><span class="badge badge-market">KRX</span></td>
+            <td><span class="badge badge-sector">IT</span></td>
+            <td class="td-num">50</td>
+            <td class="td-num">163,600</td>
+            <td style="text-align:center">
+              <button class="btn btn-destructive" style="width:28px;height:28px;padding:0">✕</button>
+            </td>
+          </tr>
+
+          <!-- Row 3: Row being searched (dropdown open) -->
+          <tr style="background:rgba(19,117,236,0.03)">
+            <td>
+              <div class="search-wrap">
+                <input type="text" class="cell-input cell-input-ticker" value="삼성" placeholder="종목명 또는 코드" style="background:transparent;border:none;border-radius:0;height:36px;font-size:13px;padding:0 4px;color:var(--text-body);width:100%;outline:none;border-bottom:1px solid var(--brand-primary)">
+                <!-- Dropdown open state -->
+                <div class="dropdown-demo">
+                  <div class="di selected">
+                    <div class="left">
+                      <span class="ticker">005930</span>
+                      <span class="name">삼성전자</span>
+                    </div>
+                    <div class="right">
+                      <span class="market">KRX</span>
+                      <span class="price">78,500원</span>
+                    </div>
+                  </div>
+                  <div class="di">
+                    <div class="left">
+                      <span class="ticker">005935</span>
+                      <span class="name">삼성전자우</span>
+                    </div>
+                    <div class="right">
+                      <span class="market">KRX</span>
+                      <span class="price">70,200원</span>
+                    </div>
+                  </div>
+                  <div class="di">
+                    <div class="left">
+                      <span class="ticker">028260</span>
+                      <span class="name">삼성물산</span>
+                    </div>
+                    <div class="right">
+                      <span class="market">KRX</span>
+                      <span class="price">118,600원</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </td>
+            <td style="font-size:12px;color:var(--text-disabled)">(선택 대기)</td>
+            <td>—</td>
+            <td>
+              <input type="text" class="cell-input" placeholder="섹터" style="background:transparent;border:none;border-radius:0;height:32px;font-size:13px;padding:0 4px;color:var(--text-body);width:100%;outline:none;">
+            </td>
+            <td class="td-num">
+              <input type="number" class="cell-input" placeholder="0" style="background:transparent;border:none;border-radius:0;height:32px;font-size:13px;padding:0 4px;color:var(--text-body);width:100%;outline:none;text-align:right;">
+            </td>
+            <td class="td-num">
+              <input type="number" class="cell-input" placeholder="0" style="background:transparent;border:none;border-radius:0;height:32px;font-size:13px;padding:0 4px;color:var(--text-body);width:100%;outline:none;text-align:right;">
+            </td>
+            <td style="text-align:center">
+              <button class="btn btn-destructive" style="width:28px;height:28px;padding:0">✕</button>
+            </td>
+          </tr>
+
+          <!-- Row 4 -->
+          <tr>
+            <td>
+              <span style="font-family:var(--font-mono);font-weight:500;color:var(--text-primary);font-size:13px">AAPL</span>
+            </td>
+            <td style="font-size:13px;color:var(--text-body)">Apple</td>
+            <td><span class="badge badge-market">NASDAQ</span></td>
+            <td><span class="badge badge-sector">IT</span></td>
+            <td class="td-num">15</td>
+            <td class="td-num">180.50</td>
+            <td style="text-align:center">
+              <button class="btn btn-destructive" style="width:28px;height:28px;padding:0">✕</button>
+            </td>
+          </tr>
+
+          <!-- Row 5 -->
+          <tr>
+            <td>
+              <span style="font-family:var(--font-mono);font-weight:500;color:var(--text-primary);font-size:13px">XOM</span>
+            </td>
+            <td style="font-size:13px;color:var(--text-body)">ExxonMobil</td>
+            <td><span class="badge badge-market">NYSE</span></td>
+            <td><span class="badge badge-sector">에너지</span></td>
+            <td class="td-num">40</td>
+            <td class="td-num">115.20</td>
+            <td style="text-align:center">
+              <button class="btn btn-destructive" style="width:28px;height:28px;padding:0">✕</button>
+            </td>
+          </tr>
+
+        </tbody>
+      </table>
+
+      <!-- Status bar -->
+      <div class="status-bar">
+        <span style="color:var(--text-muted)">마지막 저장: 오늘 14:23</span>
+        <span style="color:var(--brand-primary)">변경사항이 있습니다 — 저장 후 포트폴리오에 반영됩니다</span>
+      </div>
+    </div>
+
+    <!-- Error state example -->
+    <div class="mt-4" style="padding: 10px 16px; background: rgba(221,60,68,0.06); border: 1px solid rgba(221,60,68,0.2); border-radius: var(--radius);">
+      <span style="font-size:12px;color:var(--error)">오류: 보유수량은 0보다 커야 합니다 (3행)</span>
+    </div>
+
+  </div>
+</body>
+</html>

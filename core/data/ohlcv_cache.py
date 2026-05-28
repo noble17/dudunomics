@@ -1,6 +1,7 @@
 """OHLCV DuckDB 캐시 레이어.
 
-fetch_ohlcv / fetch_index 는 DB 우선 조회 → 캐시 미스 시 yfinance fetch 후 저장.
+fetch_ohlcv / fetch_index 는 DB 우선 조회 → 캐시 미스 시 fetch 후 저장.
+우선순위: KIS API → FDR (국내 fallback) / yfinance (해외 fallback)
 """
 from __future__ import annotations
 
@@ -9,9 +10,11 @@ from datetime import date, timedelta
 
 import pandas as pd
 import yfinance as yf
+from yfinance.exceptions import YFRateLimitError
 from sqlalchemy import text
 
 from core import repository as repo
+from core.ids import is_domestic
 
 log = logging.getLogger(__name__)
 
@@ -66,66 +69,159 @@ def _is_cached(ticker: str, start: date, end: date) -> bool:
     return min_date <= start + _TOLERANCE and max_date >= end - _TOLERANCE
 
 
-def _fetch_and_store(tickers: list[str], start: date, end: date) -> list[str]:
-    """yfinance로 데이터 다운로드 후 prices_cache에 저장. warnings 반환."""
-    warns: list[str] = []
-    try:
-        raw = yf.download(
-            tickers,
-            start=str(start),
-            end=str(end),
-            progress=False,
-            auto_adjust=True,
-            group_by="ticker",
-        )
-    except Exception as e:
-        warns.append(f"yfinance fetch 실패 ({tickers}): {e}")
-        return warns
+def _store_df(ticker: str, df: pd.DataFrame) -> None:
+    """OHLCV DataFrame을 prices_cache에 저장."""
+    rows = [
+        {"ticker": ticker, "date": dt.date() if hasattr(dt, "date") else dt,
+         "open": float(row.get("Open") or 0), "high": float(row.get("High") or 0),
+         "low": float(row.get("Low") or 0), "close": float(row.get("Close") or 0),
+         "volume": int(row.get("Volume") or 0)}
+        for dt, row in df.iterrows()
+    ]
+    repo.upsert_ohlcv_rows(rows)
+
+
+def _fetch_fdr(ticker: str, start: date, end: date) -> pd.DataFrame:
+    """FDR fallback — KRX 종목 전용."""
+    import FinanceDataReader as fdr
+    code = ticker.split(".")[0]
+    df = fdr.DataReader(code, start=str(start), end=str(end))
+    if df.empty:
+        return df
+    df.index = pd.to_datetime(df.index).tz_localize(None)
+    df.columns = [c.capitalize() if c.lower() in ("open", "high", "low", "close", "volume") else c for c in df.columns]
+    return df[[c for c in ["Open", "High", "Low", "Close", "Volume"] if c in df.columns]]
+
+
+def _fetch_yfinance(ticker: str, start: date, end: date) -> pd.DataFrame:
+    """yfinance fallback — 해외 종목 단건. bulk 경로가 없을 때 사용."""
+    from core.data.yf_session import get_session
+    t = yf.Ticker(ticker, session=get_session())
+    df = t.history(start=str(start), end=str(end), auto_adjust=True)
+    if df.empty:
+        return df
+    df.index = df.index.tz_localize(None) if df.index.tz else df.index
+    return df[[c for c in ["Open", "High", "Low", "Close", "Volume"] if c in df.columns]]
+
+
+def _fetch_yfinance_bulk(tickers: list[str], start: date, end: date) -> dict[str, pd.DataFrame]:
+    """여러 해외 종목을 yf.download() 단일 호출로 페치.
+
+    HTTP 커넥션 1개로 수백 종목 처리 → IP 차단 방지.
+    threads=False로 yfinance 내부 병렬 요청 비활성화.
+    """
+    if not tickers:
+        return {}
+
+    log.info("[ohlcv] bulk download %d개 종목 (%s ~ %s)", len(tickers), start, end)
+    raw = yf.download(
+        tickers,
+        start=str(start),
+        end=str(end),
+        auto_adjust=True,
+        group_by="ticker",
+        threads=False,
+        progress=False,
+    )
 
     if raw.empty:
-        for t in tickers:
-            warns.append(f"{t}: 데이터 없음")
-        return warns
+        return {}
 
-    if raw.index.tz is not None:
-        raw.index = raw.index.tz_convert(None)
+    result: dict[str, pd.DataFrame] = {}
+    cols = ["Open", "High", "Low", "Close", "Volume"]
 
-    # 단일 티커는 MultiIndex 없이 반환됨 → 수동 변환
-    if not isinstance(raw.columns, pd.MultiIndex):
-        cols = [c[0] if isinstance(c, tuple) else c for c in raw.columns]
-        raw.columns = cols
-        keep = [c for c in ["Open", "High", "Low", "Close", "Volume"] if c in raw.columns]
-        raw = raw[keep]
-        raw.columns = pd.MultiIndex.from_tuples([(tickers[0], c) for c in raw.columns])
+    if len(tickers) == 1:
+        # 단일 종목이면 MultiIndex 없이 반환됨
+        df = raw.copy()
+        df.index = df.index.tz_localize(None) if df.index.tz else df.index
+        available = [c for c in cols if c in df.columns]
+        if available:
+            result[tickers[0]] = df[available].dropna(how="all")
     else:
-        sample = raw.columns[0]
-        if sample[0] in ("Open", "High", "Low", "Close", "Volume", "Adj Close"):
-            raw = raw.swaplevel(axis=1)
-        raw = raw.sort_index(axis=1)
+        for ticker in tickers:
+            if ticker not in raw.columns.get_level_values(0):
+                continue
+            df = raw[ticker].copy()
+            df.index = df.index.tz_localize(None) if df.index.tz else df.index
+            available = [c for c in cols if c in df.columns]
+            if available:
+                df = df[available].dropna(how="all")
+                if not df.empty:
+                    result[ticker] = df
 
-    rows: list[dict] = []
-    available = raw.columns.get_level_values(0).unique().tolist()
-    for ticker in tickers:
-        if ticker not in available:
-            warns.append(f"{ticker}: 데이터 없음 — 제외")
-            continue
-        sub = raw[ticker].dropna(how="all")
-        if sub.empty:
-            warns.append(f"{ticker}: 구간 내 데이터 없음 — 제외")
-            continue
-        for dt, row in sub.iterrows():
-            rows.append({
-                "ticker": ticker,
-                "date": dt.date(),
-                "open": row.get("Open"),
-                "high": row.get("High"),
-                "low": row.get("Low"),
-                "close": row.get("Close"),
-                "volume": int(row.get("Volume") or 0),
-            })
+    return result
 
-    repo.upsert_ohlcv_rows(rows)
+
+def _fetch_and_store(tickers: list[str], start: date, end: date) -> list[str]:
+    """OHLCV 다운로드 후 prices_cache에 저장.
+
+    - 국내 종목: KIS API → FDR fallback (개별)
+    - 해외 종목: yf.download() bulk 1회 호출 → 실패 종목만 개별 재시도
+    """
+    from core.prices.kis import fetch_ohlcv_domestic
+
+    warns: list[str] = []
+    domestic_tickers = [t for t in tickers if is_domestic(t)]
+    overseas_tickers = [t for t in tickers if not is_domestic(t)]
+
+    # ── 국내 종목: 개별 KIS/FDR ──────────────────────────────────────────────
+    for ticker in domestic_tickers:
+        df: pd.DataFrame = pd.DataFrame()
+        try:
+            df = fetch_ohlcv_domestic(ticker, start, end)
+        except Exception as e:
+            log.warning("KIS OHLCV 실패 (%s): %s — FDR fallback", ticker, e)
+
+        if df.empty:
+            try:
+                df = _fetch_fdr(ticker, start, end)
+            except Exception as e:
+                warns.append(f"{ticker}: fetch 실패 — {e}")
+                continue
+            if df.empty:
+                warns.append(f"{ticker}: 데이터 없음")
+                continue
+
+        try:
+            _store_df(ticker, df)
+        except Exception as e:
+            warns.append(f"{ticker}: 저장 실패 — {e}")
+
+    # ── 해외 종목: bulk download ──────────────────────────────────────────────
+    if overseas_tickers:
+        try:
+            bulk = _fetch_yfinance_bulk(overseas_tickers, start, end)
+        except YFRateLimitError:
+            warns.append("해외 bulk: Yahoo Finance 요청 한도 초과. 잠시 후 다시 시도하세요.")
+            return warns
+        except Exception as e:
+            log.warning("bulk download 실패: %s — 개별 재시도", e)
+            bulk = {}
+
+        failed = [t for t in overseas_tickers if t not in bulk]
+
+        for ticker, df in bulk.items():
+            try:
+                _store_df(ticker, df)
+            except Exception as e:
+                warns.append(f"{ticker}: 저장 실패 — {e}")
+
+        # bulk에서 빠진 종목 개별 재시도
+        for ticker in failed:
+            try:
+                df = _fetch_yfinance(ticker, start, end)
+                if df.empty:
+                    warns.append(f"{ticker}: 데이터 없음")
+                    continue
+                _store_df(ticker, df)
+            except YFRateLimitError:
+                warns.append(f"{ticker}: Yahoo Finance 요청 한도 초과.")
+            except Exception as e:
+                warns.append(f"{ticker}: fetch 실패 — {e}")
+
     return warns
+
+
 
 
 def _read_ohlcv(

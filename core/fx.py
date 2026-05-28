@@ -24,17 +24,29 @@ class KisFxProvider(FxProvider):
             return self._fetch_yfinance(pair)
 
     def _fetch_kis(self, pair: str) -> float:
-        from pykis import PyKis
-        env = os.getenv("KIS_ENV", "real")
-        api = PyKis(
-            appkey=os.environ["KIS_APPKEY"],
-            secretkey=os.environ["KIS_SECRETKEY"],
-            account=os.environ["KIS_ACCOUNT_NO"],
-            virtual=env != "real",
+        """KIS 해외시세 price-detail 응답의 t_rate 필드로 환율 취득 (pykis 미사용)."""
+        if pair != "USDKRW":
+            raise ValueError(f"KIS FX: {pair} 미지원, yfinance 폴백")
+
+        from core.prices.kis import KIS_BASE, _get_token, _headers
+        token = _get_token()
+        if not token:
+            raise RuntimeError("KIS 토큰 없음")
+
+        import requests
+        res = requests.get(
+            f"{KIS_BASE}/uapi/overseas-price/v1/quotations/price-detail",
+            params={"AUTH": "", "EXCD": "NAS", "SYMB": "AAPL"},
+            headers=_headers("HHDFS76200200", token),
+            timeout=10,
         )
-        # KIS 환율: USD/KRW
-        rate_info = api.forex_rate("USD")
-        return float(rate_info.rate)
+        data = res.json()
+        if data.get("rt_cd") != "0":
+            raise RuntimeError(f"KIS price-detail 오류: {data.get('msg1')}")
+        t_rate = float(data["output"].get("t_rate") or 0)
+        if t_rate <= 0:
+            raise RuntimeError("t_rate 값 없음")
+        return t_rate
 
     def _fetch_yfinance(self, pair: str) -> float:
         import yfinance as yf

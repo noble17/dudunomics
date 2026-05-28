@@ -1,9 +1,28 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Roboto, Roboto_Mono, Noto_Sans_KR } from "next/font/google";
 import "./globals.css";
 import { Nav } from "@/components/nav";
 
-const inter = Inter({ subsets: ["latin"] });
+const roboto = Roboto({
+  subsets: ["latin"],
+  weight: ["400", "500"],
+  variable: "--font-roboto",
+  display: "swap",
+});
+
+const robotoMono = Roboto_Mono({
+  subsets: ["latin"],
+  weight: ["400"],
+  variable: "--font-roboto-mono",
+  display: "swap",
+});
+
+const notoSansKR = Noto_Sans_KR({
+  subsets: ["latin"],
+  weight: ["400", "500", "700"],
+  variable: "--font-noto-sans-kr",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "Dudunomics",
@@ -13,7 +32,9 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="ko">
-      <body className={`${inter.className} min-h-screen bg-slate-50 antialiased`}>
+      <body
+        className={`${roboto.variable} ${robotoMono.variable} ${notoSansKR.variable} min-h-screen bg-background antialiased`}
+      >
         <Nav />
         <main className="mx-auto max-w-screen-xl px-6 py-8">{children}</main>
       </body>

@@ -28,5 +28,10 @@ python-dotenv==1.0.1
 requests==2.32.3
 pyyaml==6.0.2
 
+# 인증
+pyjwt==2.13.0
+bcrypt==4.2.1
+python-multipart==0.0.29
+
 # 테스트
 pytest==8.3.5

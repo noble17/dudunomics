@@ -1,0 +1,162 @@
+<h2>A + 통계 + 이벤트 — 세부 레이아웃</h2>
+<p class="subtitle">통계 행과 이벤트 섹션 위치를 골라주세요</p>
+
+<div class="cards">
+
+  <!-- Option A1 -->
+  <div class="card" data-choice="a1" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="background:#f8f9fb;border:1px solid #e0e2e7;border-radius:6px;padding:12px;font-family:monospace;font-size:11px;gap:6px;display:flex;flex-direction:column;">
+
+        <!-- header row: title + range buttons -->
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <span style="font-weight:600;font-size:12px;">자산 추이</span>
+          <div style="display:flex;gap:3px;">
+            <span style="padding:2px 6px;border:1px solid #1375EC;border-radius:3px;color:#1375EC;font-size:9px;background:#EEF5FF;">1H</span>
+            <span style="padding:2px 6px;border:1px solid #ddd;border-radius:3px;color:#888;font-size:9px;">6H</span>
+            <span style="padding:2px 6px;border:1px solid #ddd;border-radius:3px;color:#888;font-size:9px;">24H</span>
+            <span style="padding:2px 6px;border:1px solid #ddd;border-radius:3px;color:#888;font-size:9px;">7D</span>
+            <span style="padding:2px 6px;border:1px solid #ddd;border-radius:3px;color:#888;font-size:9px;">30D</span>
+          </div>
+        </div>
+
+        <!-- stats row -->
+        <div style="display:flex;gap:0;border:1px solid #e0e2e7;border-radius:4px;overflow:hidden;background:#fff;">
+          <div style="flex:1;text-align:center;padding:5px 4px;border-right:1px solid #f0f0f0;">
+            <div style="font-size:8px;color:#999;margin-bottom:2px;">현재</div>
+            <div style="font-size:10px;font-weight:600;color:#111;">₩263M</div>
+          </div>
+          <div style="flex:1;text-align:center;padding:5px 4px;border-right:1px solid #f0f0f0;">
+            <div style="font-size:8px;color:#999;margin-bottom:2px;">변동</div>
+            <div style="font-size:10px;font-weight:600;color:#1AAD5E;">+2621만</div>
+          </div>
+          <div style="flex:1;text-align:center;padding:5px 4px;border-right:1px solid #f0f0f0;">
+            <div style="font-size:8px;color:#999;margin-bottom:2px;">최고</div>
+            <div style="font-size:10px;font-weight:600;color:#111;">₩265M</div>
+          </div>
+          <div style="flex:1;text-align:center;padding:5px 4px;">
+            <div style="font-size:8px;color:#999;margin-bottom:2px;">최저</div>
+            <div style="font-size:10px;font-weight:600;color:#111;">₩235M</div>
+          </div>
+        </div>
+
+        <!-- chart -->
+        <div style="background:#fff;border:1px solid #e0e2e7;height:90px;border-radius:4px;overflow:hidden;">
+          <svg width="100%" height="85" viewBox="0 0 320 85" preserveAspectRatio="none">
+            <defs><linearGradient id="g1" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#1375EC" stop-opacity="0.15"/><stop offset="100%" stop-color="#1375EC" stop-opacity="0"/></linearGradient></defs>
+            <path d="M0,72 C40,62 80,34 140,24 C180,18 220,20 280,17 L320,15 L320,85 L0,85 Z" fill="url(#g1)"/>
+            <path d="M0,72 C40,62 80,34 140,24 C180,18 220,20 280,17 L320,15" fill="none" stroke="#1375EC" stroke-width="2"/>
+            <path d="M0,55 C40,48 80,26 140,18 C180,14 220,15 280,13 L320,11" fill="none" stroke="#BEC1C6" stroke-width="1.5" stroke-dasharray="4 2"/>
+            <line x1="165" y1="4" x2="165" y2="82" stroke="#E8812A" stroke-width="1.5" stroke-dasharray="4 3"/>
+            <rect x="150" y="3" width="30" height="13" rx="2" fill="#fff" stroke="#E8812A" stroke-width="1"/>
+            <text x="165" y="12" text-anchor="middle" font-size="8" fill="#E8812A">월급</text>
+          </svg>
+        </div>
+
+        <!-- zoom brush -->
+        <div style="background:#fff;border:1px solid #e0e2e7;height:22px;border-radius:3px;overflow:hidden;position:relative;">
+          <svg width="100%" height="20" viewBox="0 0 300 20" preserveAspectRatio="none">
+            <path d="M0,16 C40,12 80,7 140,5 C180,4 220,5 300,4" fill="none" stroke="#BEC1C6" stroke-width="1"/>
+            <rect x="90" y="0" width="100" height="20" fill="#1375EC" fill-opacity="0.12" rx="2"/>
+            <line x1="90" y1="0" x2="90" y2="20" stroke="#1375EC" stroke-width="2"/>
+            <line x1="190" y1="0" x2="190" y2="20" stroke="#1375EC" stroke-width="2"/>
+          </svg>
+        </div>
+
+        <!-- event section -->
+        <div style="background:#fff;border:1px solid #e0e2e7;border-radius:4px;padding:6px 8px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
+            <span style="font-size:9px;font-weight:600;color:#333;">이벤트</span>
+            <span style="font-size:9px;color:#1375EC;cursor:pointer;">+ 이벤트 추가</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0;border-top:1px solid #f4f4f4;font-size:9px;">
+            <span>💰 5월 월급 · 05-23 21:09 · 입금</span>
+            <span style="color:#1AAD5E;">+790만원</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0;border-top:1px solid #f4f4f4;font-size:9px;">
+            <span>💳 카드값 · 05-14 20:05 · 출금</span>
+            <span style="color:#DD3C44;">-200만원</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A1. 수직 스택</h3>
+      <p>범위 버튼 → 통계 → 차트 → 줌 브러시 → 이벤트. 위에서 아래로 자연스럽게 흐름. 페이지 스크롤 약간 증가.</p>
+    </div>
+  </div>
+
+  <!-- Option A2 -->
+  <div class="card" data-choice="a2" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="background:#f8f9fb;border:1px solid #e0e2e7;border-radius:6px;padding:12px;font-family:monospace;font-size:11px;gap:6px;display:flex;flex-direction:column;">
+
+        <!-- header: title + stats + range buttons in one row -->
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div style="display:flex;gap:10px;align-items:baseline;">
+            <span style="font-weight:600;font-size:12px;">자산 추이</span>
+            <span style="font-size:10px;font-weight:600;color:#111;">₩263M</span>
+            <span style="font-size:9px;color:#1AAD5E;font-weight:600;">+2621만</span>
+          </div>
+          <div style="display:flex;gap:3px;">
+            <span style="padding:2px 6px;border:1px solid #1375EC;border-radius:3px;color:#1375EC;font-size:9px;background:#EEF5FF;">1H</span>
+            <span style="padding:2px 6px;border:1px solid #ddd;border-radius:3px;color:#888;font-size:9px;">6H</span>
+            <span style="padding:2px 6px;border:1px solid #ddd;border-radius:3px;color:#888;font-size:9px;">24H</span>
+            <span style="padding:2px 6px;border:1px solid #ddd;border-radius:3px;color:#888;font-size:9px;">7D</span>
+            <span style="padding:2px 6px;border:1px solid #ddd;border-radius:3px;color:#888;font-size:9px;">30D</span>
+          </div>
+        </div>
+
+        <!-- secondary stats: 최고/최저 inline small -->
+        <div style="display:flex;gap:12px;font-size:9px;color:#888;">
+          <span>최고 <b style="color:#333;">₩265M</b></span>
+          <span>최저 <b style="color:#333;">₩235M</b></span>
+          <span>시작 <b style="color:#333;">₩236M</b></span>
+        </div>
+
+        <!-- chart -->
+        <div style="background:#fff;border:1px solid #e0e2e7;height:95px;border-radius:4px;overflow:hidden;">
+          <svg width="100%" height="90" viewBox="0 0 320 90" preserveAspectRatio="none">
+            <defs><linearGradient id="g2" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#1375EC" stop-opacity="0.15"/><stop offset="100%" stop-color="#1375EC" stop-opacity="0"/></linearGradient></defs>
+            <path d="M0,76 C40,66 80,38 140,27 C180,20 220,22 280,19 L320,17 L320,90 L0,90 Z" fill="url(#g2)"/>
+            <path d="M0,76 C40,66 80,38 140,27 C180,20 220,22 280,19 L320,17" fill="none" stroke="#1375EC" stroke-width="2"/>
+            <path d="M0,58 C40,50 80,28 140,20 C180,15 220,17 280,14 L320,12" fill="none" stroke="#BEC1C6" stroke-width="1.5" stroke-dasharray="4 2"/>
+            <line x1="165" y1="4" x2="165" y2="87" stroke="#E8812A" stroke-width="1.5" stroke-dasharray="4 3"/>
+            <rect x="150" y="3" width="30" height="13" rx="2" fill="#fff" stroke="#E8812A" stroke-width="1"/>
+            <text x="165" y="12" text-anchor="middle" font-size="8" fill="#E8812A">월급</text>
+          </svg>
+        </div>
+
+        <!-- zoom + event toggle in same row -->
+        <div style="display:flex;gap:6px;">
+          <div style="flex:1;background:#fff;border:1px solid #e0e2e7;height:22px;border-radius:3px;overflow:hidden;">
+            <svg width="100%" height="20" viewBox="0 0 200 20" preserveAspectRatio="none">
+              <path d="M0,16 C25,12 50,7 90,5 C120,4 150,5 200,4" fill="none" stroke="#BEC1C6" stroke-width="1"/>
+              <rect x="55" y="0" width="80" height="20" fill="#1375EC" fill-opacity="0.12" rx="2"/>
+              <line x1="55" y1="0" x2="55" y2="20" stroke="#1375EC" stroke-width="2"/>
+              <line x1="135" y1="0" x2="135" y2="20" stroke="#1375EC" stroke-width="2"/>
+            </svg>
+          </div>
+          <span style="font-size:9px;color:#1375EC;padding:4px 8px;border:1px solid #1375EC;border-radius:3px;white-space:nowrap;">+ 이벤트</span>
+        </div>
+
+        <!-- event list collapsible -->
+        <div style="background:#fff;border:1px solid #e0e2e7;border-radius:4px;padding:5px 8px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;font-size:9px;">
+            <span>💰 5월 월급 · 05-23</span><span style="color:#1AAD5E;">+790만원</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;font-size:9px;border-top:1px solid #f4f4f4;margin-top:3px;padding-top:3px;">
+            <span>💳 카드값 · 05-14</span><span style="color:#DD3C44;">-200만원</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A2. 헤더 통합형</h3>
+      <p>현재값·변동을 타이틀 옆에 인라인으로, 최고·최저는 작게 2번째 줄에. 차트 영역을 더 크게 유지하면서 통계도 항상 보임.</p>
+    </div>
+  </div>
+
+</div>

@@ -27,7 +27,7 @@ export default function HoldingsPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">보유종목 편집</h1>
+      <h1 className="font-heading text-2xl font-bold tracking-tight">보유종목 편집</h1>
       <HoldingsEditor
         initialHoldings={holdings}
         initialCashKrw={cash.cash_krw}

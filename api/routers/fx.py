@@ -1,14 +1,15 @@
 from fastapi import APIRouter, Depends, HTTPException
-from api.auth import require_auth
+from core.auth.deps import current_user, CurrentUser
 from api.models import FxRateOut
 import core.repository as repo
 from core.fx import get_fx_provider
 
-router = APIRouter(prefix="/api/fx", tags=["fx"], dependencies=[Depends(require_auth)])
+router = APIRouter(prefix="/api/fx", tags=["fx"])
 _fx_provider = get_fx_provider()
 
+
 @router.get("/{pair}", response_model=FxRateOut)
-def get_fx_rate(pair: str):
+def get_fx_rate(pair: str, user: CurrentUser = Depends(current_user)):
     pair = pair.upper()
     cached = repo.get_latest_fx_rate(pair)
     if cached:

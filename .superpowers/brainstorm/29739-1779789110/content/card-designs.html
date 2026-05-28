@@ -1,0 +1,275 @@
+<h2>KPI 카드 디자인 옵션</h2>
+<p class="subtitle">현재 디자인과 2가지 방향을 비교해보세요. 클릭해서 선택할 수 있어요.</p>
+
+<style>
+  /* 디자인 시스템 변수 */
+  :root {
+    --rise: #DD3C44;
+    --fall: #1375EC;
+    --bg: #E9ECF1;
+    --card-bg: #FFFFFF;
+    --border: #EDEEF1;
+    --text-label: #666666;
+    --text-value: #1A2434;
+    --font-mono: 'Roboto Mono', monospace;
+  }
+
+  .preview-bg {
+    background: var(--bg);
+    padding: 20px;
+    border-radius: 6px;
+    margin-bottom: 16px;
+  }
+
+  .kpi-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  /* === 옵션 A: 현재 디자인 (비교용) === */
+  .card-current {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    padding: 14px 16px;
+    min-width: 120px;
+    flex: 1;
+  }
+  .card-current .lbl {
+    font-size: 10px;
+    color: var(--text-label);
+    letter-spacing: 0.03em;
+    margin-bottom: 6px;
+    font-family: sans-serif;
+  }
+  .card-current .val {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    color: var(--text-value);
+    white-space: nowrap;
+  }
+  .card-current .sub {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--rise);
+    margin-top: 3px;
+  }
+
+  /* === 옵션 B: 상단 액센트 라인 === */
+  .card-accent {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-top: 3px solid var(--border);
+    padding: 14px 16px;
+    min-width: 120px;
+    flex: 1;
+    position: relative;
+  }
+  .card-accent.positive { border-top-color: var(--rise); }
+  .card-accent.negative { border-top-color: var(--fall); }
+  .card-accent .lbl {
+    font-size: 10px;
+    color: var(--text-label);
+    letter-spacing: 0.03em;
+    margin-bottom: 8px;
+    font-family: sans-serif;
+  }
+  .card-accent .val {
+    font-family: var(--font-mono);
+    font-size: 14px;
+    color: var(--text-value);
+    font-weight: 500;
+    white-space: nowrap;
+  }
+  .card-accent .val.positive { color: var(--rise); }
+  .card-accent .val.negative { color: var(--fall); }
+  .card-accent .sub {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--rise);
+    margin-top: 4px;
+    opacity: 0.85;
+  }
+
+  /* === 옵션 C: 틴트 배경 + 구분 강화 === */
+  .card-tint {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    padding: 14px 16px;
+    min-width: 120px;
+    flex: 1;
+  }
+  .card-tint.positive { background: rgba(221,60,68,0.05); border-color: rgba(221,60,68,0.2); }
+  .card-tint.negative { background: rgba(19,117,236,0.05); border-color: rgba(19,117,236,0.2); }
+  .card-tint .lbl {
+    font-size: 10px;
+    color: var(--text-label);
+    letter-spacing: 0.03em;
+    margin-bottom: 6px;
+    font-family: sans-serif;
+  }
+  .card-tint.positive .lbl { color: rgba(221,60,68,0.7); }
+  .card-tint .val {
+    font-family: var(--font-mono);
+    font-size: 14px;
+    color: var(--text-value);
+    white-space: nowrap;
+  }
+  .card-tint.positive .val { color: var(--rise); }
+  .card-tint.negative .val { color: var(--fall); }
+  .card-tint .sub {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--rise);
+    margin-top: 4px;
+  }
+
+  .option-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 10px;
+  }
+</style>
+
+<div class="cards" style="flex-direction: column; gap: 20px;">
+
+  <!-- 옵션 A: 현재 -->
+  <div class="card" data-choice="a" onclick="toggleSelect(this)" style="padding: 20px;">
+    <div class="card-body" style="padding: 0;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+        <div>
+          <h3 style="margin:0 0 2px 0;">A. 현재 디자인 (변경 없음)</h3>
+          <p style="margin:0; font-size:12px; color:#888;">심플한 테두리 박스</p>
+        </div>
+      </div>
+      <div class="preview-bg">
+        <div class="kpi-row">
+          <div class="card-current">
+            <div class="lbl">순자산</div>
+            <div class="val">₩261,295,214</div>
+          </div>
+          <div class="card-current">
+            <div class="lbl">수익률</div>
+            <div class="val" style="color:var(--rise)">+13.14%</div>
+            <div class="sub">+₩22,973,460</div>
+          </div>
+          <div class="card-current">
+            <div class="lbl">현금</div>
+            <div class="val">₩63,471,601</div>
+          </div>
+          <div class="card-current">
+            <div class="lbl">국내평가금액</div>
+            <div class="val">₩109,985,000</div>
+          </div>
+          <div class="card-current">
+            <div class="lbl">해외평가금액</div>
+            <div class="val">₩87,838,612</div>
+          </div>
+          <div class="card-current">
+            <div class="lbl">국내손익</div>
+            <div class="val" style="color:var(--rise)">+₩16,114,478</div>
+          </div>
+          <div class="card-current">
+            <div class="lbl">해외손익</div>
+            <div class="val" style="color:var(--rise)">+₩6,858,982</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 옵션 B: 상단 액센트 라인 -->
+  <div class="card" data-choice="b" onclick="toggleSelect(this)" style="padding: 20px;">
+    <div class="card-body" style="padding: 0;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+        <div>
+          <h3 style="margin:0 0 2px 0;">B. 상단 액센트 라인</h3>
+          <p style="margin:0; font-size:12px; color:#888;">수익/손실 카드 상단에 컬러 3px 라인 — 한눈에 색으로 구분</p>
+        </div>
+        <span style="background:#1375EC; color:white; font-size:10px; padding:2px 8px; border-radius:3px; font-weight:600;">추천</span>
+      </div>
+      <div class="preview-bg">
+        <div class="kpi-row">
+          <div class="card-accent">
+            <div class="lbl">순자산</div>
+            <div class="val">₩261,295,214</div>
+          </div>
+          <div class="card-accent positive">
+            <div class="lbl">수익률</div>
+            <div class="val positive">+13.14%</div>
+            <div class="sub">+₩22,973,460</div>
+          </div>
+          <div class="card-accent">
+            <div class="lbl">현금</div>
+            <div class="val">₩63,471,601</div>
+          </div>
+          <div class="card-accent">
+            <div class="lbl">국내평가금액</div>
+            <div class="val">₩109,985,000</div>
+          </div>
+          <div class="card-accent">
+            <div class="lbl">해외평가금액</div>
+            <div class="val">₩87,838,612</div>
+          </div>
+          <div class="card-accent positive">
+            <div class="lbl">국내손익</div>
+            <div class="val positive">+₩16,114,478</div>
+          </div>
+          <div class="card-accent positive">
+            <div class="lbl">해외손익</div>
+            <div class="val positive">+₩6,858,982</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 옵션 C: 틴트 배경 -->
+  <div class="card" data-choice="c" onclick="toggleSelect(this)" style="padding: 20px;">
+    <div class="card-body" style="padding: 0;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+        <div>
+          <h3 style="margin:0 0 2px 0;">C. 틴트 배경</h3>
+          <p style="margin:0; font-size:12px; color:#888;">수익/손실 카드에 미묘한 배경색 — 더 강한 시각적 구분</p>
+        </div>
+      </div>
+      <div class="preview-bg">
+        <div class="kpi-row">
+          <div class="card-tint">
+            <div class="lbl">순자산</div>
+            <div class="val">₩261,295,214</div>
+          </div>
+          <div class="card-tint positive">
+            <div class="lbl">수익률</div>
+            <div class="val positive">+13.14%</div>
+            <div class="sub">+₩22,973,460</div>
+          </div>
+          <div class="card-tint">
+            <div class="lbl">현금</div>
+            <div class="val">₩63,471,601</div>
+          </div>
+          <div class="card-tint">
+            <div class="lbl">국내평가금액</div>
+            <div class="val">₩109,985,000</div>
+          </div>
+          <div class="card-tint">
+            <div class="lbl">해외평가금액</div>
+            <div class="val">₩87,838,612</div>
+          </div>
+          <div class="card-tint positive">
+            <div class="lbl">국내손익</div>
+            <div class="val positive">+₩16,114,478</div>
+          </div>
+          <div class="card-tint positive">
+            <div class="lbl">해외손익</div>
+            <div class="val positive">+₩6,858,982</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>

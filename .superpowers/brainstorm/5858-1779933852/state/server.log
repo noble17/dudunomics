@@ -1,0 +1,2 @@
+{"type":"server-started","port":60850,"host":"127.0.0.1","url_host":"localhost","url":"http://localhost:60850","screen_dir":"/Users/user/Development/private/dudunomics/.superpowers/brainstorm/5858-1779933852/content","state_dir":"/Users/user/Development/private/dudunomics/.superpowers/brainstorm/5858-1779933852/state"}
+{"type":"server-stopped","reason":"idle timeout"}

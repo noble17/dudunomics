@@ -40,24 +40,30 @@ def _percentile_rank(series: pd.Series, ascending: bool = True) -> pd.Series:
 
 def run_batch(universe: str = "sp500") -> dict:
     """전체 유니버스 배치 스코어링 실행. 완료 후 통계 dict 반환."""
+    import core.batch_state as bs
+
     today = date.today()
     log.info("[Universe Scorer] 시작: %s %s", universe, today)
 
     # 1. 유니버스 티커 목록
     tickers = get_tickers(universe)
     log.info("[Universe Scorer] 티커 %d개", len(tickers))
+    bs.start(universe, len(tickers))
 
     # 2. OHLCV 캐시 갱신 (1년치 — momentum 12M 계산 필요)
     start_ohlcv = today - timedelta(days=380)
     log.info("[Universe Scorer] OHLCV 갱신 중...")
+    bs.update(universe, "주가 데이터 캐시 갱신 중", 0)
     _, warns = fetch_ohlcv(tickers, start_ohlcv, today)
     if warns:
         log.warning("OHLCV 경고 %d건: %s...", len(warns), warns[:3])
 
     # 3. 확장 펀더멘탈 페치
     log.info("[Universe Scorer] 펀더멘탈 페치 중...")
-    snaps: list[ExtendedSnapshot] = fetch_extended(tickers, max_workers=20)
+    bs.update(universe, "펀더멘탈 페치 중 (가장 오래 걸림)", 0)
+    snaps: list[ExtendedSnapshot] = fetch_extended(tickers, max_workers=1)
     snap_map: dict[str, ExtendedSnapshot] = {s.ticker: s for s in snaps}
+    bs.update(universe, "팩터 계산 중", len(snaps))
 
     # 4. 팩터별 raw 값 계산
     log.info("[Universe Scorer] 팩터 계산 중...")
@@ -75,13 +81,18 @@ def run_batch(universe: str = "sp500") -> dict:
     raw_pbr    = pd.Series({t: snap_map[t].pbr       for t in tickers if t in snap_map})
 
     from core.factors.valuation import _winsorize_series, _combined_value_zscore
-    w_pe  = _winsorize_series(raw_fwd_pe.dropna())
-    w_pbr = _winsorize_series(raw_pbr.dropna())
-    common = w_pe.index.intersection(w_pbr.index)
-    if common.empty:
+    pe_clean  = raw_fwd_pe.dropna()
+    pbr_clean = raw_pbr.dropna()
+    if pe_clean.empty or pbr_clean.empty:
         raw_valuation = pd.Series({t: math.nan for t in tickers})
     else:
-        raw_valuation = _combined_value_zscore(w_pe[common], w_pbr[common]).reindex(tickers)
+        w_pe  = _winsorize_series(pe_clean)
+        w_pbr = _winsorize_series(pbr_clean)
+        common = w_pe.index.intersection(w_pbr.index)
+        if common.empty:
+            raw_valuation = pd.Series({t: math.nan for t in tickers})
+        else:
+            raw_valuation = _combined_value_zscore(w_pe[common], w_pbr[common]).reindex(tickers)
 
     # 4d. Quality
     raw_quality_vals: dict[str, float] = {}
@@ -144,12 +155,14 @@ def run_batch(universe: str = "sp500") -> dict:
             "raw_roe":          snap.roe if snap else None,
             "raw_debt_ratio":   (snap.debt_to_equity / 100.0) if (snap and snap.debt_to_equity) else None,
             "raw_rsi":          _safe_float(raw_rsi.get(ticker)),
-            "above_ma200":      above_ma200.get(ticker, False),
+            "above_ma200":      bool(above_ma200.get(ticker, False)),
             "cfo_positive":     bool(snap.operating_cashflow and snap.operating_cashflow > 0) if snap else False,
             "company_name":     snap.company_name if snap else None,
         })
 
+    bs.update(universe, "DB 저장 중", len(tickers))
     repo.upsert_quant_scores(rows)
+    bs.finish(universe, len(rows))
     log.info("[Universe Scorer] 완료: %d행 upsert", len(rows))
     return {"universe": universe, "as_of": str(today), "count": len(rows)}
 

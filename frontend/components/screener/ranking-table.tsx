@@ -8,6 +8,7 @@ interface Props {
   weights: FactorWeights;
   hardFilters: { ma200: boolean; cfo: boolean };
   topN?: number;
+  universe?: string;
 }
 
 function normalizeWeights(w: FactorWeights): FactorWeights {
@@ -37,7 +38,7 @@ function pctCell(val: number | null) {
   return <td className={`px-2 py-1.5 text-right text-xs font-medium ${color}`}>{val.toFixed(2)}</td>;
 }
 
-export function RankingTable({ scores, weights, hardFilters, topN = 50 }: Props) {
+export function RankingTable({ scores, weights, hardFilters, topN = 50, universe = "sp500" }: Props) {
   const router = useRouter();
   const norm = normalizeWeights(weights);
 
@@ -76,7 +77,7 @@ export function RankingTable({ scores, weights, hardFilters, topN = 50 }: Props)
             <tr
               key={s.ticker}
               className="border-b border-border hover:bg-muted/30 cursor-pointer transition-colors"
-              onClick={() => router.push(`/screener/${s.ticker}`)}
+              onClick={() => router.push(`/screener/${s.ticker}?universe=${universe}`)}
             >
               <td className="px-2 py-1.5 text-xs text-muted-foreground">{i + 1}</td>
               <td className="px-2 py-1.5 font-bold text-blue-700">{s.ticker}</td>

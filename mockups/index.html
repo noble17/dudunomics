@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dudunomics — Upbit Design Tokens</title>
+  <link rel="stylesheet" href="tokens.css">
+  <style>
+    .section { margin-bottom: 40px; }
+    .section-title {
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--text-muted);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-bottom: 14px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border-line);
+    }
+    .chips { display: flex; flex-wrap: wrap; gap: 10px; }
+    .chip {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+    }
+    .chip-swatch {
+      width: 56px;
+      height: 40px;
+      border-radius: var(--radius);
+      border: 1px solid rgba(0,0,0,0.06);
+    }
+    .chip-name  { font-size: 10px; color: var(--text-muted); text-align: center; max-width: 64px; }
+    .chip-hex   { font-family: var(--font-mono); font-size: 10px; color: var(--text-subtle); }
+
+    .btn-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+
+    .cell-demo { display: flex; flex-direction: column; gap: 0; width: 280px; border: 1px solid var(--border-line); border-radius: var(--radius); overflow: hidden; }
+    .cell-row  { display: flex; justify-content: space-between; align-items: center; padding: 0 14px; height: 30px; font-size: 11px; }
+    .cell-row.header { background: var(--surface-table-header); color: var(--text-muted); border-bottom: 1px solid var(--border-line); }
+    .cell-row.rise   { background: var(--rise-soft); color: var(--rise); height: 45px; font-family: var(--font-mono); font-size: 12px; }
+    .cell-row.fall   { background: var(--fall-soft); color: var(--fall); height: 45px; font-family: var(--font-mono); font-size: 12px; }
+    .cell-row.normal { background: var(--surface-card); height: 45px; font-family: var(--font-mono); font-size: 12px; color: var(--text-body); }
+
+    .segment { display: inline-flex; border: 1px solid var(--border-strong); border-radius: var(--radius); overflow: hidden; }
+    .seg-btn { font-size: 12px; height: 28px; padding: 0 12px; background: var(--surface-card); color: var(--text-body); border: none; cursor: pointer; border-right: 1px solid var(--border-strong); }
+    .seg-btn:last-child { border-right: none; }
+    .seg-btn.active { background: var(--surface-table-alt); }
+
+    .page-row { display: flex; gap: 12px; align-items: center; padding: 10px 14px; background: var(--surface-card); border: 1px solid var(--border-line); border-radius: var(--radius); font-size: 13px; }
+    .page-label { font-size: 11px; color: var(--text-muted); min-width: 100px; }
+    .page-value { flex: 1; }
+
+    .toast {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      background: var(--surface-card);
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius);
+      padding: 10px 16px;
+      font-size: 13px;
+      color: var(--text-body);
+      box-shadow: 0 4px 12px rgba(26,36,52,0.1);
+    }
+
+    .nav-preview {
+      background: var(--surface-card);
+      border: 1px solid var(--border-line);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+
+    .skeleton { background: var(--surface-neutral); border-radius: 2px; }
+  </style>
+</head>
+<body>
+  <nav class="nav">
+    <a href="index.html" class="nav-logo">Dudunomics</a>
+    <div class="nav-links">
+      <a href="index.html" class="nav-link active">토큰</a>
+      <a href="portfolio.html" class="nav-link">포트폴리오</a>
+      <a href="holdings.html" class="nav-link">보유종목</a>
+      <a href="backtest.html" class="nav-link">백테스트</a>
+    </div>
+  </nav>
+
+  <div class="container">
+    <h1 class="page-title">Upbit 디자인 토큰 카탈로그</h1>
+    <p style="font-size:12px;color:var(--text-muted);margin-bottom:32px;">DESIGN.md §3 기준 — 2026-05-14 CDP inspect 검증완료</p>
+
+    <!-- Color Palette -->
+    <div class="section">
+      <div class="section-title">색상 팔레트</div>
+      <div class="chips">
+        <div class="chip">
+          <div class="chip-swatch" style="background:#1375EC"></div>
+          <div class="chip-name">brand.primary</div>
+          <div class="chip-hex">#1375EC</div>
+        </div>
+        <div class="chip">
+          <div class="chip-swatch" style="background:#0062DF"></div>
+          <div class="chip-name">brand.primaryDeep</div>
+          <div class="chip-hex">#0062DF</div>
+        </div>
+        <div class="chip">
+          <div class="chip-swatch" style="background:#003597"></div>
+          <div class="chip-name">brand.primaryDarker</div>
+          <div class="chip-hex">#003597</div>
+        </div>
+        <div class="chip" style="margin-left:12px">
+          <div class="chip-swatch" style="background:#DD3C44"></div>
+          <div class="chip-name">semantic.rise ▲</div>
+          <div class="chip-hex">#DD3C44</div>
+        </div>
+        <div class="chip">
+          <div class="chip-swatch" style="background:rgba(221,60,68,0.08);border:1px solid rgba(221,60,68,0.2)"></div>
+          <div class="chip-name">rise.soft</div>
+          <div class="chip-hex">rgba(221,60,68,.08)</div>
+        </div>
+        <div class="chip" style="margin-left:12px">
+          <div class="chip-swatch" style="background:#1375EC"></div>
+          <div class="chip-name">semantic.fall ▼</div>
+          <div class="chip-hex">#1375EC</div>
+        </div>
+        <div class="chip">
+          <div class="chip-swatch" style="background:rgba(19,117,236,0.08);border:1px solid rgba(19,117,236,0.2)"></div>
+          <div class="chip-name">fall.soft</div>
+          <div class="chip-hex">rgba(19,117,236,.08)</div>
+        </div>
+        <div class="chip" style="margin-left:12px">
+          <div class="chip-swatch" style="background:#1A2434"></div>
+          <div class="chip-name">text.primary</div>
+          <div class="chip-hex">#1A2434</div>
+        </div>
+        <div class="chip">
+          <div class="chip-swatch" style="background:#333333"></div>
+          <div class="chip-name">text.body</div>
+          <div class="chip-hex">#333333</div>
+        </div>
+        <div class="chip">
+          <div class="chip-swatch" style="background:#666666"></div>
+          <div class="chip-name">text.muted</div>
+          <div class="chip-hex">#666666</div>
+        </div>
+        <div class="chip">
+          <div class="chip-swatch" style="background:#8E929B"></div>
+          <div class="chip-name">text.disabled</div>
+          <div class="chip-hex">#8E929B</div>
+        </div>
+        <div class="chip" style="margin-left:12px">
+          <div class="chip-swatch" style="background:#E9ECF1"></div>
+          <div class="chip-name">surface.body</div>
+          <div class="chip-hex">#E9ECF1</div>
+        </div>
+        <div class="chip">
+          <div class="chip-swatch" style="background:#FFFFFF"></div>
+          <div class="chip-name">surface.card</div>
+          <div class="chip-hex">#FFFFFF</div>
+        </div>
+        <div class="chip">
+          <div class="chip-swatch" style="background:#F9FAFC"></div>
+          <div class="chip-name">surface.tableHeader</div>
+          <div class="chip-hex">#F9FAFC</div>
+        </div>
+        <div class="chip">
+          <div class="chip-swatch" style="background:#F4F5F7"></div>
+          <div class="chip-name">surface.tableAlt</div>
+          <div class="chip-hex">#F4F5F7</div>
+        </div>
+        <div class="chip">
+          <div class="chip-swatch" style="background:#EDEEF1"></div>
+          <div class="chip-name">surface.neutral</div>
+          <div class="chip-hex">#EDEEF1</div>
+        </div>
+        <div class="chip">
+          <div class="chip-swatch" style="background:#BEC1C6"></div>
+          <div class="chip-name">border.strong</div>
+          <div class="chip-hex">#BEC1C6</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Buttons -->
+    <div class="section">
+      <div class="section-title">버튼 — DESIGN.md §4</div>
+      <div class="btn-row">
+        <div>
+          <div style="font-size:10px;color:var(--text-muted);margin-bottom:6px">Primary (h:36 / #0062DF)</div>
+          <button class="btn btn-primary">로그인</button>
+        </div>
+        <div>
+          <div style="font-size:10px;color:var(--text-muted);margin-bottom:6px">Primary Hero (h:44 / #003597)</div>
+          <button class="btn btn-primary-hero">거래소 둘러보기</button>
+        </div>
+        <div>
+          <div style="font-size:10px;color:var(--text-muted);margin-bottom:6px">Secondary (h:36 / #EDEEF1)</div>
+          <button class="btn btn-secondary">회원가입</button>
+        </div>
+        <div>
+          <div style="font-size:10px;color:var(--text-muted);margin-bottom:6px">Tag (h:28 / #FFFFFF)</div>
+          <div class="flex gap-2">
+            <button class="btn btn-tag">10%</button>
+            <button class="btn btn-tag">25%</button>
+            <button class="btn btn-tag">50%</button>
+            <button class="btn btn-tag">100%</button>
+            <button class="btn btn-tag">직접입력</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Table cells -->
+    <div class="section">
+      <div class="section-title">테이블 셀 — KR 컨벤션 (빨강=상승, 파랑=하락)</div>
+      <div class="flex gap-4 flex-wrap">
+        <div>
+          <div style="font-size:10px;color:var(--text-muted);margin-bottom:6px">가격/변동 셀</div>
+          <div class="cell-demo">
+            <div class="cell-row header">
+              <span>종목</span><span>현재가</span><span>전일대비</span>
+            </div>
+            <div class="cell-row normal">
+              <span style="font-family:var(--font-sans);color:var(--text-primary)">삼성전자</span>
+              <span>78,500</span>
+              <span style="color:var(--text-muted)">0.00%</span>
+            </div>
+            <div class="cell-row rise">
+              <span style="font-family:var(--font-sans)">SK하이닉스</span>
+              <span>188,000</span>
+              <span>▲ +2.44%</span>
+            </div>
+            <div class="cell-row fall">
+              <span style="font-family:var(--font-sans)">NAVER</span>
+              <span>192,000</span>
+              <span>▼ -1.03%</span>
+            </div>
+            <div class="cell-row rise">
+              <span style="font-family:var(--font-sans)">AAPL</span>
+              <span>196.45</span>
+              <span>▲ +0.87%</span>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div style="font-size:10px;color:var(--text-muted);margin-bottom:6px">평가손익 셀</div>
+          <div class="cell-demo">
+            <div class="cell-row header">
+              <span>종목</span><span>평가손익</span><span>수익률</span>
+            </div>
+            <div class="cell-row normal">
+              <span style="font-family:var(--font-sans);color:var(--text-primary)">삼성전자</span>
+              <span style="color:var(--text-muted)">0</span>
+              <span style="color:var(--text-muted)">0.00%</span>
+            </div>
+            <div class="cell-row">
+              <span style="font-family:var(--font-sans);color:var(--text-primary)">SK하이닉스</span>
+              <span class="text-rise">+2,450,000</span>
+              <span class="text-rise">+14.97%</span>
+            </div>
+            <div class="cell-row">
+              <span style="font-family:var(--font-sans);color:var(--text-primary)">NAVER</span>
+              <span class="text-fall">-320,000</span>
+              <span class="text-fall">-3.20%</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Segment -->
+    <div class="section">
+      <div class="section-title">세그먼트 스위치</div>
+      <div class="flex gap-4">
+        <div>
+          <div style="font-size:10px;color:var(--text-muted);margin-bottom:6px">탭 (Tab)</div>
+          <div class="tabs" style="margin-bottom:0">
+            <div class="tab active">전체</div>
+            <div class="tab">국내</div>
+            <div class="tab">해외</div>
+            <div class="tab">섹터</div>
+          </div>
+        </div>
+        <div>
+          <div style="font-size:10px;color:var(--text-muted);margin-bottom:6px">Locale 세그먼트</div>
+          <div class="segment">
+            <button class="seg-btn active">KO</button>
+            <button class="seg-btn">EN</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- States -->
+    <div class="section">
+      <div class="section-title">상태 — DESIGN.md §14</div>
+      <div class="flex gap-3 flex-wrap items-center">
+        <div>
+          <div style="font-size:10px;color:var(--text-muted);margin-bottom:6px">Success Toast</div>
+          <div class="toast">
+            <span style="color:var(--brand-primary)">✓</span>
+            <span>저장 완료</span>
+          </div>
+        </div>
+        <div>
+          <div style="font-size:10px;color:var(--text-muted);margin-bottom:6px">Error (inline)</div>
+          <div style="font-size:12px;color:var(--error)">최소 1개 이상의 종목이 필요합니다</div>
+        </div>
+        <div>
+          <div style="font-size:10px;color:var(--text-muted);margin-bottom:6px">Skeleton (row)</div>
+          <div style="display:flex;flex-direction:column;gap:4px">
+            <div class="skeleton" style="width:180px;height:14px"></div>
+            <div class="skeleton" style="width:120px;height:14px"></div>
+          </div>
+        </div>
+        <div>
+          <div style="font-size:10px;color:var(--text-muted);margin-bottom:6px">Disabled</div>
+          <button class="btn btn-primary" style="opacity:0.4;pointer-events:none">실행</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Typography -->
+    <div class="section">
+      <div class="section-title">타이포그래피 & 폰트</div>
+      <div class="card" style="display:flex;flex-direction:column;gap:12px">
+        <div style="font-family:var(--font-sans);font-size:15px;font-weight:400;color:var(--text-primary)">Body (sans 15/400) — Roboto + Noto Sans KR — 거래소 둘러보기 / Exchange</div>
+        <div style="font-family:var(--font-sans);font-size:14px;font-weight:400;color:var(--text-body)">Body Small (sans 14/400) — 보유 종목 편집 / Holdings Editor — 로그인</div>
+        <div style="font-family:var(--font-sans);font-size:12px;font-weight:400;color:var(--text-muted)">Caption (sans 12/400) — 체결가 / 현재가 / 전일대비 / 거래대금</div>
+        <div style="font-family:var(--font-sans);font-size:11px;font-weight:400;color:var(--text-muted);letter-spacing:0.02em">Table Header (sans 11/400) — COLUMN LABEL</div>
+        <div style="font-family:var(--font-mono);font-size:20px;font-weight:400;color:var(--text-primary);font-feature-settings:'tnum'">Mono (KPI value) — 42,350,000원 / +11.45%</div>
+        <div style="font-family:var(--font-mono);font-size:12px;font-weight:400;color:var(--rise);font-feature-settings:'tnum'">Mono Rise — ▲ +2,450,000 / +14.97%</div>
+        <div style="font-family:var(--font-mono);font-size:12px;font-weight:400;color:var(--fall);font-feature-settings:'tnum'">Mono Fall — ▼ -320,000 / -3.20%</div>
+      </div>
+    </div>
+
+  </div>
+</body>
+</html>

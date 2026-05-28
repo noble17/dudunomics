@@ -6,7 +6,6 @@ yfinance Ticker.info 딕셔너리에서 필드 추출.
 from __future__ import annotations
 
 import logging
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from datetime import date
 
@@ -45,9 +44,15 @@ def _safe(info: dict, key: str) -> float | None:
 
 
 def _fetch_one(ticker: str, as_of: date) -> ExtendedSnapshot:
+    # 국내 종목(.KS/.KQ)은 yfinance fundamentals 커버리지 없음 → 즉시 빈 스냅샷
+    t_upper = ticker.upper()
+    if t_upper.endswith(".KS") or t_upper.endswith(".KQ"):
+        return ExtendedSnapshot(ticker=ticker, as_of=as_of)
+
     import yfinance as yf
+    from core.data.yf_session import get_session
     try:
-        info = yf.Ticker(ticker).info
+        info = yf.Ticker(ticker, session=get_session()).info
         return ExtendedSnapshot(
             ticker=ticker,
             as_of=as_of,
@@ -67,13 +72,18 @@ def _fetch_one(ticker: str, as_of: date) -> ExtendedSnapshot:
         return ExtendedSnapshot(ticker=ticker, as_of=as_of, error=str(e))
 
 
-def fetch_extended(tickers: list[str], max_workers: int = 20) -> list[ExtendedSnapshot]:
-    """ThreadPool으로 복수 티커 동시 페치."""
+def fetch_extended(tickers: list[str], max_workers: int = 1) -> list[ExtendedSnapshot]:
+    """순차 페치 (rate limiter 세션이 자체적으로 간격 조절).
+
+    max_workers=1 고정 — yfinance 병렬 호출은 Yahoo IP 차단을 유발함.
+    세션의 1 req/1.5s 레이트 리미터가 속도 제어.
+    """
     from datetime import date as dt_date
     today = dt_date.today()
     results: list[ExtendedSnapshot] = []
-    with ThreadPoolExecutor(max_workers=min(max_workers, len(tickers))) as ex:
-        futures = {ex.submit(_fetch_one, t, today): t for t in tickers}
-        for future in as_completed(futures):
-            results.append(future.result())
+    total = len(tickers)
+    for i, ticker in enumerate(tickers, 1):
+        if i % 50 == 0:
+            log.info("[fundamentals] %d/%d 완료", i, total)
+        results.append(_fetch_one(ticker, today))
     return results

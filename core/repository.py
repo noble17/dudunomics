@@ -31,88 +31,113 @@ def session():
         yield s
 
 
+def _has_column(conn, table: str, column: str) -> bool:
+    row = conn.execute(text(
+        "SELECT COUNT(*) FROM information_schema.columns "
+        "WHERE table_name = :t AND column_name = :c"
+    ), {"t": table, "c": column}).fetchone()
+    return row[0] > 0
+
+
 def _init_schema(engine):
     ddl = """
+    CREATE TABLE IF NOT EXISTS users (
+        id          INTEGER PRIMARY KEY,
+        email       TEXT NOT NULL UNIQUE,
+        password_hash TEXT NOT NULL,
+        created_at  TIMESTAMP DEFAULT current_timestamp,
+        is_active   BOOLEAN DEFAULT true
+    );
+
+    CREATE SEQUENCE IF NOT EXISTS users_id_seq START 1;
+
+    CREATE TABLE IF NOT EXISTS user_sessions (
+        jti         TEXT PRIMARY KEY,
+        user_id     INTEGER NOT NULL,
+        expires_at  TIMESTAMP NOT NULL,
+        revoked     BOOLEAN DEFAULT false
+    );
+
     CREATE TABLE IF NOT EXISTS holdings (
-        ticker TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        currency TEXT NOT NULL,
-        quantity DOUBLE NOT NULL,
-        avg_price DOUBLE NOT NULL,
-        sector TEXT,
-        market TEXT,
-        updated_at TIMESTAMP DEFAULT current_timestamp
+        ticker      TEXT PRIMARY KEY,
+        name        TEXT NOT NULL,
+        currency    TEXT NOT NULL,
+        quantity    DOUBLE NOT NULL,
+        avg_price   DOUBLE NOT NULL,
+        sector      TEXT,
+        market      TEXT,
+        updated_at  TIMESTAMP DEFAULT current_timestamp
     );
 
     CREATE TABLE IF NOT EXISTS meta (
-        key TEXT PRIMARY KEY,
+        key   TEXT PRIMARY KEY,
         value TEXT
     );
 
     CREATE TABLE IF NOT EXISTS prices_cache (
         ticker TEXT,
-        date DATE,
-        open DOUBLE,
-        high DOUBLE,
-        low DOUBLE,
-        close DOUBLE,
+        date   DATE,
+        open   DOUBLE,
+        high   DOUBLE,
+        low    DOUBLE,
+        close  DOUBLE,
         volume BIGINT,
         PRIMARY KEY (ticker, date)
     );
 
     CREATE TABLE IF NOT EXISTS portfolio_snapshots (
-        ts TIMESTAMP PRIMARY KEY,
-        total_equity_krw DOUBLE,
+        ts                  TIMESTAMP PRIMARY KEY,
+        total_equity_krw    DOUBLE,
         total_with_cash_krw DOUBLE,
-        cash_krw DOUBLE,
-        total_equity_usd DOUBLE,
+        cash_krw            DOUBLE,
+        total_equity_usd    DOUBLE,
         total_with_cash_usd DOUBLE,
-        cash_usd DOUBLE,
-        usdkrw DOUBLE,
-        holdings_json JSON
+        cash_usd            DOUBLE,
+        usdkrw              DOUBLE,
+        holdings_json       JSON
     );
 
     CREATE TABLE IF NOT EXISTS fx_rates (
-        ts TIMESTAMP,
+        ts   TIMESTAMP,
         pair TEXT,
         rate DOUBLE,
         PRIMARY KEY (ts, pair)
     );
 
     CREATE TABLE IF NOT EXISTS backtest_runs (
-        id INTEGER PRIMARY KEY,
-        created_at TIMESTAMP DEFAULT current_timestamp,
-        strategy TEXT,
-        params_json JSON,
-        ticker TEXT,
+        id           INTEGER PRIMARY KEY,
+        created_at   TIMESTAMP DEFAULT current_timestamp,
+        strategy     TEXT,
+        params_json  JSON,
+        ticker       TEXT,
         period_start DATE,
-        period_end DATE,
+        period_end   DATE,
         total_return DOUBLE,
-        mdd DOUBLE,
-        sharpe DOUBLE,
+        mdd          DOUBLE,
+        sharpe       DOUBLE,
         equity_curve JSON
     );
 
     CREATE SEQUENCE IF NOT EXISTS backtest_runs_id_seq START 1;
 
     CREATE TABLE IF NOT EXISTS portfolio_events (
-        id INTEGER PRIMARY KEY,
-        ts TIMESTAMP NOT NULL,
-        label TEXT NOT NULL,
+        id     INTEGER PRIMARY KEY,
+        ts     TIMESTAMP NOT NULL,
+        label  TEXT NOT NULL,
         amount INTEGER DEFAULT 0,
-        type TEXT DEFAULT '기타'
+        type   TEXT DEFAULT '기타'
     );
 
     CREATE SEQUENCE IF NOT EXISTS portfolio_events_id_seq START 1;
 
     CREATE TABLE IF NOT EXISTS fundamentals_cache (
-        ticker TEXT,
-        as_of DATE,
+        ticker      TEXT,
+        as_of       DATE,
         forward_eps DOUBLE,
-        forward_pe DOUBLE,
+        forward_pe  DOUBLE,
         trailing_pe DOUBLE,
-        raw_json JSON,
-        fetched_at TIMESTAMP,
+        raw_json    JSON,
+        fetched_at  TIMESTAMP,
         PRIMARY KEY (ticker, as_of)
     );
 
@@ -155,6 +180,7 @@ def _init_schema(engine):
             stmt = stmt.strip()
             if stmt:
                 conn.execute(text(stmt))
+        # 기존 ALTER 마이그레이션 (하위 호환)
         for migration in [
             "ALTER TABLE holdings ADD COLUMN sector TEXT",
             "ALTER TABLE holdings ADD COLUMN market TEXT",
@@ -171,17 +197,202 @@ def _init_schema(engine):
             except Exception:
                 pass
         conn.commit()
+        _run_migrations(conn)
+
+
+def _run_migrations(conn):
+    """멀티유저 user_id 마이그레이션. 이미 적용됐으면 건너뜀."""
+
+    # holdings: (user_id, ticker) 복합 PK로 재생성
+    if not _has_column(conn, "holdings", "user_id"):
+        conn.execute(text("""
+            CREATE TABLE holdings_new (
+                user_id    INTEGER NOT NULL DEFAULT 1,
+                ticker     TEXT NOT NULL,
+                name       TEXT NOT NULL,
+                currency   TEXT NOT NULL,
+                quantity   DOUBLE NOT NULL,
+                avg_price  DOUBLE NOT NULL,
+                sector     TEXT,
+                market     TEXT,
+                updated_at TIMESTAMP DEFAULT current_timestamp,
+                PRIMARY KEY (user_id, ticker)
+            )
+        """))
+        conn.execute(text(
+            "INSERT INTO holdings_new SELECT 1, ticker, name, currency, quantity, "
+            "avg_price, sector, market, updated_at FROM holdings"
+        ))
+        conn.execute(text("DROP TABLE holdings"))
+        conn.execute(text("ALTER TABLE holdings_new RENAME TO holdings"))
+
+    # meta: (user_id, key) 복합 PK로 재생성
+    if not _has_column(conn, "meta", "user_id"):
+        conn.execute(text("""
+            CREATE TABLE meta_new (
+                user_id INTEGER NOT NULL DEFAULT 1,
+                key     TEXT NOT NULL,
+                value   TEXT,
+                PRIMARY KEY (user_id, key)
+            )
+        """))
+        conn.execute(text(
+            "INSERT INTO meta_new SELECT 1, key, value FROM meta"
+        ))
+        conn.execute(text("DROP TABLE meta"))
+        conn.execute(text("ALTER TABLE meta_new RENAME TO meta"))
+
+    # ticker_notes: (user_id, ticker) 복합 PK로 재생성
+    if not _has_column(conn, "ticker_notes", "user_id"):
+        conn.execute(text("""
+            CREATE TABLE ticker_notes_new (
+                user_id      INTEGER NOT NULL DEFAULT 1,
+                ticker       TEXT NOT NULL,
+                opinion      TEXT,
+                target_price DOUBLE,
+                memo         TEXT,
+                tags         TEXT,
+                updated_at   TIMESTAMP,
+                PRIMARY KEY (user_id, ticker)
+            )
+        """))
+        conn.execute(text(
+            "INSERT INTO ticker_notes_new SELECT 1, ticker, opinion, target_price, "
+            "memo, tags, updated_at FROM ticker_notes"
+        ))
+        conn.execute(text("DROP TABLE ticker_notes"))
+        conn.execute(text("ALTER TABLE ticker_notes_new RENAME TO ticker_notes"))
+
+    # portfolio_snapshots: user_id 컬럼 추가
+    if not _has_column(conn, "portfolio_snapshots", "user_id"):
+        conn.execute(text(
+            "ALTER TABLE portfolio_snapshots ADD COLUMN IF NOT EXISTS user_id INTEGER DEFAULT 1"
+        ))
+        conn.execute(text(
+            "UPDATE portfolio_snapshots SET user_id = 1 WHERE user_id IS NULL"
+        ))
+        try:
+            conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS idx_snapshots_user ON portfolio_snapshots(user_id)"
+            ))
+        except Exception:
+            pass
+
+    # backtest_runs: user_id 컬럼 추가
+    if not _has_column(conn, "backtest_runs", "user_id"):
+        conn.execute(text(
+            "ALTER TABLE backtest_runs ADD COLUMN IF NOT EXISTS user_id INTEGER DEFAULT 1"
+        ))
+        conn.execute(text(
+            "UPDATE backtest_runs SET user_id = 1 WHERE user_id IS NULL"
+        ))
+
+    # portfolio_events: user_id 컬럼 추가
+    if not _has_column(conn, "portfolio_events", "user_id"):
+        conn.execute(text(
+            "ALTER TABLE portfolio_events ADD COLUMN IF NOT EXISTS user_id INTEGER DEFAULT 1"
+        ))
+        conn.execute(text(
+            "UPDATE portfolio_events SET user_id = 1 WHERE user_id IS NULL"
+        ))
+
+    # LEGACY 사용자 자동 생성
+    legacy_email = os.getenv("LEGACY_USER_EMAIL", "")
+    legacy_pw = os.getenv("LEGACY_USER_PASSWORD", "")
+    if legacy_email and legacy_pw:
+        existing = conn.execute(
+            text("SELECT id FROM users WHERE id = 1")
+        ).fetchone()
+        if not existing:
+            from core.auth.passwords import hash_password
+            conn.execute(text("""
+                INSERT INTO users (id, email, password_hash, created_at, is_active)
+                VALUES (1, :email, :pw_hash, current_timestamp, true)
+            """), {"email": legacy_email, "pw_hash": hash_password(legacy_pw)})
+
+    conn.commit()
+
+
+# ── Users ─────────────────────────────────────────────────────────────────────
+
+def create_user(email: str, password_hash: str) -> int:
+    with session() as s:
+        row = s.execute(text("SELECT nextval('users_id_seq')")).fetchone()
+        user_id = row[0]
+        s.execute(text("""
+            INSERT INTO users (id, email, password_hash, created_at, is_active)
+            VALUES (:id, :email, :pw_hash, current_timestamp, true)
+        """), {"id": user_id, "email": email, "pw_hash": password_hash})
+        s.commit()
+        return user_id
+
+
+def get_user_by_email(email: str) -> dict | None:
+    with session() as s:
+        row = s.execute(
+            text("SELECT * FROM users WHERE email = :email AND is_active = true"),
+            {"email": email},
+        ).mappings().fetchone()
+        return dict(row) if row else None
+
+
+def get_user_by_id(user_id: int) -> dict | None:
+    with session() as s:
+        row = s.execute(
+            text("SELECT * FROM users WHERE id = :id AND is_active = true"),
+            {"id": user_id},
+        ).mappings().fetchone()
+        return dict(row) if row else None
+
+
+def create_session(jti: str, user_id: int, expires_at: datetime) -> None:
+    with session() as s:
+        s.execute(text("""
+            INSERT INTO user_sessions (jti, user_id, expires_at, revoked)
+            VALUES (:jti, :uid, :exp, false)
+        """), {"jti": jti, "uid": user_id, "exp": expires_at})
+        s.commit()
+
+
+def revoke_session(jti: str) -> None:
+    with session() as s:
+        s.execute(
+            text("UPDATE user_sessions SET revoked = true WHERE jti = :jti"),
+            {"jti": jti},
+        )
+        s.commit()
+
+
+def is_session_valid(jti: str) -> bool:
+    with session() as s:
+        row = s.execute(text("""
+            SELECT 1 FROM user_sessions
+            WHERE jti = :jti AND revoked = false AND expires_at > current_timestamp
+        """), {"jti": jti}).fetchone()
+        return row is not None
+
+
+def get_active_user_ids_with_holdings() -> list[int]:
+    with session() as s:
+        rows = s.execute(text(
+            "SELECT DISTINCT user_id FROM holdings WHERE quantity > 0"
+        )).fetchall()
+        return [r[0] for r in rows]
 
 
 # ── Holdings ──────────────────────────────────────────────────────────────────
 
-def get_holdings() -> list[dict]:
+def get_holdings(user_id: int) -> list[dict]:
     with session() as s:
-        rows = s.execute(text("SELECT * FROM holdings ORDER BY ticker")).mappings().all()
+        rows = s.execute(
+            text("SELECT * FROM holdings WHERE user_id = :uid ORDER BY ticker"),
+            {"uid": user_id},
+        ).mappings().all()
         return [dict(r) for r in rows]
 
 
 def upsert_holding(
+    user_id: int,
     ticker: str,
     name: str,
     currency: str,
@@ -193,48 +404,55 @@ def upsert_holding(
     now = datetime.now()
     with session() as s:
         s.execute(text("""
-            INSERT INTO holdings (ticker, name, currency, quantity, avg_price, sector, market, updated_at)
-            VALUES (:ticker, :name, :currency, :quantity, :avg_price, :sector, :market, :now)
-            ON CONFLICT (ticker) DO UPDATE SET
-                name = excluded.name,
-                currency = excluded.currency,
-                quantity = excluded.quantity,
-                avg_price = excluded.avg_price,
-                sector = excluded.sector,
-                market = excluded.market,
+            INSERT INTO holdings (user_id, ticker, name, currency, quantity, avg_price, sector, market, updated_at)
+            VALUES (:uid, :ticker, :name, :currency, :quantity, :avg_price, :sector, :market, :now)
+            ON CONFLICT (user_id, ticker) DO UPDATE SET
+                name       = excluded.name,
+                currency   = excluded.currency,
+                quantity   = excluded.quantity,
+                avg_price  = excluded.avg_price,
+                sector     = excluded.sector,
+                market     = excluded.market,
                 updated_at = :now
-        """), {"ticker": ticker, "name": name, "currency": currency,
+        """), {"uid": user_id, "ticker": ticker, "name": name, "currency": currency,
                "quantity": quantity, "avg_price": avg_price,
                "sector": sector, "market": market, "now": now})
         s.commit()
 
 
-def delete_holding(ticker: str):
+def delete_holding(user_id: int, ticker: str):
     with session() as s:
-        s.execute(text("DELETE FROM holdings WHERE ticker = :ticker"), {"ticker": ticker})
+        s.execute(
+            text("DELETE FROM holdings WHERE user_id = :uid AND ticker = :ticker"),
+            {"uid": user_id, "ticker": ticker},
+        )
         s.commit()
 
 
 # ── Meta (현금 등) ─────────────────────────────────────────────────────────────
 
-def get_meta(key: str, default: str | None = None) -> str | None:
+def get_meta(user_id: int, key: str, default: str | None = None) -> str | None:
     with session() as s:
-        row = s.execute(text("SELECT value FROM meta WHERE key = :key"), {"key": key}).fetchone()
+        row = s.execute(
+            text("SELECT value FROM meta WHERE user_id = :uid AND key = :key"),
+            {"uid": user_id, "key": key},
+        ).fetchone()
         return row[0] if row else default
 
 
-def set_meta(key: str, value: str):
+def set_meta(user_id: int, key: str, value: str):
     with session() as s:
         s.execute(text("""
-            INSERT INTO meta (key, value) VALUES (:key, :value)
-            ON CONFLICT (key) DO UPDATE SET value = excluded.value
-        """), {"key": key, "value": value})
+            INSERT INTO meta (user_id, key, value) VALUES (:uid, :key, :value)
+            ON CONFLICT (user_id, key) DO UPDATE SET value = excluded.value
+        """), {"uid": user_id, "key": key, "value": value})
         s.commit()
 
 
 # ── Portfolio Snapshots ───────────────────────────────────────────────────────
 
 def insert_snapshot(
+    user_id: int,
     ts: datetime,
     total_equity_krw: float,
     total_with_cash_krw: float,
@@ -248,29 +466,32 @@ def insert_snapshot(
     with session() as s:
         s.execute(text("""
             INSERT OR IGNORE INTO portfolio_snapshots
-            (ts, total_equity_krw, total_with_cash_krw, cash_krw,
+            (user_id, ts, total_equity_krw, total_with_cash_krw, cash_krw,
              total_equity_usd, total_with_cash_usd, cash_usd, usdkrw, holdings_json)
-            VALUES (:ts, :total_equity_krw, :total_with_cash_krw, :cash_krw,
+            VALUES (:uid, :ts, :total_equity_krw, :total_with_cash_krw, :cash_krw,
                     :total_equity_usd, :total_with_cash_usd, :cash_usd, :usdkrw, :holdings_json)
         """), {
-            "ts": ts, "total_equity_krw": total_equity_krw,
+            "uid": user_id, "ts": ts,
+            "total_equity_krw": total_equity_krw,
             "total_with_cash_krw": total_with_cash_krw, "cash_krw": cash_krw,
-            "total_equity_usd": total_equity_usd, "total_with_cash_usd": total_with_cash_usd,
+            "total_equity_usd": total_equity_usd,
+            "total_with_cash_usd": total_with_cash_usd,
             "cash_usd": cash_usd, "usdkrw": usdkrw,
             "holdings_json": json.dumps(holdings_json),
         })
         s.commit()
 
 
-def get_snapshots(limit: int = 400) -> list[dict]:
+def get_snapshots(user_id: int, limit: int = 400) -> list[dict]:
     with session() as s:
         rows = s.execute(text(
-            "SELECT * FROM portfolio_snapshots ORDER BY ts DESC LIMIT :limit"
-        ), {"limit": limit}).mappings().all()
+            "SELECT * FROM portfolio_snapshots WHERE user_id = :uid "
+            "ORDER BY ts DESC LIMIT :limit"
+        ), {"uid": user_id, "limit": limit}).mappings().all()
         return [dict(r) for r in rows]
 
 
-# ── FX Rates ──────────────────────────────────────────────────────────────────
+# ── FX Rates (공유, user_id 불필요) ──────────────────────────────────────────
 
 def insert_fx_rate(ts: datetime, pair: str, rate: float):
     with session() as s:
@@ -289,10 +510,9 @@ def get_latest_fx_rate(pair: str) -> float | None:
         return row[0] if row else None
 
 
-# ── Fundamentals Cache ───────────────────────────────────────────────────────
+# ── Fundamentals Cache (공유) ─────────────────────────────────────────────────
 
 def upsert_fundamentals(snapshots: "list") -> None:
-    """FundamentalSnapshot 목록을 fundamentals_cache에 upsert."""
     if not snapshots:
         return
     now = datetime.now()
@@ -309,61 +529,62 @@ def upsert_fundamentals(snapshots: "list") -> None:
                     raw_json    = excluded.raw_json,
                     fetched_at  = excluded.fetched_at
             """), {
-                "ticker": snap.ticker,
-                "as_of": snap.as_of,
-                "feps": snap.forward_eps,
-                "fpe": snap.forward_pe,
-                "tpe": snap.trailing_pe,
-                "raw_json": snap.raw_json,
+                "ticker": snap.ticker, "as_of": snap.as_of,
+                "feps": snap.forward_eps, "fpe": snap.forward_pe,
+                "tpe": snap.trailing_pe, "raw_json": snap.raw_json,
                 "fetched_at": now,
             })
         s.commit()
 
 
-# ── Portfolio Events ──────────────────────────────────────────────────────────
-
-def get_events() -> list[dict]:
-    with session() as s:
-        rows = s.execute(
-            text("SELECT * FROM portfolio_events ORDER BY ts DESC")
-        ).mappings().all()
-        return [dict(r) for r in rows]
-
-
-def insert_event(ts: datetime, label: str, amount: int, type_: str) -> int:
-    with session() as s:
-        row = s.execute(text("SELECT nextval('portfolio_events_id_seq')")).fetchone()
-        event_id = row[0]
-        s.execute(text("""
-            INSERT INTO portfolio_events (id, ts, label, amount, type)
-            VALUES (:id, :ts, :label, :amount, :type)
-        """), {"id": event_id, "ts": ts, "label": label, "amount": amount, "type": type_})
-        s.commit()
-    return event_id
-
-
-def delete_event(event_id: int) -> None:
-    with session() as s:
-        s.execute(text("DELETE FROM portfolio_events WHERE id = :id"), {"id": event_id})
-        s.commit()
-
-
 def get_latest_fundamental(ticker: str, as_of: date) -> dict | None:
-    """as_of 이전 가장 최근 스냅샷 반환 (없으면 None)."""
     with session() as s:
         row = s.execute(text("""
             SELECT ticker, as_of, forward_eps, forward_pe, trailing_pe
             FROM fundamentals_cache
             WHERE ticker = :ticker AND as_of <= :as_of
-            ORDER BY as_of DESC
-            LIMIT 1
+            ORDER BY as_of DESC LIMIT 1
         """), {"ticker": ticker, "as_of": as_of}).fetchone()
         return dict(row._mapping) if row else None
+
+
+# ── Portfolio Events ──────────────────────────────────────────────────────────
+
+def get_events(user_id: int) -> list[dict]:
+    with session() as s:
+        rows = s.execute(
+            text("SELECT * FROM portfolio_events WHERE user_id = :uid ORDER BY ts DESC"),
+            {"uid": user_id},
+        ).mappings().all()
+        return [dict(r) for r in rows]
+
+
+def insert_event(user_id: int, ts: datetime, label: str, amount: int, type_: str) -> int:
+    with session() as s:
+        row = s.execute(text("SELECT nextval('portfolio_events_id_seq')")).fetchone()
+        event_id = row[0]
+        s.execute(text("""
+            INSERT INTO portfolio_events (id, user_id, ts, label, amount, type)
+            VALUES (:id, :uid, :ts, :label, :amount, :type)
+        """), {"id": event_id, "uid": user_id, "ts": ts,
+               "label": label, "amount": amount, "type": type_})
+        s.commit()
+    return event_id
+
+
+def delete_event(user_id: int, event_id: int) -> None:
+    with session() as s:
+        s.execute(
+            text("DELETE FROM portfolio_events WHERE id = :id AND user_id = :uid"),
+            {"id": event_id, "uid": user_id},
+        )
+        s.commit()
 
 
 # ── Backtest Runs ─────────────────────────────────────────────────────────────
 
 def insert_backtest_run(
+    user_id: int,
     strategy: str,
     params: dict,
     ticker: str,
@@ -385,14 +606,14 @@ def insert_backtest_run(
         run_id = row[0]
         s.execute(text("""
             INSERT INTO backtest_runs
-            (id, strategy, params_json, ticker, period_start, period_end,
+            (id, user_id, strategy, params_json, ticker, period_start, period_end,
              total_return, mdd, sharpe, equity_curve,
              tickers_json, cagr, weights_history, contribution_json, warnings_json, risk_options_json)
-            VALUES (:id, :strategy, :params_json, :ticker, :period_start, :period_end,
+            VALUES (:id, :uid, :strategy, :params_json, :ticker, :period_start, :period_end,
                     :total_return, :mdd, :sharpe, :equity_curve,
                     :tickers_json, :cagr, :weights_history, :contribution_json, :warnings_json, :risk_options_json)
         """), {
-            "id": run_id, "strategy": strategy,
+            "id": run_id, "uid": user_id, "strategy": strategy,
             "params_json": json.dumps(params), "ticker": ticker,
             "period_start": period_start, "period_end": period_end,
             "total_return": total_return, "mdd": mdd, "sharpe": sharpe,
@@ -408,21 +629,19 @@ def insert_backtest_run(
         return run_id
 
 
-# ── OHLCV Cache ───────────────────────────────────────────────────────────────
+# ── OHLCV Cache (공유) ────────────────────────────────────────────────────────
 
 def get_ohlcv_range(ticker: str) -> "tuple[date, date] | None":
-    """캐시된 (min_date, max_date) 반환. 없으면 None."""
     with session() as s:
-        row = s.execute(text("""
-            SELECT MIN(date), MAX(date) FROM prices_cache WHERE ticker = :ticker
-        """), {"ticker": ticker}).fetchone()
+        row = s.execute(text(
+            "SELECT MIN(date), MAX(date) FROM prices_cache WHERE ticker = :ticker"
+        ), {"ticker": ticker}).fetchone()
         if row is None or row[0] is None:
             return None
         return (row[0], row[1])
 
 
 def upsert_ohlcv_rows(rows: list[dict]) -> None:
-    """(ticker, date, open, high, low, close, volume) 배치 insert. 중복 무시."""
     if not rows:
         return
     with session() as s:
@@ -433,7 +652,7 @@ def upsert_ohlcv_rows(rows: list[dict]) -> None:
         s.commit()
 
 
-# ── Quant Scores ──────────────────────────────────────────────────────────────
+# ── Quant Scores (공유) ───────────────────────────────────────────────────────
 
 def upsert_quant_scores(rows: list[dict]) -> None:
     if not rows:
@@ -477,7 +696,6 @@ def upsert_quant_scores(rows: list[dict]) -> None:
 
 
 def get_latest_quant_scores(universe: str) -> list[dict]:
-    """(universe, as_of) 인덱스를 타는 최신 배치 조회."""
     with session() as s:
         rows = s.execute(text("""
             SELECT * FROM quant_scores
@@ -500,23 +718,34 @@ def get_quant_ticker(ticker: str, universe: str) -> dict | None:
 
 # ── Ticker Notes ──────────────────────────────────────────────────────────────
 
-def upsert_ticker_note(ticker: str, opinion: str | None, target_price: float | None,
-                       memo: str | None, tags: str | None) -> None:
+def upsert_ticker_note(
+    user_id: int,
+    ticker: str,
+    opinion: str | None,
+    target_price: float | None,
+    memo: str | None,
+    tags: str | None,
+) -> None:
     with session() as s:
         s.execute(text("""
-            INSERT INTO ticker_notes (ticker, opinion, target_price, memo, tags, updated_at)
-            VALUES (:ticker, :opinion, :target_price, :memo, :tags, :now)
-            ON CONFLICT (ticker) DO UPDATE SET
-                opinion = excluded.opinion, target_price = excluded.target_price,
-                memo = excluded.memo, tags = excluded.tags, updated_at = excluded.updated_at
-        """), {"ticker": ticker, "opinion": opinion, "target_price": target_price,
-               "memo": memo, "tags": tags, "now": datetime.now()})
+            INSERT INTO ticker_notes (user_id, ticker, opinion, target_price, memo, tags, updated_at)
+            VALUES (:uid, :ticker, :opinion, :target_price, :memo, :tags, :now)
+            ON CONFLICT (user_id, ticker) DO UPDATE SET
+                opinion      = excluded.opinion,
+                target_price = excluded.target_price,
+                memo         = excluded.memo,
+                tags         = excluded.tags,
+                updated_at   = excluded.updated_at
+        """), {"uid": user_id, "ticker": ticker, "opinion": opinion,
+               "target_price": target_price, "memo": memo, "tags": tags,
+               "now": datetime.now()})
         s.commit()
 
 
-def get_ticker_note(ticker: str) -> dict | None:
+def get_ticker_note(user_id: int, ticker: str) -> dict | None:
     with session() as s:
         row = s.execute(
-            text("SELECT * FROM ticker_notes WHERE ticker = :ticker"), {"ticker": ticker}
+            text("SELECT * FROM ticker_notes WHERE user_id = :uid AND ticker = :ticker"),
+            {"uid": user_id, "ticker": ticker},
         ).mappings().fetchone()
         return dict(row) if row else None

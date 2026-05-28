@@ -1,0 +1,7 @@
+{"type":"server-started","port":51061,"host":"127.0.0.1","url_host":"localhost","url":"http://localhost:51061","screen_dir":"/Users/user/Development/private/dudunomics/.superpowers/brainstorm/24456-1779936461/content","state_dir":"/Users/user/Development/private/dudunomics/.superpowers/brainstorm/24456-1779936461/state"}
+{"type":"screen-added","file":"/Users/user/Development/private/dudunomics/.superpowers/brainstorm/24456-1779936461/content/layout-screening.html"}
+{"type":"screen-added","file":"/Users/user/Development/private/dudunomics/.superpowers/brainstorm/24456-1779936461/content/layout-detail.html"}
+{"type":"screen-added","file":"/Users/user/Development/private/dudunomics/.superpowers/brainstorm/24456-1779936461/content/waiting.html"}
+{"type":"screen-added","file":"/Users/user/Development/private/dudunomics/.superpowers/brainstorm/24456-1779936461/content/detail-metrics.html"}
+{"type":"screen-added","file":"/Users/user/Development/private/dudunomics/.superpowers/brainstorm/24456-1779936461/content/waiting-2.html"}
+{"type":"server-stopped","reason":"idle timeout"}

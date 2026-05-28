@@ -2,7 +2,7 @@
 "use client";
 
 import { useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import useSWR from "swr";
 import { screenerApi } from "@/lib/api";
 import { RadarChart } from "@/components/screener/radar-chart";
@@ -13,11 +13,13 @@ import { NoteForm } from "@/components/screener/note-form";
 export default function TickerDetailPage() {
   const { ticker } = useParams<{ ticker: string }>();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const universe = searchParams.get("universe") ?? "sp500";
   const [search, setSearch] = useState("");
 
   const { data: score, isLoading } = useSWR(
-    ticker ? `/api/screener/ticker/${ticker}` : null,
-    () => screenerApi.ticker(ticker)
+    ticker ? `/api/screener/ticker/${ticker}?universe=${universe}` : null,
+    () => screenerApi.ticker(ticker, universe)
   );
 
   const handleSearch = (e: React.FormEvent) => {

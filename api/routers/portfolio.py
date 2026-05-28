@@ -1,20 +1,20 @@
 from datetime import datetime
 from fastapi import APIRouter, Depends
-from api.auth import require_auth
+from core.auth.deps import current_user, CurrentUser
 from api.models import PortfolioRow, PortfolioSnapshot, SnapshotHistory, EventIn, EventOut
 import core.repository as repo
 from core.fx import get_fx_provider
 from core.prices.kis import KISPriceProvider
 
-router = APIRouter(prefix="/api/portfolio", tags=["portfolio"], dependencies=[Depends(require_auth)])
+router = APIRouter(prefix="/api/portfolio", tags=["portfolio"])
 
 _price_provider = KISPriceProvider()
 _fx_provider = get_fx_provider()
 
 
 @router.get("/current", response_model=PortfolioSnapshot)
-def get_current():
-    holdings = repo.get_holdings()
+def get_current(user: CurrentUser = Depends(current_user)):
+    holdings = repo.get_holdings(user.id)
     if not holdings:
         return PortfolioSnapshot(
             rows=[], total_equity_krw=0, total_with_cash_krw=0,
@@ -27,8 +27,8 @@ def get_current():
     prices = _price_provider.get_current_prices(tickers, markets=markets)
     usdkrw = _get_usdkrw()
 
-    cash_krw = float(repo.get_meta("cash_krw") or 0)
-    cash_usd = float(repo.get_meta("cash_usd") or 0)
+    cash_krw = float(repo.get_meta(user.id, "cash_krw") or 0)
+    cash_usd = float(repo.get_meta(user.id, "cash_usd") or 0)
     cash_total_krw = cash_krw + cash_usd * usdkrw
     cash_total_usd = cash_krw / usdkrw + cash_usd
 
@@ -73,8 +73,8 @@ def get_current():
 
 
 @router.get("/history", response_model=list[SnapshotHistory])
-def get_history(limit: int = 400):
-    rows = repo.get_snapshots(limit=limit)
+def get_history(limit: int = 400, user: CurrentUser = Depends(current_user)):
+    rows = repo.get_snapshots(user.id, limit=limit)
     return [
         SnapshotHistory(
             ts=r["ts"],
@@ -88,21 +88,22 @@ def get_history(limit: int = 400):
 
 
 @router.get("/events", response_model=list[EventOut])
-def get_events():
-    return repo.get_events()
+def get_events(user: CurrentUser = Depends(current_user)):
+    return repo.get_events(user.id)
 
 
 @router.post("/events", response_model=EventOut)
-def add_event(body: EventIn):
+def add_event(body: EventIn, user: CurrentUser = Depends(current_user)):
     event_id = repo.insert_event(
+        user_id=user.id,
         ts=body.ts, label=body.label, amount=body.amount, type_=body.type
     )
     return EventOut(id=event_id, ts=body.ts, label=body.label, amount=body.amount, type=body.type)
 
 
 @router.delete("/events/{event_id}")
-def delete_event(event_id: int):
-    repo.delete_event(event_id)
+def delete_event(event_id: int, user: CurrentUser = Depends(current_user)):
+    repo.delete_event(user.id, event_id)
     return {"ok": True}
 
 
