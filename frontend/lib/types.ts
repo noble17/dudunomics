@@ -214,3 +214,26 @@ export interface CandlesOut {
   period: string;
   candles: CandleItem[];
 }
+
+export interface NewsItem {
+  title: string;
+  published_date: string;
+  url: string;
+  site: string;
+  image: string | null;
+}
+
+export interface NewsOut {
+  ticker: string;
+  items: NewsItem[];
+}
+
+export interface AISummaryOut {
+  ticker: string;
+  summary: string;
+}
+
+export interface ChatMessage {
+  role: "user" | "assistant";
+  content: string;
+}

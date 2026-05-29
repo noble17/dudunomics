@@ -6,6 +6,7 @@ import type {
   QuantScore, TickerNote,
   WorkspaceLayout,
   QuotesOut,
+  NewsOut, AISummaryOut, ChatMessage,
 } from "./types";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -94,4 +95,40 @@ export const quotesApi = {
 export const candlesApi = {
   get: (ticker: string, period: string) =>
     request<CandlesOut>(`/api/candles?ticker=${encodeURIComponent(ticker)}&period=${encodeURIComponent(period)}`),
+};
+
+export const newsApi = {
+  get: (ticker: string, limit = 10): Promise<NewsOut> =>
+    request<NewsOut>(`/api/news?ticker=${encodeURIComponent(ticker)}&limit=${limit}`),
+};
+
+export const aiApi = {
+  summary: (ticker: string): Promise<AISummaryOut> =>
+    request<AISummaryOut>(`/api/ai/summary?ticker=${encodeURIComponent(ticker)}`),
+
+  streamChat: async (
+    messages: ChatMessage[],
+    ticker: string | null,
+    onChunk: (text: string) => void,
+  ): Promise<void> => {
+    const res = await fetch("/api/ai/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ messages, ticker }),
+    });
+    if (!res.ok || !res.body) return;
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const lines = decoder.decode(value).split("\n");
+      for (const line of lines) {
+        if (line.startsWith("data: ")) {
+          onChunk(line.slice(6));
+        }
+      }
+    }
+  },
 };
