@@ -207,3 +207,18 @@ class QuotesOut(BaseModel):
     QQQ: QuoteItem | None = None
     USDKRW: QuoteItem | None = None
     BTC: QuoteItem | None = None
+
+
+class CandleItem(BaseModel):
+    time: str       # "YYYY-MM-DD"
+    open: float
+    high: float
+    low: float
+    close: float
+    volume: float
+
+
+class CandlesOut(BaseModel):
+    ticker: str
+    period: str
+    candles: list[CandleItem]
