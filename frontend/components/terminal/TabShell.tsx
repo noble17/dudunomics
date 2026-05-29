@@ -1,7 +1,7 @@
 "use client";
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
-// import { MarketsPanel } from "./panels/MarketsPanel";  // Task 5에서 추가
+import { MarketsPanel } from "./panels/MarketsPanel";
 // import { PortfolioPanel } from "./panels/PortfolioPanel";  // Task 8에서 추가
 import { ResearchPanel } from "./panels/ResearchPanel";
 import { ToolsPanel } from "./panels/ToolsPanel";
@@ -17,7 +17,7 @@ function TabShellInner() {
 
   return (
     <div className="flex-1 overflow-hidden flex flex-col">
-      {tab === "markets"   && <div className="flex-1 flex items-center justify-center text-xs font-mono text-[var(--color-text-muted)]">Markets Panel — Task 5에서 구현</div>}
+      {tab === "markets"   && <MarketsPanel />}
       {tab === "portfolio" && <div className="flex-1 flex items-center justify-center text-xs font-mono text-[var(--color-text-muted)]">Portfolio Panel — Task 8에서 구현</div>}
       {tab === "research"  && <ResearchPanel />}
       {tab === "tools"     && <ToolsPanel />}
