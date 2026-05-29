@@ -20,26 +20,24 @@ def ai_client(fresh_db, monkeypatch):
     return c
 
 
-def _mock_gemini_model(text: str):
-    """generate_content() 반환값을 흉내내는 mock."""
+def _mock_gemini_client(text: str):
+    """genai.Client() 반환값을 흉내내는 mock."""
     mock_response = MagicMock()
     mock_response.text = text
-    mock_model = MagicMock()
-    mock_model.generate_content.return_value = mock_response
-    return mock_model
+    mock_client = MagicMock()
+    mock_client.models.generate_content.return_value = mock_response
+    return mock_client
 
 
 def test_ai_summary_returns_text(ai_client):
     """summary 엔드포인트: Gemini mock → 요약 텍스트 반환"""
     with patch("api.routers.ai.requests.get") as mock_news, \
-         patch("api.routers.ai.genai.GenerativeModel") as mock_cls:
-        # FMP 뉴스 mock
+         patch("api.routers.ai.genai.Client") as mock_cls:
         mock_news.return_value.status_code = 200
         mock_news.return_value.json.return_value = [
             {"title": "SPY hits new high", "publishedDate": "2026-05-29", "url": "http://x.com", "site": "MW", "image": None}
         ]
-        # Gemini mock
-        mock_cls.return_value = _mock_gemini_model("SPY는 오늘 신고가를 기록했습니다.")
+        mock_cls.return_value = _mock_gemini_client("SPY는 오늘 신고가를 기록했습니다.")
         res = ai_client.get("/api/ai/summary?ticker=SPY")
     assert res.status_code == 200
     body = res.json()
@@ -66,10 +64,10 @@ def test_ai_chat_streams_response(ai_client):
     chunk2 = MagicMock()
     chunk2.text = "결과입니다."
 
-    with patch("api.routers.ai.genai.GenerativeModel") as mock_cls:
-        mock_model = MagicMock()
-        mock_model.generate_content.return_value = iter([chunk1, chunk2])
-        mock_cls.return_value = mock_model
+    with patch("api.routers.ai.genai.Client") as mock_cls:
+        mock_client = MagicMock()
+        mock_client.models.generate_content_stream.return_value = iter([chunk1, chunk2])
+        mock_cls.return_value = mock_client
 
         res = ai_client.post(
             "/api/ai/chat",
