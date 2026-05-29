@@ -63,7 +63,7 @@ export function NewsPanel({ ticker }: Props) {
   }
 
   if (error) {
-    const is503 = error?.status === 503 || String(error).includes("503");
+    const is503 = error?.status === 503;
     return (
       <div className="flex items-center justify-center h-full">
         <span className="text-[10px] font-mono text-[var(--color-text-muted)]">
@@ -85,8 +85,8 @@ export function NewsPanel({ ticker }: Props) {
 
   return (
     <div>
-      {data.items.map((item, i) => (
-        <NewsCard key={i} item={item} />
+      {data.items.map((item) => (
+        <NewsCard key={item.url} item={item} />
       ))}
     </div>
   );
