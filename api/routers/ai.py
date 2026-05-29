@@ -59,7 +59,7 @@ def get_summary(
         f"3문장 이내의 간결한 한국어로 현재 시장 동향을 요약해주세요."
     )
     try:
-        response = client.models.generate_content(model="gemini-2.0-flash-lite", contents=prompt)
+        response = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
         summary = response.text.strip()
     except genai_errors.ClientError as e:
         raise HTTPException(status_code=503, detail=f"Gemini API 오류: {e.code}") from e
@@ -92,7 +92,7 @@ def chat(
     def generate():
         try:
             for chunk in client.models.generate_content_stream(
-                model="gemini-2.0-flash-lite", contents=full_prompt
+                model="gemini-2.5-flash", contents=full_prompt
             ):
                 if chunk.text:
                     yield f"data: {chunk.text}\n\n"
