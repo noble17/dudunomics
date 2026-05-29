@@ -168,3 +168,21 @@
 
 @utility border-t-rise { border-top-color: #DD3C44; }
 @utility border-t-fall { border-top-color: #1375EC; }
+
+/* Bloomberg Terminal 다크 테마 — /terminal 페이지 전용 스코프 */
+.terminal-dark {
+  --color-bg-primary:    #0a0a0a;
+  --color-bg-secondary:  #0f0f0f;
+  --color-bg-tertiary:   #141414;
+  --color-border:        #1a1a1a;
+  --color-border-subtle: #111111;
+  --color-text-primary:  #ffffff;
+  --color-text-secondary: #888888;
+  --color-text-muted:    #444444;
+  --color-primary:       #ff6600;
+  --color-primary-dim:   #cc5200;
+  --color-gain:          #ff4444;
+  --color-loss:          #4488ff;
+  --color-connected:     #44aa44;
+  --color-placeholder:   #333333;
+}
