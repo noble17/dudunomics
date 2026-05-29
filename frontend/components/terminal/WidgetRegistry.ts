@@ -3,6 +3,7 @@ import { PortfolioWidget } from "./widgets/Portfolio";
 import { WatchlistWidget } from "./widgets/Watchlist";
 import { ScreenerWidget } from "./widgets/Screener";
 import { BacktestWidget } from "./widgets/Backtest";
+import { AlertPanel } from "./widgets/AlertPanel";
 
 export interface WidgetMeta {
   label: string;
@@ -16,4 +17,5 @@ export const WIDGET_REGISTRY: Record<string, WidgetMeta> = {
   watchlist: { label: "워치리스트", component: WatchlistWidget, defaultW: 6, defaultH: 8 },
   screener:  { label: "종목분석",   component: ScreenerWidget,  defaultW: 6, defaultH: 8 },
   backtest:  { label: "백테스트",   component: BacktestWidget,  defaultW: 6, defaultH: 6 },
+  alerts:    { label: "알림 패널",  component: AlertPanel,      defaultW: 4, defaultH: 8 },
 };
