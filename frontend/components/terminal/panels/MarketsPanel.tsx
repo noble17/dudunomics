@@ -1,7 +1,9 @@
 "use client";
 import useSWR from "swr";
 import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from "react-resizable-panels";
-import { quotesApi, portfolioApi } from "@/lib/api";
+import { quotesApi, portfolioApi, holdingsApi } from "@/lib/api";
+import { useCommandStore } from "@/lib/stores/command";
+import { CandleChart } from "@/components/terminal/widgets/CandleChart";
 import { WatchlistWidget } from "@/components/terminal/widgets/Watchlist";
 import type { QuotesOut } from "@/lib/types";
 
@@ -78,6 +80,9 @@ function ResizeHandle() {
 export function MarketsPanel() {
   const { data: quotes } = useSWR("/api/quotes", quotesApi.get, { refreshInterval: 10_000 });
   const { data: snapshot } = useSWR("/api/portfolio/current", portfolioApi.current, { refreshInterval: 30_000 });
+  const focusedTicker = useCommandStore((s) => s.focusedTicker);
+  const { data: holdings } = useSWR("/api/holdings", holdingsApi.list, { dedupingInterval: 30_000 });
+  const chartTicker = focusedTicker ?? holdings?.[0]?.ticker ?? "SPY";
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
@@ -104,16 +109,9 @@ export function MarketsPanel() {
 
         <ResizeHandle />
 
-        {/* 중: Chart placeholder (기본 50%) */}
+        {/* 중: Chart (기본 50%) */}
         <Panel defaultSize={50} minSize={20} className="flex flex-col overflow-hidden border-x border-[var(--color-border)]">
-          <div className="px-3 py-1.5 text-[9px] font-mono uppercase tracking-widest text-[var(--color-primary)] border-b border-[var(--color-border)] shrink-0">
-            CHART
-          </div>
-          <div className="flex-1 flex items-center justify-center">
-            <span className="text-xs font-mono text-[var(--color-text-muted)]">
-              캔들 차트 — M5에서 연결
-            </span>
-          </div>
+          <CandleChart ticker={chartTicker} />
         </Panel>
 
         <ResizeHandle />
