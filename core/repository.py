@@ -835,11 +835,16 @@ def get_user_alerts(user_id: int) -> list[dict]:
 
 def delete_user_alert(user_id: int, alert_id: int) -> bool:
     with session() as s:
-        result = s.execute(text(
+        row = s.execute(text(
+            "SELECT id FROM user_alerts WHERE id = :id AND user_id = :u"
+        ), {"id": alert_id, "u": user_id}).fetchone()
+        if row is None:
+            return False
+        s.execute(text(
             "DELETE FROM user_alerts WHERE id = :id AND user_id = :u"
         ), {"id": alert_id, "u": user_id})
         s.commit()
-        return result.rowcount > 0
+        return True
 
 
 def get_all_enabled_alerts() -> list[dict]:
