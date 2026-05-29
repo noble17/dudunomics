@@ -222,3 +222,31 @@ class CandlesOut(BaseModel):
     ticker: str
     period: str
     candles: list[CandleItem]
+
+
+class NewsItem(BaseModel):
+    title: str
+    published_date: str
+    url: str
+    site: str
+    image: str | None = None
+
+
+class NewsOut(BaseModel):
+    ticker: str
+    items: list[NewsItem]
+
+
+class AISummaryOut(BaseModel):
+    ticker: str
+    summary: str
+
+
+class ChatMessage(BaseModel):
+    role: str   # "user" | "assistant"
+    content: str
+
+
+class ChatRequest(BaseModel):
+    messages: list[ChatMessage]
+    ticker: str | None = None
