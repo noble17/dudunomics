@@ -1,5 +1,5 @@
 "use client";
-
+import { useEffect, useState } from "react";
 import { useQuotes } from "@/hooks/useQuotes";
 import type { QuoteItem } from "@/lib/types";
 
@@ -25,8 +25,8 @@ function QuoteCell({ label, item, decimals }: {
   const arrow = up ? "▲" : down ? "▼" : "";
 
   return (
-    <div className="flex items-center gap-1.5 text-xs shrink-0">
-      <span className="text-[var(--color-text-secondary)] font-medium">{label}</span>
+    <div className="flex items-center gap-1.5 text-[11px] shrink-0">
+      <span className="text-[var(--color-text-secondary)] font-mono">{label}</span>
       <span className="text-[var(--color-text-primary)] font-mono">
         {item ? fmt(item.price, decimals) : "—"}
       </span>
@@ -40,15 +40,43 @@ function QuoteCell({ label, item, decimals }: {
   );
 }
 
+const EST_FORMATTER = new Intl.DateTimeFormat("en-US", {
+  timeZone: "America/New_York",
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+  hour12: false,
+});
+
 export function IndexStrip() {
   const quotes = useQuotes();
+  const [clock, setClock] = useState(() => EST_FORMATTER.format(new Date()));
+
+  useEffect(() => {
+    const id = setInterval(() => setClock(EST_FORMATTER.format(new Date())), 1000);
+    return () => clearInterval(id);
+  }, []);
 
   return (
-    <div className="flex items-center gap-6 px-4 h-8 border-b border-[var(--color-border)] bg-[var(--color-bg-secondary)] shrink-0 overflow-x-auto">
-      <QuoteCell label="SPY"     item={quotes?.SPY}    decimals={2} />
-      <QuoteCell label="QQQ"     item={quotes?.QQQ}    decimals={2} />
-      <QuoteCell label="USD/KRW" item={quotes?.USDKRW} decimals={1} />
-      <QuoteCell label="BTC"     item={quotes?.BTC}    decimals={0} />
+    <div className="flex items-center px-4 h-8 border-b border-[var(--color-border)] bg-[var(--color-bg-secondary)] shrink-0">
+      {/* 좌: INDICES 레이블 */}
+      <span className="text-[9px] font-mono uppercase tracking-widest text-[var(--color-primary)] mr-4 shrink-0">
+        INDICES ▾
+      </span>
+
+      {/* 시세 셀 */}
+      <div className="flex items-center gap-6 flex-1 overflow-x-auto">
+        <QuoteCell label="SPY"     item={quotes?.SPY}    decimals={2} />
+        <QuoteCell label="QQQ"     item={quotes?.QQQ}    decimals={2} />
+        <QuoteCell label="USD/KRW" item={quotes?.USDKRW} decimals={1} />
+        <QuoteCell label="BTC"     item={quotes?.BTC}    decimals={0} />
+      </div>
+
+      {/* 우: Connected + EST 시각 */}
+      <div className="flex items-center gap-2 shrink-0 ml-4">
+        <span className="text-[9px] font-mono text-[var(--color-connected)]">● Connected</span>
+        <span className="text-[10px] font-mono text-[var(--color-text-muted)]">NY {clock} EST</span>
+      </div>
     </div>
   );
 }
