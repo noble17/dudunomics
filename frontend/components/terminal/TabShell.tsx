@@ -2,7 +2,7 @@
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import { MarketsPanel } from "./panels/MarketsPanel";
-// import { PortfolioPanel } from "./panels/PortfolioPanel";  // Task 8에서 추가
+import { PortfolioPanel } from "./panels/PortfolioPanel";
 import { ResearchPanel } from "./panels/ResearchPanel";
 import { ToolsPanel } from "./panels/ToolsPanel";
 import { AiPanel } from "./panels/AiPanel";
@@ -18,7 +18,7 @@ function TabShellInner() {
   return (
     <div className="flex-1 overflow-hidden flex flex-col">
       {tab === "markets"   && <MarketsPanel />}
-      {tab === "portfolio" && <div className="flex-1 flex items-center justify-center text-xs font-mono text-[var(--color-text-muted)]">Portfolio Panel — Task 8에서 구현</div>}
+      {tab === "portfolio" && <PortfolioPanel />}
       {tab === "research"  && <ResearchPanel />}
       {tab === "tools"     && <ToolsPanel />}
       {tab === "ai"        && <AiPanel />}
