@@ -29,6 +29,7 @@ export function AlertPanel() {
 
   async function handleAdd() {
     if (!ticker.trim()) return;
+    if (selectedOpt.needsValue && (!condValue.trim() || isNaN(parseFloat(condValue)))) return;
     setAdding(true);
     try {
       await addAlert({
@@ -94,7 +95,7 @@ export function AlertPanel() {
             )}
             <button
               onClick={handleAdd}
-              disabled={adding || !ticker.trim()}
+              disabled={adding || !ticker.trim() || (selectedOpt.needsValue && (!condValue.trim() || isNaN(parseFloat(condValue))))}
               className="w-full py-1 border border-[var(--color-primary)] text-[var(--color-primary)] text-[9px] uppercase tracking-widest hover:bg-[var(--color-primary)]/10 disabled:opacity-40 transition-colors"
             >
               {adding ? "추가 중…" : "+ 추가"}

@@ -23,13 +23,6 @@ def create_alert(body: AlertIn, user: CurrentUser = Depends(current_user)):
     return next(a for a in alerts if a["id"] == alert_id)
 
 
-@router.delete("/{alert_id}", status_code=204)
-def delete_alert(alert_id: int, user: CurrentUser = Depends(current_user)):
-    deleted = repo.delete_user_alert(user.id, alert_id)
-    if not deleted:
-        raise HTTPException(status_code=404, detail="알림 없음 또는 권한 없음")
-
-
 @router.get("/events", response_model=list[AlertEventOut])
 def get_alert_events(user: CurrentUser = Depends(current_user)):
     return repo.get_alert_events(user.id)
@@ -43,3 +36,10 @@ def get_unread_events(user: CurrentUser = Depends(current_user)):
 @router.post("/events/read", status_code=204)
 def mark_events_read(user: CurrentUser = Depends(current_user)):
     repo.mark_all_alert_events_read(user.id)
+
+
+@router.delete("/{alert_id}", status_code=204)
+def delete_alert(alert_id: int, user: CurrentUser = Depends(current_user)):
+    deleted = repo.delete_user_alert(user.id, alert_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="알림 없음 또는 권한 없음")
