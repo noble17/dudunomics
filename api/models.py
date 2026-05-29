@@ -218,10 +218,50 @@ class CandleItem(BaseModel):
     volume: float
 
 
+class IndicatorPoint(BaseModel):
+    time: str
+    value: float
+
+class IndicatorsData(BaseModel):
+    ma: dict[str, list[IndicatorPoint]]
+    bollinger: dict[str, list[IndicatorPoint]]
+    rsi: list[IndicatorPoint]
+    macd: dict[str, list[IndicatorPoint]]
+    volume_ma: list[IndicatorPoint]
+
 class CandlesOut(BaseModel):
     ticker: str
     period: str
     candles: list[CandleItem]
+    indicators: IndicatorsData | None = None
+
+AlertConditionType = Literal[
+    "price_above", "price_below",
+    "rsi_above", "rsi_below",
+    "ma_golden_cross", "ma_dead_cross",
+]
+
+class AlertIn(BaseModel):
+    ticker: str
+    condition_type: AlertConditionType
+    condition_value: float | None = None
+
+class AlertOut(BaseModel):
+    id: int
+    ticker: str
+    condition_type: str
+    condition_value: float | None
+    enabled: bool
+    created_at: datetime
+
+class AlertEventOut(BaseModel):
+    id: int
+    ticker: str
+    condition_type: str
+    condition_value: float | None
+    triggered_price: float
+    triggered_at: datetime
+    read: bool
 
 
 class NewsItem(BaseModel):

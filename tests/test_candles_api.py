@@ -71,3 +71,28 @@ def test_candles_requires_auth(fresh_db, monkeypatch):
     c = TestClient(app)
     res = c.get("/api/candles?ticker=SPY")
     assert res.status_code == 401
+
+
+def test_candles_with_indicators(candles_client):
+    """indicators=true 요청 시 ma/bollinger/rsi/macd/volume_ma 포함."""
+    fake = _make_fake_ohlcv("SPY", 200)
+    with patch("api.routers.candles.fetch_ohlcv", return_value=(fake, [])):
+        res = candles_client.get("/api/candles?ticker=SPY&period=1Y&indicators=true")
+    assert res.status_code == 200
+    data = res.json()
+    assert data["indicators"] is not None
+    ind = data["indicators"]
+    assert set(ind.keys()) == {"ma", "bollinger", "rsi", "macd", "volume_ma"}
+    assert set(ind["ma"].keys()) == {"5", "20", "60", "120"}
+    assert len(ind["ma"]["5"]) > 0
+    pt = ind["ma"]["5"][0]
+    assert "time" in pt and "value" in pt
+
+
+def test_candles_without_indicators_returns_null(candles_client):
+    """indicators 파라미터 없으면 indicators 필드가 null."""
+    fake = _make_fake_ohlcv("SPY", 60)
+    with patch("api.routers.candles.fetch_ohlcv", return_value=(fake, [])):
+        res = candles_client.get("/api/candles?ticker=SPY&period=3M")
+    assert res.status_code == 200
+    assert res.json()["indicators"] is None
