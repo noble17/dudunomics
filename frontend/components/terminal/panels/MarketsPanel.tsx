@@ -1,10 +1,14 @@
 "use client";
+import { useState } from "react";
 import useSWR from "swr";
 import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from "react-resizable-panels";
-import { quotesApi, portfolioApi, holdingsApi } from "@/lib/api";
+import { quotesApi, portfolioApi, holdingsApi, aiApi } from "@/lib/api";
 import { useCommandStore } from "@/lib/stores/command";
 import { CandleChart } from "@/components/terminal/widgets/CandleChart";
 import { WatchlistWidget } from "@/components/terminal/widgets/Watchlist";
+import { NewsPanel } from "@/components/terminal/widgets/NewsPanel";
+import { AIStatusBar } from "@/components/terminal/widgets/AIStatusBar";
+import { AIOverlay } from "@/components/terminal/widgets/AIOverlay";
 import type { QuotesOut } from "@/lib/types";
 
 type TileConfig = {
@@ -84,9 +88,28 @@ export function MarketsPanel() {
   const { data: holdings } = useSWR("/api/holdings", holdingsApi.list, { dedupingInterval: 30_000 });
   const chartTicker = focusedTicker ?? holdings?.[0]?.ticker ?? "SPY";
 
+  const [aiOpen, setAiOpen] = useState(false);
+  const [aiSummary, setAiSummary] = useState<string | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+
+  async function handleAiOpen() {
+    setAiOpen(true);
+    if (!aiSummary) {
+      setAiLoading(true);
+      try {
+        const { summary } = await aiApi.summary(chartTicker);
+        setAiSummary(summary);
+      } catch {
+        // 요약 실패해도 채팅은 열림
+      } finally {
+        setAiLoading(false);
+      }
+    }
+  }
+
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
-      {/* Row 1: Market Overview 타일 (height: 80px) */}
+      {/* Row 1: Market Overview 타일 */}
       <div className="h-20 shrink-0 flex items-stretch border-b border-[var(--color-border)] bg-[var(--color-bg-secondary)]">
         <div className="flex items-stretch flex-1 overflow-x-auto">
           {TILES.map(tile => (
@@ -97,7 +120,7 @@ export function MarketsPanel() {
 
       {/* Row 2: 3분할 드래그 패널 */}
       <PanelGroup orientation="horizontal" className="flex-1 overflow-hidden">
-        {/* 좌: Watchlist (기본 20%) */}
+        {/* 좌: Watchlist */}
         <Panel defaultSize={20} minSize={12} className="flex flex-col overflow-hidden">
           <div className="px-3 py-1.5 text-[9px] font-mono uppercase tracking-widest text-[var(--color-primary)] border-b border-[var(--color-border)] shrink-0">
             WATCHLIST
@@ -109,29 +132,27 @@ export function MarketsPanel() {
 
         <ResizeHandle />
 
-        {/* 중: Chart (기본 50%) */}
+        {/* 중: Chart */}
         <Panel defaultSize={50} minSize={20} className="flex flex-col overflow-hidden border-x border-[var(--color-border)]">
           <CandleChart ticker={chartTicker} />
         </Panel>
 
         <ResizeHandle />
 
-        {/* 우: Top News placeholder (기본 30%) */}
+        {/* 우: Top News */}
         <Panel defaultSize={30} minSize={12} className="flex flex-col overflow-hidden">
           <div className="px-3 py-1.5 text-[9px] font-mono uppercase tracking-widest text-[var(--color-primary)] border-b border-[var(--color-border)] shrink-0">
             TOP NEWS
           </div>
-          <div className="flex-1 flex items-center justify-center">
-            <span className="text-xs font-mono text-[var(--color-text-muted)]">
-              뉴스 — M6에서 연결
-            </span>
+          <div className="flex-1 overflow-auto">
+            <NewsPanel ticker={chartTicker} />
           </div>
         </Panel>
       </PanelGroup>
 
-      {/* Row 3: 포트폴리오 요약 + AI (height: 72px) */}
+      {/* Row 3: 포트폴리오 요약 + AI */}
       <div className="h-[72px] shrink-0 flex border-t border-[var(--color-border)] bg-[var(--color-bg-secondary)]">
-        {/* 좌 (50%): MY PORTFOLIO */}
+        {/* 좌: MY PORTFOLIO */}
         <div className="flex-1 flex flex-col justify-center px-4 border-r border-[var(--color-border)]">
           <p className="text-[9px] font-mono uppercase tracking-widest text-[var(--color-primary)] mb-1">
             MY PORTFOLIO
@@ -149,16 +170,24 @@ export function MarketsPanel() {
             <span className="text-[11px] font-mono text-[var(--color-text-muted)]">로딩 중…</span>
           )}
         </div>
-        {/* 우 (50%): AI ASSISTANT placeholder */}
-        <div className="flex-1 flex flex-col justify-center px-4">
-          <p className="text-[9px] font-mono uppercase tracking-widest text-[var(--color-primary)] mb-1">
-            AI ASSISTANT
-          </p>
-          <span className="text-[11px] font-mono text-[var(--color-text-muted)]">
-            Gemini API — M6에서 연결
-          </span>
+        {/* 우: AI ASSISTANT */}
+        <div className="flex-1 flex">
+          <AIStatusBar
+            summary={aiSummary}
+            loading={aiLoading}
+            onOpen={handleAiOpen}
+          />
         </div>
       </div>
+
+      {/* AI 채팅 오버레이 */}
+      {aiOpen && (
+        <AIOverlay
+          ticker={chartTicker}
+          initialSummary={aiSummary}
+          onClose={() => setAiOpen(false)}
+        />
+      )}
     </div>
   );
 }
