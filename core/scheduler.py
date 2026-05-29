@@ -116,13 +116,12 @@ def _check_condition(alert: dict, current_price: float, ohlcv_df: pd.DataFrame |
         ma20 = indicators["ma"]["20"]
         if len(ma5) < 2 or len(ma20) < 2:
             return False
-        # 전일 MA5 < MA20, 당일 MA5 > MA20 → 골든크로스
-        prev_cross = ma5[-2]["value"] < ma20[-2]["value"]
-        curr_cross = ma5[-1]["value"] > ma20[-1]["value"]
+        prev_above = ma5[-2]["value"] > ma20[-2]["value"]
+        curr_above = ma5[-1]["value"] > ma20[-1]["value"]
         if ct == "ma_golden_cross":
-            return prev_cross and curr_cross
+            return (not prev_above) and curr_above     # prev: MA5 < MA20, curr: MA5 > MA20
         else:  # dead_cross
-            return (not prev_cross) and (not curr_cross)
+            return prev_above and (not curr_above)     # prev: MA5 > MA20, curr: MA5 < MA20
 
     return False
 

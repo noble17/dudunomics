@@ -90,6 +90,8 @@ export function CandleChart({ ticker }: Props) {
     chart.priceScale("rsi_scale").applyOptions({
       scaleMargins: SCALE_MARGINS.rsi,
     });
+    rsiSeries.createPriceLine({ price: 70, color: "#30d158", lineStyle: 2, lineWidth: 1, axisLabelVisible: true, title: "70" });
+    rsiSeries.createPriceLine({ price: 30, color: "#ff453a", lineStyle: 2, lineWidth: 1, axisLabelVisible: true, title: "30" });
 
     // ── MACD ─────────────────────────────────────────────────
     const macdLineSeries = chart.addLineSeries({
@@ -124,7 +126,7 @@ export function CandleChart({ ticker }: Props) {
     // ── 볼린저밴드 ────────────────────────────────────────────
     const bbUpper = chart.addLineSeries({
       priceScaleId: "right",
-      color: "rgba(100, 210, 255, 0.6)",
+      color: "rgba(100, 210, 255, 0.4)",
       lineWidth: 1,
       lineStyle: 2, // dashed
       lastValueVisible: false,
@@ -132,14 +134,14 @@ export function CandleChart({ ticker }: Props) {
     });
     const bbMiddle = chart.addLineSeries({
       priceScaleId: "right",
-      color: "rgba(100, 210, 255, 0.4)",
+      color: "rgba(100, 210, 255, 0.7)",
       lineWidth: 1,
       lastValueVisible: false,
       priceLineVisible: false,
     });
     const bbLower = chart.addLineSeries({
       priceScaleId: "right",
-      color: "rgba(100, 210, 255, 0.6)",
+      color: "rgba(100, 210, 255, 0.4)",
       lineWidth: 1,
       lineStyle: 2,
       lastValueVisible: false,
