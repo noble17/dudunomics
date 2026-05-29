@@ -199,3 +199,18 @@ export interface QuotesOut {
   USDKRW: QuoteItem | null
   BTC: QuoteItem | null
 }
+
+export interface CandleItem {
+  time: string;   // "YYYY-MM-DD"
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+}
+
+export interface CandlesOut {
+  ticker: string;
+  period: string;
+  candles: CandleItem[];
+}

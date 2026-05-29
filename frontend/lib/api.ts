@@ -1,5 +1,5 @@
 import type {
-  BacktestRunIn, BacktestRunOut, CashUpdate, EventOut,
+  BacktestRunIn, BacktestRunOut, CandlesOut, CashUpdate, EventOut,
   HoldingIn, HoldingOut, PortfolioSnapshot,
   SnapshotHistory, StrategyDef,
   TickerLookupOut, TickerSearchHit,
@@ -89,4 +89,9 @@ export const workspaceApi = {
 
 export const quotesApi = {
   get: () => request<QuotesOut>("/api/quotes"),
+};
+
+export const candlesApi = {
+  get: (ticker: string, period: string) =>
+    request<CandlesOut>(`/api/candles?ticker=${encodeURIComponent(ticker)}&period=${encodeURIComponent(period)}`),
 };
