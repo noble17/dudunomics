@@ -11,6 +11,8 @@ def ai_client(fresh_db, monkeypatch):
     monkeypatch.setenv("FMP_API_KEY", "test-fmp-key")
     monkeypatch.delenv("LEGACY_USER_EMAIL", raising=False)
     monkeypatch.delenv("LEGACY_USER_PASSWORD", raising=False)
+    import api.routers.ai as ai_mod
+    ai_mod._summary_cache.clear()
     from api.main import app
     from fastapi.testclient import TestClient
     c = TestClient(app)

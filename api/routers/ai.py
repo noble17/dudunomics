@@ -11,6 +11,7 @@ router = APIRouter(prefix="/api/ai", tags=["ai"])
 
 _summary_cache: dict[str, tuple[str, float]] = {}
 _SUMMARY_TTL = 600.0  # 10분
+_configured = False
 
 
 def _get_recent_news_titles(ticker: str, limit: int = 3) -> list[str]:
@@ -31,12 +32,14 @@ def _get_recent_news_titles(ticker: str, limit: int = 3) -> list[str]:
     return []
 
 
-def _require_gemini_key() -> str:
+def _require_gemini_key() -> None:
+    global _configured
     key = os.getenv("GEMINI_API_KEY", "")
     if not key or key == "your_gemini_key_here":
         raise HTTPException(status_code=503, detail="GEMINI_API_KEY not configured")
-    genai.configure(api_key=key)
-    return key
+    if not _configured:
+        genai.configure(api_key=key)
+        _configured = True
 
 
 @router.get("/summary", response_model=AISummaryOut)
