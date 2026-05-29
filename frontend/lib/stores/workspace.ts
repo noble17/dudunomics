@@ -40,10 +40,14 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     try {
       const res = await workspaceApi.get();
       const incoming = res.layout;
-      set({
-        layout: Object.keys(incoming).length > 0 ? incoming : DEFAULT_LAYOUT,
-        loaded: true,
-      });
+      const finalLayout = Object.keys(incoming).length > 0 ? incoming : DEFAULT_LAYOUT;
+      // 기존 위젯 ID에서 최대 번호 추출해 _widgetCounter 동기화 (중복 키 방지)
+      const maxN = (finalLayout.center_widgets ?? []).reduce((m, w) => {
+        const n = parseInt(w.i.replace(/\D/g, ""), 10);
+        return isNaN(n) ? m : Math.max(m, n);
+      }, 0);
+      if (maxN > _widgetCounter) _widgetCounter = maxN;
+      set({ layout: finalLayout, loaded: true });
     } catch {
       set({ loaded: true });
     }
