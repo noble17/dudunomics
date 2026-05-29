@@ -1,6 +1,8 @@
 "use client";
 import useSWR from "swr";
+import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from "react-resizable-panels";
 import { quotesApi } from "@/lib/api";
+import { WatchlistWidget } from "@/components/terminal/widgets/Watchlist";
 import type { QuotesOut } from "@/lib/types";
 
 type TileConfig = {
@@ -67,6 +69,12 @@ function MarketTile({ config, quotes }: { config: TileConfig; quotes: QuotesOut 
   );
 }
 
+function ResizeHandle() {
+  return (
+    <PanelResizeHandle className="w-1 hover:bg-[var(--color-primary)] bg-[var(--color-border)] transition-colors mx-0.5" />
+  );
+}
+
 export function MarketsPanel() {
   const { data: quotes } = useSWR("/api/quotes", quotesApi.get, { refreshInterval: 10_000 });
 
@@ -81,10 +89,46 @@ export function MarketsPanel() {
         </div>
       </div>
 
-      {/* Row 2: 3분할 패널 — Task 6에서 구현 */}
-      <div className="flex-1 overflow-hidden flex items-center justify-center text-xs font-mono text-[var(--color-text-muted)]">
-        Row 2 — Task 6에서 구현
-      </div>
+      {/* Row 2: 3분할 드래그 패널 */}
+      <PanelGroup orientation="horizontal" className="flex-1 overflow-hidden">
+        {/* 좌: Watchlist (기본 20%) */}
+        <Panel defaultSize={20} minSize={12} className="flex flex-col overflow-hidden">
+          <div className="px-3 py-1.5 text-[9px] font-mono uppercase tracking-widest text-[var(--color-primary)] border-b border-[var(--color-border)] shrink-0">
+            WATCHLIST
+          </div>
+          <div className="flex-1 overflow-auto p-2">
+            <WatchlistWidget />
+          </div>
+        </Panel>
+
+        <ResizeHandle />
+
+        {/* 중: Chart placeholder (기본 50%) */}
+        <Panel defaultSize={50} minSize={20} className="flex flex-col overflow-hidden border-x border-[var(--color-border)]">
+          <div className="px-3 py-1.5 text-[9px] font-mono uppercase tracking-widest text-[var(--color-primary)] border-b border-[var(--color-border)] shrink-0">
+            CHART
+          </div>
+          <div className="flex-1 flex items-center justify-center">
+            <span className="text-xs font-mono text-[var(--color-text-muted)]">
+              캔들 차트 — M5에서 연결
+            </span>
+          </div>
+        </Panel>
+
+        <ResizeHandle />
+
+        {/* 우: Top News placeholder (기본 30%) */}
+        <Panel defaultSize={30} minSize={12} className="flex flex-col overflow-hidden">
+          <div className="px-3 py-1.5 text-[9px] font-mono uppercase tracking-widest text-[var(--color-primary)] border-b border-[var(--color-border)] shrink-0">
+            TOP NEWS
+          </div>
+          <div className="flex-1 flex items-center justify-center">
+            <span className="text-xs font-mono text-[var(--color-text-muted)]">
+              뉴스 — M6에서 연결
+            </span>
+          </div>
+        </Panel>
+      </PanelGroup>
 
       {/* Row 3: 포트폴리오 요약 — Task 7에서 구현 */}
       <div className="h-[72px] shrink-0 border-t border-[var(--color-border)] bg-[var(--color-bg-secondary)]" />
