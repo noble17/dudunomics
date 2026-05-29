@@ -1,7 +1,7 @@
 "use client";
 import useSWR from "swr";
 import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from "react-resizable-panels";
-import { quotesApi } from "@/lib/api";
+import { quotesApi, portfolioApi } from "@/lib/api";
 import { WatchlistWidget } from "@/components/terminal/widgets/Watchlist";
 import type { QuotesOut } from "@/lib/types";
 
@@ -77,6 +77,7 @@ function ResizeHandle() {
 
 export function MarketsPanel() {
   const { data: quotes } = useSWR("/api/quotes", quotesApi.get, { refreshInterval: 10_000 });
+  const { data: snapshot } = useSWR("/api/portfolio/current", portfolioApi.current, { refreshInterval: 30_000 });
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
@@ -130,8 +131,36 @@ export function MarketsPanel() {
         </Panel>
       </PanelGroup>
 
-      {/* Row 3: 포트폴리오 요약 — Task 7에서 구현 */}
-      <div className="h-[72px] shrink-0 border-t border-[var(--color-border)] bg-[var(--color-bg-secondary)]" />
+      {/* Row 3: 포트폴리오 요약 + AI (height: 72px) */}
+      <div className="h-[72px] shrink-0 flex border-t border-[var(--color-border)] bg-[var(--color-bg-secondary)]">
+        {/* 좌 (50%): MY PORTFOLIO */}
+        <div className="flex-1 flex flex-col justify-center px-4 border-r border-[var(--color-border)]">
+          <p className="text-[9px] font-mono uppercase tracking-widest text-[var(--color-primary)] mb-1">
+            MY PORTFOLIO
+          </p>
+          {snapshot ? (
+            <div className="flex items-baseline gap-4">
+              <span className="text-[13px] font-mono text-[var(--color-text-primary)]">
+                ₩{snapshot.total_with_cash_krw.toLocaleString("ko-KR", { maximumFractionDigits: 0 })}
+              </span>
+              <span className="text-[10px] font-mono text-[var(--color-text-secondary)]">
+                오늘 손익 <span className="text-[var(--color-text-muted)]">—</span>
+              </span>
+            </div>
+          ) : (
+            <span className="text-[11px] font-mono text-[var(--color-text-muted)]">로딩 중…</span>
+          )}
+        </div>
+        {/* 우 (50%): AI ASSISTANT placeholder */}
+        <div className="flex-1 flex flex-col justify-center px-4">
+          <p className="text-[9px] font-mono uppercase tracking-widest text-[var(--color-primary)] mb-1">
+            AI ASSISTANT
+          </p>
+          <span className="text-[11px] font-mono text-[var(--color-text-muted)]">
+            Gemini API — M6에서 연결
+          </span>
+        </div>
+      </div>
     </div>
   );
 }
