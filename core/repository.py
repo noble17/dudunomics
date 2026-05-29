@@ -182,6 +182,30 @@ def _init_schema(engine):
         updated_at  TIMESTAMP DEFAULT current_timestamp,
         PRIMARY KEY (user_id, name)
     );
+
+    CREATE SEQUENCE IF NOT EXISTS user_alerts_id_seq START 1;
+    CREATE TABLE IF NOT EXISTS user_alerts (
+        id              INTEGER DEFAULT nextval('user_alerts_id_seq') PRIMARY KEY,
+        user_id         INTEGER NOT NULL,
+        ticker          VARCHAR NOT NULL,
+        condition_type  VARCHAR NOT NULL,
+        condition_value DOUBLE,
+        enabled         BOOLEAN DEFAULT TRUE,
+        created_at      TIMESTAMP DEFAULT current_timestamp
+    );
+
+    CREATE SEQUENCE IF NOT EXISTS user_alert_events_id_seq START 1;
+    CREATE TABLE IF NOT EXISTS user_alert_events (
+        id              INTEGER DEFAULT nextval('user_alert_events_id_seq') PRIMARY KEY,
+        user_id         INTEGER NOT NULL,
+        alert_id        INTEGER,
+        ticker          VARCHAR NOT NULL,
+        condition_type  VARCHAR NOT NULL,
+        condition_value DOUBLE,
+        triggered_price DOUBLE NOT NULL,
+        triggered_at    TIMESTAMP DEFAULT current_timestamp,
+        read            BOOLEAN DEFAULT FALSE
+    );
     """
     with engine.connect() as conn:
         for stmt in ddl.strip().split(";"):
@@ -782,4 +806,102 @@ def save_workspace(user_id: int, layout: dict, name: str = "default") -> None:
                 layout_json = excluded.layout_json,
                 updated_at  = excluded.updated_at
         """), {"uid": user_id, "n": name, "payload": payload})
+        s.commit()
+
+
+# ── 알림 조건 CRUD ──────────────────────────────────────────
+
+def create_alert(user_id: int, ticker: str, condition_type: str, condition_value: float | None) -> int:
+    with session() as s:
+        row = s.execute(text("""
+            INSERT INTO user_alerts (user_id, ticker, condition_type, condition_value)
+            VALUES (:u, :t, :ct, :cv)
+            RETURNING id
+        """), {"u": user_id, "t": ticker.upper(), "ct": condition_type, "cv": condition_value}).fetchone()
+        s.commit()
+        return row[0]
+
+
+def get_user_alerts(user_id: int) -> list[dict]:
+    with session() as s:
+        rows = s.execute(text("""
+            SELECT id, ticker, condition_type, condition_value, enabled, created_at
+            FROM user_alerts WHERE user_id = :u AND enabled = TRUE
+            ORDER BY created_at DESC
+        """), {"u": user_id}).fetchall()
+        return [{"id": r[0], "ticker": r[1], "condition_type": r[2],
+                 "condition_value": r[3], "enabled": r[4], "created_at": r[5]} for r in rows]
+
+
+def delete_user_alert(user_id: int, alert_id: int) -> bool:
+    with session() as s:
+        result = s.execute(text(
+            "DELETE FROM user_alerts WHERE id = :id AND user_id = :u"
+        ), {"id": alert_id, "u": user_id})
+        s.commit()
+        return result.rowcount > 0
+
+
+def get_all_enabled_alerts() -> list[dict]:
+    """스케줄러용 — 전체 사용자 활성 알림."""
+    with session() as s:
+        rows = s.execute(text("""
+            SELECT id, user_id, ticker, condition_type, condition_value
+            FROM user_alerts WHERE enabled = TRUE
+        """)).fetchall()
+        return [{"id": r[0], "user_id": r[1], "ticker": r[2],
+                 "condition_type": r[3], "condition_value": r[4]} for r in rows]
+
+
+def has_recent_alert_event(alert_id: int, minutes: int = 60) -> bool:
+    """같은 alert_id가 최근 N분 내 이미 발화했는지 확인 (중복 방지)."""
+    with session() as s:
+        row = s.execute(text("""
+            SELECT COUNT(*) FROM user_alert_events
+            WHERE alert_id = :aid
+              AND triggered_at >= current_timestamp - INTERVAL (CAST(:m AS VARCHAR) || ' minutes')
+        """), {"aid": alert_id, "m": minutes}).fetchone()
+        return row[0] > 0
+
+
+def insert_alert_event(user_id: int, alert_id: int, ticker: str,
+                       condition_type: str, condition_value: float | None,
+                       triggered_price: float) -> None:
+    with session() as s:
+        s.execute(text("""
+            INSERT INTO user_alert_events
+              (user_id, alert_id, ticker, condition_type, condition_value, triggered_price)
+            VALUES (:u, :aid, :t, :ct, :cv, :price)
+        """), {"u": user_id, "aid": alert_id, "t": ticker, "ct": condition_type,
+               "cv": condition_value, "price": triggered_price})
+        s.commit()
+
+
+def get_alert_events(user_id: int, limit: int = 50) -> list[dict]:
+    with session() as s:
+        rows = s.execute(text("""
+            SELECT id, ticker, condition_type, condition_value, triggered_price, triggered_at, read
+            FROM user_alert_events WHERE user_id = :u
+            ORDER BY triggered_at DESC LIMIT :lim
+        """), {"u": user_id, "lim": limit}).fetchall()
+        return [{"id": r[0], "ticker": r[1], "condition_type": r[2], "condition_value": r[3],
+                 "triggered_price": r[4], "triggered_at": r[5], "read": r[6]} for r in rows]
+
+
+def get_unread_alert_events(user_id: int) -> list[dict]:
+    with session() as s:
+        rows = s.execute(text("""
+            SELECT id, ticker, condition_type, condition_value, triggered_price, triggered_at, read
+            FROM user_alert_events WHERE user_id = :u AND read = FALSE
+            ORDER BY triggered_at DESC
+        """), {"u": user_id}).fetchall()
+        return [{"id": r[0], "ticker": r[1], "condition_type": r[2], "condition_value": r[3],
+                 "triggered_price": r[4], "triggered_at": r[5], "read": r[6]} for r in rows]
+
+
+def mark_all_alert_events_read(user_id: int) -> None:
+    with session() as s:
+        s.execute(text(
+            "UPDATE user_alert_events SET read = TRUE WHERE user_id = :u AND read = FALSE"
+        ), {"u": user_id})
         s.commit()
