@@ -200,6 +200,20 @@ export interface QuotesOut {
   BTC: QuoteItem | null
 }
 
+// ── 지표 ──────────────────────────────────────────────────
+export interface IndicatorPoint {
+  time: string
+  value: number
+}
+
+export interface IndicatorsData {
+  ma: Record<string, IndicatorPoint[]>        // "5" | "20" | "60" | "120"
+  bollinger: Record<string, IndicatorPoint[]> // "upper" | "middle" | "lower"
+  rsi: IndicatorPoint[]
+  macd: Record<string, IndicatorPoint[]>      // "macd" | "signal" | "histogram"
+  volume_ma: IndicatorPoint[]
+}
+
 export interface CandleItem {
   time: string;   // "YYYY-MM-DD"
   open: number;
@@ -213,6 +227,7 @@ export interface CandlesOut {
   ticker: string;
   period: string;
   candles: CandleItem[];
+  indicators?: IndicatorsData | null;
 }
 
 export interface NewsItem {
@@ -236,4 +251,38 @@ export interface AISummaryOut {
 export interface ChatMessage {
   role: "user" | "assistant";
   content: string;
+}
+
+// ── 알림 ──────────────────────────────────────────────────
+export type AlertConditionType =
+  | "price_above"
+  | "price_below"
+  | "rsi_above"
+  | "rsi_below"
+  | "ma_golden_cross"
+  | "ma_dead_cross"
+
+export interface AlertCondition {
+  id: number
+  ticker: string
+  condition_type: AlertConditionType
+  condition_value: number | null
+  enabled: boolean
+  created_at: string
+}
+
+export interface AlertEvent {
+  id: number
+  ticker: string
+  condition_type: string
+  condition_value: number | null
+  triggered_price: number
+  triggered_at: string
+  read: boolean
+}
+
+export interface AlertIn {
+  ticker: string
+  condition_type: AlertConditionType
+  condition_value?: number | null
 }

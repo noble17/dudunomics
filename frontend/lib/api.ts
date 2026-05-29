@@ -7,6 +7,7 @@ import type {
   WorkspaceLayout,
   QuotesOut,
   NewsOut, AISummaryOut, ChatMessage,
+  AlertCondition, AlertEvent, AlertIn,
 } from "./types";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -93,8 +94,22 @@ export const quotesApi = {
 };
 
 export const candlesApi = {
-  get: (ticker: string, period: string) =>
-    request<CandlesOut>(`/api/candles?ticker=${encodeURIComponent(ticker)}&period=${encodeURIComponent(period)}`),
+  get: (ticker: string, period: string, indicators = false) =>
+    request<CandlesOut>(
+      `/api/candles?ticker=${encodeURIComponent(ticker)}&period=${encodeURIComponent(period)}${indicators ? "&indicators=true" : ""}`
+    ),
+};
+
+export const alertsApi = {
+  list: () => request<AlertCondition[]>("/api/alerts"),
+  create: (body: AlertIn) =>
+    request<AlertCondition>("/api/alerts", { method: "POST", body: JSON.stringify(body) }),
+  delete: (id: number) =>
+    fetch(`/api/alerts/${id}`, { method: "DELETE", credentials: "include" }),
+  events: () => request<AlertEvent[]>("/api/alerts/events"),
+  unread: () => request<AlertEvent[]>("/api/alerts/events/unread"),
+  markRead: () =>
+    fetch("/api/alerts/events/read", { method: "POST", credentials: "include" }),
 };
 
 export const newsApi = {
