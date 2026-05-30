@@ -531,3 +531,108 @@ def fetch_ohlcv_domestic(ticker: str, start: date, end: date) -> pd.DataFrame:
     return df
 
 
+# ── 역사 OHLCV 해외 (모듈 레벨 함수) ────────────────────────────────────────────
+
+def _fetch_ohlcv_overseas_single(
+    ticker: str,
+    excd: str,
+    start: date,
+    end: date,
+    token: str,
+) -> pd.DataFrame:
+    """단일 EXCD로 KIS 해외 일봉 조회. 페이지네이션 최대 5회."""
+    all_rows: list[dict] = []
+    keyb = ""
+
+    for _ in range(5):
+        try:
+            res = requests.get(
+                f"{KIS_BASE}/uapi/overseas-price/v1/quotations/dailyprice",
+                params={
+                    "AUTH": "",
+                    "EXCD": excd,
+                    "SYMB": ticker,
+                    "GUBN": "0",
+                    "BYMD": end.strftime("%Y%m%d"),
+                    "MODP": "1",
+                    "KEYB": keyb,
+                },
+                headers=_headers("HHDFS76240000", token),
+                timeout=10,
+            )
+            data = res.json()
+        except Exception as e:
+            log.warning("KIS 해외 일봉 예외 (%s/%s): %s", ticker, excd, e)
+            return pd.DataFrame()
+
+        if data.get("rt_cd") != "0":
+            log.debug("KIS 해외 일봉 오류 (%s/%s): %s", ticker, excd, data.get("msg1"))
+            return pd.DataFrame()
+
+        rows = data.get("output2") or []
+        reached_start = False
+        for row in rows:
+            dt_str = row.get("xymd", "")
+            if not dt_str:
+                continue
+            clos = float(row.get("clos") or 0)
+            if clos <= 0:
+                continue
+            dt = datetime.strptime(dt_str, "%Y%m%d").date()
+            if dt < start:
+                reached_start = True
+                continue
+            all_rows.append({
+                "date": dt,
+                "Open":   float(row.get("open") or 0),
+                "High":   float(row.get("high") or 0),
+                "Low":    float(row.get("low") or 0),
+                "Close":  clos,
+                "Volume": int(row.get("tvol") or 0),
+            })
+
+        if reached_start or not rows:
+            break
+
+        keyb = (data.get("output1") or {}).get("keyb", "")
+        if not keyb:
+            break
+
+    if not all_rows:
+        return pd.DataFrame()
+
+    df = pd.DataFrame(all_rows)
+    df = df.drop_duplicates("date").sort_values("date")
+    df.index = pd.to_datetime(df.pop("date"))
+    return df
+
+
+def fetch_ohlcv_overseas(
+    ticker: str,
+    start: date,
+    end: date,
+    market: str | None = None,
+) -> pd.DataFrame:
+    """KIS 해외주식 일봉 OHLCV. 미장(NAS/NYS/AMS) 대상, 최대 5페이지(500일).
+
+    Returns DataFrame with DatetimeIndex, columns: Open High Low Close Volume
+    빈 DataFrame이면 KIS 조회 실패 (caller에서 yfinance fallback).
+    """
+    token = _get_token()
+    if not token:
+        return pd.DataFrame()
+
+    if market:
+        first = _MARKET_TO_EXCD.get(market.upper())
+        excd_list = [first] if first else ["NAS", "NYS", "AMS"]
+    else:
+        excd_list = ["NAS", "NYS", "AMS"]
+
+    for excd in excd_list:
+        df = _fetch_ohlcv_overseas_single(ticker, excd, start, end, token)
+        if not df.empty:
+            return df
+
+    return pd.DataFrame()
+
+
