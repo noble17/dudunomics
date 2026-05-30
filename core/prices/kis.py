@@ -40,6 +40,7 @@ _EXCD_TO_MARKET: dict[str, str] = {
     "NAS": "NASDAQ", "NYS": "NYSE", "AMS": "AMEX",
     "TSE": "TYO",    "HKS": "HKEX", "SHS": "SSE",
     "SZS": "SZSE",   "HNX": "HNX",  "HSX": "HSX",
+    "NASD": "NASDAQ", "NYSE": "NYSE",
 }
 
 _EXCD_TO_CURRENCY: dict[str, str] = {
@@ -52,6 +53,8 @@ _DATA_DIR = Path(os.environ.get("DB_PATH", "data/dudunomics.duckdb")).parent
 _TOKEN_FILE = _DATA_DIR / "kis_token.json"
 _NAME_FILE = _DATA_DIR / "kis_names.json"
 _TOKEN_TTL = 23 * 3600  # 23시간 (KIS 24시간 유효, 1시간 여유)
+_CANO = "63241945"
+_ACNT_PRDT_CD = "01"
 
 # 메모리 1차 캐시 (프로세스 내)
 _token_cache: dict = {}
@@ -638,15 +641,6 @@ def fetch_ohlcv_overseas(
 
 # ── 계좌 잔고 조회 (모듈 레벨 함수) ────────────────────────────────────────────
 
-_EXCD_TO_MARKET_BALANCE: dict[str, str] = {
-    "NASD": "NASDAQ", "NYSE": "NYSE", "AMEX": "AMEX",
-    "NAS":  "NASDAQ", "NYS":  "NYSE", "AMS":  "AMEX",
-}
-
-_CANO = "63241945"
-_ACNT_PRDT_CD = "01"
-
-
 def fetch_balance_domestic() -> list[dict]:
     """KIS 국내 계좌 잔고 조회. 토큰 없음 or 오류 시 빈 리스트."""
     token = _get_token()
@@ -739,7 +733,7 @@ def fetch_balance_overseas() -> list[dict]:
             if qty <= 0:
                 continue
             excd = item.get("ovrs_excg_cd", "")
-            market = _EXCD_TO_MARKET_BALANCE.get(excd, excd)
+            market = _EXCD_TO_MARKET.get(excd, excd)
             results.append({
                 "ticker": item.get("ovrs_pdno", ""),
                 "name": item.get("ovrs_item_name") or item.get("ovrs_pdno", ""),
