@@ -37,7 +37,7 @@ export function CommandPalette() {
             <Command.Empty className="text-xs text-[var(--color-text-secondary)] px-3 py-4">
               결과 없음
             </Command.Empty>
-            <Command.Group heading={<span className="text-[10px] text-[var(--color-text-secondary)] uppercase tracking-wider px-2">위젯 추가</span>}>
+            <Command.Group heading={<span className="text-[12px] text-[var(--color-text-secondary)] uppercase tracking-wider px-2">위젯 추가</span>}>
               {Object.entries(WIDGET_REGISTRY).map(([type, meta]) => (
                 <Command.Item
                   key={type}
@@ -46,7 +46,7 @@ export function CommandPalette() {
                   className="flex items-center gap-2 px-3 py-2 text-sm rounded cursor-pointer text-[var(--color-text-primary)] data-[selected=true]:bg-[var(--color-bg-primary)]"
                 >
                   <span>{meta.label} 추가</span>
-                  <span className="ml-auto text-[10px] text-[var(--color-text-secondary)] font-mono">{type}</span>
+                  <span className="ml-auto text-[12px] text-[var(--color-text-secondary)] font-data">{type}</span>
                 </Command.Item>
               ))}
             </Command.Group>

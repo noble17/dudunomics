@@ -42,9 +42,9 @@ function inferMarket(ticker: string): string {
 }
 
 function MarketBadge({ label }: { label: string }) {
-  if (!label) return <span className="text-muted-foreground font-mono text-xs">—</span>;
+  if (!label) return <span className="text-muted-foreground font-data text-xs">—</span>;
   return (
-    <span className="border border-border px-1.5 py-0.5 font-mono text-[10px] tracking-wide text-muted-foreground">
+    <span className="border border-border px-1.5 py-0.5 font-data text-[10px] tracking-wide text-muted-foreground">
       {label}
     </span>
   );
@@ -84,7 +84,7 @@ function HoldingsTable({ rows, usdkrw }: { rows: PortfolioRow[]; usdkrw: number 
                 {/* 종목명 + 티커 서브텍스트 */}
                 <td className="px-4 py-2">
                   <p className="font-data text-foreground">{row.name || row.ticker}</p>
-                  <p className="font-mono text-[10px] text-muted-foreground">{row.ticker}</p>
+                  <p className="font-data text-[10px] text-muted-foreground">{row.ticker}</p>
                 </td>
                 {/* 시장 */}
                 <td className="px-4 py-2"><MarketBadge label={market} /></td>
@@ -92,7 +92,7 @@ function HoldingsTable({ rows, usdkrw }: { rows: PortfolioRow[]; usdkrw: number 
                 <td className="px-4 py-2">
                   {row.sector
                     ? <span className="border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground">{row.sector}</span>
-                    : <span className="text-muted-foreground font-mono text-xs">—</span>
+                    : <span className="text-muted-foreground font-data text-xs">—</span>
                   }
                 </td>
                 {/* 보유 */}
@@ -226,7 +226,7 @@ export function PortfolioDashboard({ snapshot, history }: Props) {
         )}
       </div>
 
-      <p className="text-right font-mono text-xs text-muted-foreground">
+      <p className="text-right font-data text-xs text-muted-foreground">
         마지막 갱신: {new Date(updated_at).toLocaleString("ko-KR")} · USD/KRW {usdkrw.toLocaleString("ko-KR")}
       </p>
     </div>

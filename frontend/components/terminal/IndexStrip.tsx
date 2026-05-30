@@ -25,13 +25,13 @@ function QuoteCell({ label, item, decimals }: {
   const arrow = up ? "▲" : down ? "▼" : "";
 
   return (
-    <div className="flex items-center gap-1.5 text-[11px] shrink-0">
-      <span className="text-[var(--color-text-secondary)] font-mono">{label}</span>
-      <span className="text-[var(--color-text-primary)] font-mono">
+    <div className="flex items-center gap-1.5 text-[13px] shrink-0">
+      <span className="text-[var(--color-text-secondary)] font-data">{label}</span>
+      <span className="text-[var(--color-text-primary)] font-data">
         {item ? fmt(item.price, decimals) : "—"}
       </span>
       {item && (
-        <span className={`font-mono text-[10px] ${changeColor}`}>
+        <span className={`font-data text-[12px] ${changeColor}`}>
           {arrow}{item.change_abs >= 0 ? "+" : ""}{fmt(item.change_abs, decimals)}{" "}
           ({item.change_pct >= 0 ? "+" : ""}{item.change_pct.toFixed(2)}%)
         </span>
@@ -60,7 +60,7 @@ export function IndexStrip() {
   return (
     <div className="flex items-center px-4 h-8 border-b border-[var(--color-border)] bg-[var(--color-bg-secondary)] shrink-0">
       {/* 좌: INDICES 레이블 */}
-      <span className="text-[9px] font-mono uppercase tracking-widest text-[var(--color-primary)] mr-4 shrink-0">
+      <span className="text-[11px] font-data uppercase tracking-widest text-[var(--color-primary)] mr-4 shrink-0">
         INDICES ▾
       </span>
 
@@ -74,8 +74,8 @@ export function IndexStrip() {
 
       {/* 우: Connected + EST 시각 */}
       <div className="flex items-center gap-2 shrink-0 ml-4">
-        <span className="text-[9px] font-mono text-[var(--color-connected)]">● Connected</span>
-        <span className="text-[10px] font-mono text-[var(--color-text-muted)]">NY {clock} EST</span>
+        <span className="text-[11px] font-data text-[var(--color-connected)]">● Connected</span>
+        <span className="text-[12px] font-data text-[var(--color-text-muted)]">NY {clock} EST</span>
       </div>
     </div>
   );

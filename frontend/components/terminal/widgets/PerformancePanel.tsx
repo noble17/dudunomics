@@ -46,13 +46,13 @@ export function PerformancePanel() {
   return (
     <div className="flex flex-col h-full overflow-hidden">
       <div className="flex items-center justify-between px-3 py-1.5 border-b border-[var(--color-border)] shrink-0">
-        <span className="text-[9px] font-mono uppercase tracking-widest text-[var(--color-primary)]">PERFORMANCE</span>
+        <span className="text-[11px] font-data uppercase tracking-widest text-[var(--color-primary)]">PERFORMANCE</span>
         <div className="flex gap-2">
           {PERIODS.map(p => (
             <button
               key={p}
               onClick={() => setPeriod(p)}
-              className={`text-[9px] font-mono uppercase ${
+              className={`text-[11px] font-data uppercase ${
                 period === p ? "text-[var(--color-primary)]" : "text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]"
               }`}
             >
@@ -65,13 +65,13 @@ export function PerformancePanel() {
         {data?.chart.length ? (
           <PerformanceChart data={data.chart} />
         ) : (
-          <div className="h-[140px] flex items-center justify-center text-[10px] font-mono text-[var(--color-text-muted)]">
+          <div className="h-[140px] flex items-center justify-center text-[12px] font-data text-[var(--color-text-muted)]">
             {isLoading ? "로딩 중…" : "스냅샷 데이터 없음"}
           </div>
         )}
       </div>
       <div className="px-3 py-2 shrink-0">
-        <div className="flex gap-3 text-[10px] font-mono flex-wrap">
+        <div className="flex gap-3 text-[12px] font-data flex-wrap">
           <div><span className="text-[var(--color-text-muted)]">Sharpe </span>
             <span className="text-[var(--color-text-primary)]">{data?.sharpe.toFixed(2) ?? "—"}</span></div>
           <div><span className="text-[var(--color-text-muted)]">MDD </span>
@@ -95,7 +95,7 @@ export function PerformancePanel() {
               </span></div>
           )}
         </div>
-        <div className="flex gap-3 mt-1.5 text-[9px] font-mono">
+        <div className="flex gap-3 mt-1.5 text-[11px] font-data">
           <span className="text-[#4a9eff]">■ 포트폴리오</span>
           <span className="text-[#26c940]">■ KOSPI</span>
           <span className="text-[#ff9500]">■ S&P500</span>

@@ -113,6 +113,12 @@ def _fetch_yfinance_bulk(tickers: list[str], start: date, end: date) -> dict[str
     if not tickers:
         return {}
 
+    log.warning("yf bulk fallback activated for %d tickers: %s...", len(tickers), tickers[:3])
+
+    from core.data.yf_session import get_session
+    # yf.download는 직접 session 파라미터를 지원하지 않으므로 shared session에 주입
+    yf.shared._requests_session = get_session()
+
     log.info("[ohlcv] bulk download %d개 종목 (%s ~ %s)", len(tickers), start, end)
     raw = yf.download(
         tickers,

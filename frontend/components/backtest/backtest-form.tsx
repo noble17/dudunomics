@@ -75,27 +75,31 @@ export function BacktestForm() {
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <div className="space-y-1 sm:col-span-2 lg:col-span-1">
-              <Label>종목 (쉼표로 구분)</Label>
-              <Input value={tickerInput} onChange={(e) => setTickerInput(e.target.value)} placeholder="AAPL, MSFT, NVDA" />
+              <Label>
+                종목
+                {selectedStrategy?.tags?.includes("다종목") && (
+                  <span className="ml-1.5 text-[10px] text-[var(--color-primary)]">쉼표로 여러 종목 입력 가능</span>
+                )}
+              </Label>
+              <Input
+                value={tickerInput}
+                onChange={(e) => setTickerInput(e.target.value)}
+                placeholder={selectedStrategy?.tags?.includes("다종목") ? "005930.KS, AAPL, MSFT" : "005930.KS"}
+              />
             </div>
             <div className="space-y-1">
               <Label>전략</Label>
               <Select value={strategy || selectedStrategy?.name || ""}
                 onValueChange={(v) => setStrategy(v ?? "")}>
                 <SelectTrigger><SelectValue placeholder="전략 선택" /></SelectTrigger>
-                <SelectContent>
+                <SelectContent className="min-w-[260px]">
                   {strategies?.map((s) => (
                     <SelectItem key={s.name} value={s.name}>
-                      <div className="flex items-center gap-2 py-0.5">
+                      <div className="flex items-center gap-2">
                         {s.icon && <span className="text-base leading-none">{s.icon}</span>}
-                        <div className="flex flex-col">
-                          <span className="text-[13px] font-medium">{s.name}</span>
-                          {s.description && (
-                            <span className="text-[11px] text-muted-foreground leading-tight">{s.description}</span>
-                          )}
-                        </div>
+                        <span className="text-[13px] font-medium">{s.name}</span>
                         {s.tags?.[0] && (
-                          <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground shrink-0">
+                          <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground shrink-0">
                             {s.tags[0]}
                           </span>
                         )}

@@ -35,7 +35,7 @@ export function BacktestResult({ result }: { result: BacktestRunOut }) {
       {result.tickers && result.tickers.length > 0 && (
         <div className="flex flex-wrap gap-2">
           {result.tickers.map((t) => (
-            <span key={t} className="border border-border px-2 py-0.5 font-mono text-[10px] text-muted-foreground">
+            <span key={t} className="border border-border px-2 py-0.5 font-data text-[10px] text-muted-foreground">
               {t}
             </span>
           ))}
@@ -48,7 +48,7 @@ export function BacktestResult({ result }: { result: BacktestRunOut }) {
           <p className="mb-1 text-[11px] font-semibold text-yellow-800">주의</p>
           <ul className="space-y-0.5">
             {result.warnings.map((w, i) => (
-              <li key={i} className="font-mono text-[11px] text-yellow-700">{w}</li>
+              <li key={i} className="font-data text-[11px] text-yellow-700">{w}</li>
             ))}
           </ul>
         </div>
@@ -212,7 +212,7 @@ export function BacktestResult({ result }: { result: BacktestRunOut }) {
               <CardContent className="pt-5">
                 <p className="mb-3 text-[11px] font-medium text-muted-foreground">리밸런싱 로그</p>
                 <div className="overflow-x-auto">
-                  <table className="w-full font-mono text-xs">
+                  <table className="w-full font-data text-xs">
                     <thead>
                       <tr className="border-b border-border text-left text-muted-foreground">
                         <th className="pb-1 pr-4">날짜</th>
@@ -261,7 +261,7 @@ export function BacktestResult({ result }: { result: BacktestRunOut }) {
         )}
       </Tabs>
 
-      <p className="text-right font-mono text-xs text-muted-foreground">Run ID: {result.id}</p>
+      <p className="text-right font-data text-xs text-muted-foreground">Run ID: {result.id}</p>
     </div>
   );
 }

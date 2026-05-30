@@ -177,3 +177,8 @@ export const rebalancingApi = {
       { method: "PATCH", body: JSON.stringify({ target_weight }) }
     ),
 };
+
+export const fxApi = {
+  rate: (pair: string): Promise<{ pair: string; rate: number; ts: string | null }> =>
+    request<{ pair: string; rate: number; ts: string | null }>(`/api/fx/${pair.toUpperCase()}`),
+};

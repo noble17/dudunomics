@@ -26,10 +26,10 @@ function NewsCard({ item }: { item: NewsItem }) {
     >
       <div className="flex items-start gap-2">
         <div className="flex-1 min-w-0">
-          <p className="text-[11px] font-mono text-[var(--color-text-primary)] leading-tight line-clamp-2">
+          <p className="text-[13px] font-data text-[var(--color-text-primary)] leading-tight line-clamp-2">
             {item.title}
           </p>
-          <p className="text-[9px] font-mono text-[var(--color-text-muted)] mt-0.5">
+          <p className="text-[11px] font-data text-[var(--color-text-muted)] mt-0.5">
             {item.site} · {timeAgo(item.published_date)}
           </p>
         </div>
@@ -66,7 +66,7 @@ export function NewsPanel({ ticker }: Props) {
     const is503 = error?.status === 503;
     return (
       <div className="flex items-center justify-center h-full">
-        <span className="text-[10px] font-mono text-[var(--color-text-muted)]">
+        <span className="text-[12px] font-data text-[var(--color-text-muted)]">
           {is503 ? "FMP API 키 미설정" : "뉴스를 불러올 수 없습니다"}
         </span>
       </div>
@@ -76,7 +76,7 @@ export function NewsPanel({ ticker }: Props) {
   if (!data || data.items.length === 0) {
     return (
       <div className="flex items-center justify-center h-full">
-        <span className="text-[10px] font-mono text-[var(--color-text-muted)]">
+        <span className="text-[12px] font-data text-[var(--color-text-muted)]">
           {ticker} 뉴스 없음
         </span>
       </div>

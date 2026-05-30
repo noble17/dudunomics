@@ -3,6 +3,8 @@ import logging
 import os
 from abc import ABC, abstractmethod
 
+from core.data.yf_session import get_session
+
 log = logging.getLogger(__name__)
 
 
@@ -51,7 +53,7 @@ class KisFxProvider(FxProvider):
     def _fetch_yfinance(self, pair: str) -> float:
         import yfinance as yf
         symbol = "KRW=X" if pair == "USDKRW" else f"{pair[:3]}{pair[3:]}=X"
-        info = yf.Ticker(symbol).fast_info
+        info = yf.Ticker(symbol, session=get_session()).fast_info
         return float(info.last_price)
 
 
@@ -61,7 +63,7 @@ class YFinanceFxProvider(FxProvider):
     def get_rate(self, pair: str) -> float:
         import yfinance as yf
         symbol = "KRW=X" if pair == "USDKRW" else f"{pair[:3]}{pair[3:]}=X"
-        info = yf.Ticker(symbol).fast_info
+        info = yf.Ticker(symbol, session=get_session()).fast_info
         return float(info.last_price)
 
 

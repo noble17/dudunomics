@@ -26,7 +26,7 @@ export function ScreenerWidget() {
       <tbody>
         {top.map(s => (
           <tr key={s.ticker} className="border-b border-[var(--color-border)]/50">
-            <td className="py-1 pr-2 font-mono font-medium text-[var(--color-text-primary)]">{s.ticker}</td>
+            <td className="py-1 pr-2 font-data font-medium text-[var(--color-text-primary)]">{s.ticker}</td>
             <td className="py-1 pr-2 text-right">{s.pct_momentum != null ? `${(s.pct_momentum * 100).toFixed(0)}%` : "—"}</td>
             <td className="py-1 text-right">{s.pct_valuation != null ? `${(s.pct_valuation * 100).toFixed(0)}%` : "—"}</td>
           </tr>

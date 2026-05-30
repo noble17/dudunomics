@@ -29,23 +29,23 @@ function AddTradeModal({ onClose, onSave }: { onClose: () => void; onSave: () =>
     }
   }
 
-  const inputCls = "bg-[var(--color-bg-tertiary)] border border-[var(--color-border)] text-[var(--color-text-primary)] px-2 py-1 font-mono text-[10px] w-full";
+  const inputCls = "bg-[var(--color-bg-tertiary)] border border-[var(--color-border)] text-[var(--color-text-primary)] px-2 py-1 font-data text-[12px] w-full";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-      <div className="bg-[var(--color-bg-secondary)] border border-[var(--color-border)] p-4 w-72 font-mono">
-        <div className="text-[11px] uppercase tracking-widest text-[var(--color-primary)] mb-3">거래 추가</div>
-        {error && <div className="text-red-400 text-[10px] mb-2">{error}</div>}
+      <div className="bg-[var(--color-bg-secondary)] border border-[var(--color-border)] p-4 w-72 font-data">
+        <div className="text-[13px] uppercase tracking-widest text-[var(--color-primary)] mb-3">거래 추가</div>
+        {error && <div className="text-red-400 text-[12px] mb-2">{error}</div>}
         <div className="space-y-2">
           <div>
-            <label className="text-[9px] text-[var(--color-text-muted)] uppercase block mb-0.5">Ticker</label>
+            <label className="text-[11px] text-[var(--color-text-muted)] uppercase block mb-0.5">Ticker</label>
             <input className={inputCls} value={form.ticker}
               onChange={e => setForm(f => ({ ...f, ticker: e.target.value.toUpperCase() }))} />
           </div>
           <div className="flex gap-2">
             {(["BUY", "SELL"] as const).map(t => (
               <button key={t} onClick={() => setForm(f => ({ ...f, trade_type: t }))}
-                className={`flex-1 py-1 text-[10px] border ${
+                className={`flex-1 py-1 text-[12px] border ${
                   form.trade_type === t
                     ? t === "BUY" ? "border-green-500 text-green-400" : "border-red-500 text-red-400"
                     : "border-[var(--color-border)] text-[var(--color-text-muted)]"
@@ -56,19 +56,19 @@ function AddTradeModal({ onClose, onSave }: { onClose: () => void; onSave: () =>
           </div>
           <div className="flex gap-2">
             <div className="flex-1">
-              <label className="text-[9px] text-[var(--color-text-muted)] uppercase block mb-0.5">수량</label>
+              <label className="text-[11px] text-[var(--color-text-muted)] uppercase block mb-0.5">수량</label>
               <input className={inputCls} type="number" value={form.quantity || ""}
                 onChange={e => setForm(f => ({ ...f, quantity: parseFloat(e.target.value) || 0 }))} />
             </div>
             <div className="flex-1">
-              <label className="text-[9px] text-[var(--color-text-muted)] uppercase block mb-0.5">단가</label>
+              <label className="text-[11px] text-[var(--color-text-muted)] uppercase block mb-0.5">단가</label>
               <input className={inputCls} type="number" value={form.price || ""}
                 onChange={e => setForm(f => ({ ...f, price: parseFloat(e.target.value) || 0 }))} />
             </div>
           </div>
           <div className="flex gap-2">
             <div className="flex-1">
-              <label className="text-[9px] text-[var(--color-text-muted)] uppercase block mb-0.5">통화</label>
+              <label className="text-[11px] text-[var(--color-text-muted)] uppercase block mb-0.5">통화</label>
               <select className={inputCls} value={form.currency}
                 onChange={e => setForm(f => ({ ...f, currency: e.target.value as "KRW" | "USD" }))}>
                 <option value="USD">USD</option>
@@ -76,7 +76,7 @@ function AddTradeModal({ onClose, onSave }: { onClose: () => void; onSave: () =>
               </select>
             </div>
             <div className="flex-1">
-              <label className="text-[9px] text-[var(--color-text-muted)] uppercase block mb-0.5">날짜</label>
+              <label className="text-[11px] text-[var(--color-text-muted)] uppercase block mb-0.5">날짜</label>
               <input className={inputCls} type="date" value={form.traded_at}
                 onChange={e => setForm(f => ({ ...f, traded_at: e.target.value }))} />
             </div>
@@ -84,11 +84,11 @@ function AddTradeModal({ onClose, onSave }: { onClose: () => void; onSave: () =>
         </div>
         <div className="flex gap-2 mt-3">
           <button onClick={submit}
-            className="flex-1 py-1.5 text-[10px] bg-[var(--color-primary)] text-black font-mono">
+            className="flex-1 py-1.5 text-[12px] bg-[var(--color-primary)] text-black font-data">
             저장
           </button>
           <button onClick={onClose}
-            className="flex-1 py-1.5 text-[10px] border border-[var(--color-border)] text-[var(--color-text-muted)] font-mono">
+            className="flex-1 py-1.5 text-[12px] border border-[var(--color-border)] text-[var(--color-text-muted)] font-data">
             취소
           </button>
         </div>
@@ -113,24 +113,24 @@ export function TradeLogPanel({ filterTicker }: Props) {
   return (
     <div className="flex flex-col h-full overflow-hidden">
       <div className="flex items-center justify-between px-3 py-1.5 border-b border-[var(--color-border)] shrink-0">
-        <span className="text-[9px] font-mono uppercase tracking-widest text-[var(--color-primary)]">
+        <span className="text-[11px] font-data uppercase tracking-widest text-[var(--color-primary)]">
           TRADE LOG{filterTicker ? ` — ${filterTicker}` : ""}
         </span>
         <button onClick={() => setShowModal(true)}
-          className="text-[9px] font-mono border border-[var(--color-primary)] text-[var(--color-primary)] px-2 py-0.5 hover:bg-[var(--color-primary)] hover:text-black transition-colors">
+          className="text-[11px] font-data border border-[var(--color-primary)] text-[var(--color-primary)] px-2 py-0.5 hover:bg-[var(--color-primary)] hover:text-black transition-colors">
           + 거래 추가
         </button>
       </div>
       <div className="flex-1 overflow-auto">
-        {isLoading && <div className="p-3 text-[10px] font-mono text-[var(--color-text-muted)]">로딩 중…</div>}
+        {isLoading && <div className="p-3 text-[12px] font-data text-[var(--color-text-muted)]">로딩 중…</div>}
         {!isLoading && !trades?.length && (
-          <div className="p-3 text-[10px] font-mono text-[var(--color-text-muted)]">거래 내역 없음</div>
+          <div className="p-3 text-[12px] font-data text-[var(--color-text-muted)]">거래 내역 없음</div>
         )}
         <div className="px-3">
           {(trades ?? []).map(trade => (
             <div key={trade.id}
-              className="grid grid-cols-5 py-1.5 border-b border-[var(--color-border)] items-center text-[10px] font-mono group">
-              <span className="text-[var(--color-text-muted)] text-[9px]">{trade.traded_at}</span>
+              className="grid grid-cols-5 py-1.5 border-b border-[var(--color-border)] items-center text-[12px] font-data group">
+              <span className="text-[var(--color-text-muted)] text-[11px]">{trade.traded_at}</span>
               <span className={trade.trade_type === "BUY" ? "text-green-400" : "text-red-400"}>
                 {trade.trade_type}
               </span>
@@ -140,7 +140,7 @@ export function TradeLogPanel({ filterTicker }: Props) {
               </span>
               <div className="text-right">
                 <button onClick={() => handleDelete(trade.id)}
-                  className="opacity-0 group-hover:opacity-100 text-[9px] text-red-400 hover:text-red-300 transition-opacity">
+                  className="opacity-0 group-hover:opacity-100 text-[11px] text-red-400 hover:text-red-300 transition-opacity">
                   삭제
                 </button>
               </div>

@@ -42,17 +42,17 @@ function MarketTile({ config, quotes }: { config: TileConfig; quotes: QuotesOut 
 
   return (
     <div className="flex flex-col justify-center px-3 border-r border-[var(--color-border)] shrink-0 min-w-[88px]">
-      <span className="text-[9px] font-mono uppercase tracking-wider text-[var(--color-text-secondary)]">
+      <span className="text-[11px] font-data uppercase tracking-wider text-[var(--color-text-secondary)]">
         {config.label}
       </span>
       {item ? (
         <>
-          <span className="text-[11px] font-mono text-[var(--color-text-primary)] leading-tight">
+          <span className="text-[13px] font-data text-[var(--color-text-primary)] leading-tight">
             {fmt(item.price, config.decimals)}
           </span>
           <span
             className={[
-              "text-[10px] font-mono leading-tight",
+              "text-[12px] font-data leading-tight",
               up   ? "text-[var(--color-gain)]" :
               down ? "text-[var(--color-loss)]" :
                      "text-[var(--color-text-muted)]",
@@ -65,9 +65,9 @@ function MarketTile({ config, quotes }: { config: TileConfig; quotes: QuotesOut 
         </>
       ) : (
         <>
-          <span className="text-[11px] font-mono text-[var(--color-text-muted)]">—</span>
+          <span className="text-[13px] font-data text-[var(--color-text-muted)]">—</span>
           {config.quoteKey === null && (
-            <span className="text-[9px] font-mono text-[var(--color-placeholder)]">API 필요</span>
+            <span className="text-[11px] font-data text-[var(--color-placeholder)]">API 필요</span>
           )}
         </>
       )}
@@ -122,7 +122,7 @@ export function MarketsPanel() {
       <PanelGroup orientation="horizontal" className="flex-1 overflow-hidden">
         {/* 좌: Watchlist */}
         <Panel defaultSize={20} minSize={12} className="flex flex-col overflow-hidden">
-          <div className="px-3 py-1.5 text-[9px] font-mono uppercase tracking-widest text-[var(--color-primary)] border-b border-[var(--color-border)] shrink-0">
+          <div className="px-3 py-1.5 text-[11px] font-data uppercase tracking-widest text-[var(--color-primary)] border-b border-[var(--color-border)] shrink-0">
             WATCHLIST
           </div>
           <div className="flex-1 overflow-auto p-2">
@@ -141,7 +141,7 @@ export function MarketsPanel() {
 
         {/* 우: Top News */}
         <Panel defaultSize={30} minSize={12} className="flex flex-col overflow-hidden">
-          <div className="px-3 py-1.5 text-[9px] font-mono uppercase tracking-widest text-[var(--color-primary)] border-b border-[var(--color-border)] shrink-0">
+          <div className="px-3 py-1.5 text-[11px] font-data uppercase tracking-widest text-[var(--color-primary)] border-b border-[var(--color-border)] shrink-0">
             TOP NEWS
           </div>
           <div className="flex-1 overflow-auto">
@@ -154,20 +154,20 @@ export function MarketsPanel() {
       <div className="h-[72px] shrink-0 flex border-t border-[var(--color-border)] bg-[var(--color-bg-secondary)]">
         {/* 좌: MY PORTFOLIO */}
         <div className="flex-1 flex flex-col justify-center px-4 border-r border-[var(--color-border)]">
-          <p className="text-[9px] font-mono uppercase tracking-widest text-[var(--color-primary)] mb-1">
+          <p className="text-[11px] font-data uppercase tracking-widest text-[var(--color-primary)] mb-1">
             MY PORTFOLIO
           </p>
           {snapshot ? (
             <div className="flex items-baseline gap-4">
-              <span className="text-[13px] font-mono text-[var(--color-text-primary)]">
+              <span className="text-[15px] font-data text-[var(--color-text-primary)]">
                 ₩{snapshot.total_with_cash_krw.toLocaleString("ko-KR", { maximumFractionDigits: 0 })}
               </span>
-              <span className="text-[10px] font-mono text-[var(--color-text-secondary)]">
+              <span className="text-[12px] font-data text-[var(--color-text-secondary)]">
                 오늘 손익 <span className="text-[var(--color-text-muted)]">—</span>
               </span>
             </div>
           ) : (
-            <span className="text-[11px] font-mono text-[var(--color-text-muted)]">로딩 중…</span>
+            <span className="text-[13px] font-data text-[var(--color-text-muted)]">로딩 중…</span>
           )}
         </div>
         {/* 우: AI ASSISTANT */}

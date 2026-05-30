@@ -63,7 +63,7 @@ class TestFetchSnapshots:
     def test_fetch_snapshots_failure_ticker(self):
         from core.data.fundamentals_provider import fetch_snapshots
 
-        def side_effect(ticker):
+        def side_effect(ticker, **kwargs):
             mock = MagicMock()
             if ticker == "INVALID":
                 mock.info = {}  # yfinance가 빈 dict 반환 → None 필드

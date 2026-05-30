@@ -2,9 +2,10 @@
 from __future__ import annotations
 
 import json
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from datetime import date
+
+from core.data.yf_session import get_session
 
 
 def _safe_float(info: dict, key: str) -> float | None:
@@ -32,7 +33,7 @@ class FundamentalSnapshot:
 def _fetch_one(ticker: str, as_of: date) -> FundamentalSnapshot:
     import yfinance as yf
     try:
-        info = yf.Ticker(ticker).info
+        info = yf.Ticker(ticker, session=get_session()).info
         return FundamentalSnapshot(
             ticker=ticker,
             as_of=as_of,
@@ -56,8 +57,12 @@ def _fetch_one(ticker: str, as_of: date) -> FundamentalSnapshot:
         )
 
 
-def fetch_snapshots(tickers: list[str], max_workers: int = 8) -> list[FundamentalSnapshot]:
-    """ThreadPool으로 복수 티커 fundamentals 동시 페치."""
+def fetch_snapshots(tickers: list[str], max_workers: int = 1) -> list[FundamentalSnapshot]:
+    """순차 페치 (rate limiter 세션이 자체적으로 간격 조절).
+
+    max_workers 파라미터는 하위 호환성을 위해 유지하나 사용되지 않음.
+    병렬 yfinance 호출은 Yahoo IP 차단을 유발하므로 순차 실행.
+    """
     from datetime import date as dt_date
     today = dt_date.today()
 
@@ -65,8 +70,6 @@ def fetch_snapshots(tickers: list[str], max_workers: int = 8) -> list[Fundamenta
         return []
 
     results: list[FundamentalSnapshot] = []
-    with ThreadPoolExecutor(max_workers=min(max_workers, len(tickers))) as executor:
-        futures = {executor.submit(_fetch_one, t, today): t for t in tickers}
-        for future in as_completed(futures):
-            results.append(future.result())
+    for ticker in tickers:
+        results.append(_fetch_one(ticker, today))
     return results

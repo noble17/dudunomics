@@ -159,7 +159,7 @@ export default function ScreenerPage() {
         <div className="rounded border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-700 space-y-1.5">
           <div className="flex justify-between items-center">
             <span>{batchStatus.step}</span>
-            <span className="font-mono text-xs">
+            <span className="font-data text-xs">
               {batchStatus.done} / {batchStatus.total}
             </span>
           </div>

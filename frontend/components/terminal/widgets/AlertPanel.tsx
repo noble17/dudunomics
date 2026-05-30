@@ -50,34 +50,34 @@ export function AlertPanel() {
       <div className="fixed top-4 right-4 z-50 flex flex-col gap-1.5 pointer-events-none">
         {toasts.map((t) => (
           <div key={t.id}
-            className="bg-[var(--color-bg-secondary)] border border-[var(--color-primary)] px-3 py-2 text-[10px] font-mono text-[var(--color-text-primary)] shadow-lg"
+            className="bg-[var(--color-bg-secondary)] border border-[var(--color-primary)] px-3 py-2 text-[12px] font-data text-[var(--color-text-primary)] shadow-lg"
           >
             🔔 {t.message}
           </div>
         ))}
       </div>
 
-      <div className="flex flex-col h-full overflow-hidden text-[10px] font-mono">
+      <div className="flex flex-col h-full overflow-hidden text-[12px] font-data">
         {/* 헤더 */}
-        <div className="px-3 py-1.5 text-[9px] uppercase tracking-widest text-[var(--color-primary)] border-b border-[var(--color-border)] shrink-0">
+        <div className="px-3 py-1.5 text-[11px] uppercase tracking-widest text-[var(--color-primary)] border-b border-[var(--color-border)] shrink-0">
           ALERTS
         </div>
 
         <div className="flex-1 overflow-auto p-3 flex flex-col gap-4">
           {/* 추가 폼 */}
           <div className="flex flex-col gap-1.5">
-            <p className="text-[9px] uppercase tracking-widest text-[var(--color-text-secondary)]">NEW CONDITION</p>
+            <p className="text-[11px] uppercase tracking-widest text-[var(--color-text-secondary)]">NEW CONDITION</p>
             <div className="flex gap-1">
               <input
                 value={ticker}
                 onChange={(e) => setTicker(e.target.value.toUpperCase())}
                 placeholder="AAPL"
-                className="w-16 bg-[var(--color-bg-tertiary)] border border-[var(--color-border)] px-1.5 py-1 text-[10px] font-mono text-[var(--color-text-primary)] outline-none focus:border-[var(--color-primary)]"
+                className="w-16 bg-[var(--color-bg-tertiary)] border border-[var(--color-border)] px-1.5 py-1 text-[12px] font-data text-[var(--color-text-primary)] outline-none focus:border-[var(--color-primary)]"
               />
               <select
                 value={condType}
                 onChange={(e) => setCondType(e.target.value as AlertConditionType)}
-                className="flex-1 bg-[var(--color-bg-tertiary)] border border-[var(--color-border)] px-1 py-1 text-[10px] font-mono text-[var(--color-text-primary)] outline-none"
+                className="flex-1 bg-[var(--color-bg-tertiary)] border border-[var(--color-border)] px-1 py-1 text-[12px] font-data text-[var(--color-text-primary)] outline-none"
               >
                 {CONDITION_OPTIONS.map((o) => (
                   <option key={o.value} value={o.value}>{o.label}</option>
@@ -90,13 +90,13 @@ export function AlertPanel() {
                 onChange={(e) => setCondValue(e.target.value)}
                 placeholder="값 입력"
                 type="number"
-                className="w-full bg-[var(--color-bg-tertiary)] border border-[var(--color-border)] px-1.5 py-1 text-[10px] font-mono text-[var(--color-text-primary)] outline-none focus:border-[var(--color-primary)]"
+                className="w-full bg-[var(--color-bg-tertiary)] border border-[var(--color-border)] px-1.5 py-1 text-[12px] font-data text-[var(--color-text-primary)] outline-none focus:border-[var(--color-primary)]"
               />
             )}
             <button
               onClick={handleAdd}
               disabled={adding || !ticker.trim() || (selectedOpt.needsValue && (!condValue.trim() || isNaN(parseFloat(condValue))))}
-              className="w-full py-1 border border-[var(--color-primary)] text-[var(--color-primary)] text-[9px] uppercase tracking-widest hover:bg-[var(--color-primary)]/10 disabled:opacity-40 transition-colors"
+              className="w-full py-1 border border-[var(--color-primary)] text-[var(--color-primary)] text-[11px] uppercase tracking-widest hover:bg-[var(--color-primary)]/10 disabled:opacity-40 transition-colors"
             >
               {adding ? "추가 중…" : "+ 추가"}
             </button>
@@ -104,7 +104,7 @@ export function AlertPanel() {
 
           {/* 활성 조건 */}
           <div>
-            <p className="text-[9px] uppercase tracking-widest text-[var(--color-text-secondary)] mb-1.5">ACTIVE</p>
+            <p className="text-[11px] uppercase tracking-widest text-[var(--color-text-secondary)] mb-1.5">ACTIVE</p>
             {conditions.length === 0 ? (
               <p className="text-[var(--color-text-muted)]">조건 없음</p>
             ) : (
@@ -132,7 +132,7 @@ export function AlertPanel() {
 
           {/* 알림 히스토리 */}
           <div>
-            <p className="text-[9px] uppercase tracking-widest text-[var(--color-text-secondary)] mb-1.5">HISTORY</p>
+            <p className="text-[11px] uppercase tracking-widest text-[var(--color-text-secondary)] mb-1.5">HISTORY</p>
             {history.length === 0 ? (
               <p className="text-[var(--color-text-muted)]">내역 없음</p>
             ) : (

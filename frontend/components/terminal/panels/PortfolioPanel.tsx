@@ -19,7 +19,7 @@ export function PortfolioPanel() {
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
-      <div className="px-4 py-2 text-[9px] font-mono uppercase tracking-widest text-[var(--color-primary)] border-b border-[var(--color-border)] shrink-0">
+      <div className="px-4 py-2 text-[11px] font-data uppercase tracking-widest text-[var(--color-primary)] border-b border-[var(--color-border)] shrink-0">
         PORTFOLIO
       </div>
       <PanelGroup orientation="horizontal" className="flex-1 overflow-hidden">

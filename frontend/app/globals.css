@@ -46,7 +46,7 @@
   /* ─── Fonts ─── */
   --font-sans:    var(--font-noto-sans-kr);
   --font-heading: var(--font-noto-sans-kr);
-  --font-mono:    var(--font-roboto-mono);
+  --font-data:    var(--font-roboto-mono);
 
   /* ─── Border Radius ─── */
   --radius:    8px;

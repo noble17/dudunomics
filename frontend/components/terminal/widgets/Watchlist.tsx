@@ -26,7 +26,7 @@ export function WatchlistWidget() {
             className="border-b border-[var(--color-border)]/50 hover:bg-[var(--color-bg-primary)] cursor-pointer"
             onClick={() => setFocused(h.ticker)}
           >
-            <td className="py-1 pr-2 font-mono font-medium text-[var(--color-text-primary)]">{h.ticker}</td>
+            <td className="py-1 pr-2 font-data font-medium text-[var(--color-text-primary)]">{h.ticker}</td>
             <td className="py-1 pr-2 text-right text-[var(--color-text-secondary)]">{h.quantity}</td>
             <td className="py-1 text-right text-[var(--color-text-secondary)]">—</td>
           </tr>

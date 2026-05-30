@@ -268,7 +268,7 @@ export function HoldingsEditor({ initialHoldings, initialCashKrw, initialCashUsd
                         onClick={(e) => e.stopPropagation()}
                       >
                         {searching && (
-                          <div className="px-3 py-2 font-mono text-xs text-muted-foreground">검색 중…</div>
+                          <div className="px-3 py-2 font-data text-xs text-muted-foreground">검색 중…</div>
                         )}
                         {searchHits.map((hit) => (
                           <button
@@ -295,7 +295,7 @@ export function HoldingsEditor({ initialHoldings, initialCashKrw, initialCashUsd
                 {/* 섹터 */}
                 <td className="px-4 py-2">
                   <Input value={row.sector} onChange={(e) => update(row.id, "sector", e.target.value)}
-                    className="h-8 w-24 font-mono text-xs" placeholder="반도체" />
+                    className="h-8 w-24 font-data text-xs" placeholder="반도체" />
                 </td>
 
                 {/* 시장 — 정상이면 텍스트, lookupError면 드롭다운 */}
@@ -309,12 +309,12 @@ export function HoldingsEditor({ initialHoldings, initialCashKrw, initialCashUsd
                         handleLookup(row.id, row.ticker, v);
                       }}
                     >
-                      <SelectTrigger className="h-8 w-28 font-mono text-xs border-primary">
+                      <SelectTrigger className="h-8 w-28 font-data text-xs border-primary">
                         <SelectValue placeholder="시장 선택" />
                       </SelectTrigger>
                       <SelectContent>
                         {KIS_MARKETS.map((m) => (
-                          <SelectItem key={m} value={m} className="font-mono text-xs">{m}</SelectItem>
+                          <SelectItem key={m} value={m} className="font-data text-xs">{m}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
@@ -322,7 +322,7 @@ export function HoldingsEditor({ initialHoldings, initialCashKrw, initialCashUsd
                     <Input
                       value={row.market}
                       onChange={(e) => update(row.id, "market", e.target.value)}
-                      className="h-8 w-24 font-mono text-xs"
+                      className="h-8 w-24 font-data text-xs"
                       placeholder="NASDAQ"
                     />
                   )}
@@ -366,7 +366,7 @@ export function HoldingsEditor({ initialHoldings, initialCashKrw, initialCashUsd
                       size="sm"
                       disabled={!row.ticker || lookingUp.has(row.id)}
                       onClick={() => handleLookup(row.id, row.ticker, row.market || undefined)}
-                      className="h-8 w-8 p-0 font-mono text-xs text-muted-foreground hover:text-foreground"
+                      className="h-8 w-8 p-0 font-data text-xs text-muted-foreground hover:text-foreground"
                       title="티커 정보 자동 조회"
                     >
                       {lookingUp.has(row.id) ? "…" : "🔍"}
@@ -390,7 +390,7 @@ export function HoldingsEditor({ initialHoldings, initialCashKrw, initialCashUsd
           {saving ? "저장 중…" : "저장"}
         </Button>
         {status && (
-          <span className={`font-mono text-xs ${status.startsWith("오류") ? "text-error" : "text-gain"}`}>
+          <span className={`font-data text-xs ${status.startsWith("오류") ? "text-error" : "text-gain"}`}>
             {status}
           </span>
         )}

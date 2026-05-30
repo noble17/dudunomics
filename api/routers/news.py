@@ -3,6 +3,7 @@ import yfinance as yf
 from fastapi import APIRouter, Depends, Query
 from core.auth.deps import current_user, CurrentUser
 from api.models import NewsItem, NewsOut
+from core.data.yf_session import get_session
 
 router = APIRouter(prefix="/api/news", tags=["news"])
 
@@ -19,7 +20,7 @@ def _fetch_news(ticker: str, limit: int) -> list[NewsItem]:
         if now < expires_at:
             return items
 
-    raw = yf.Ticker(ticker.upper()).news or []
+    raw = yf.Ticker(ticker.upper(), session=get_session()).news or []
 
     items = []
     for r in raw[:limit]:

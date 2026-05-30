@@ -150,7 +150,7 @@ export function EquityCurve({ history }: Props) {
             <button
               key={r}
               onClick={() => setRange(r)}
-              className={`px-2 py-0.5 text-[10px] border rounded-sm font-mono transition-colors ${
+              className={`px-2 py-0.5 text-[10px] border rounded-sm font-data transition-colors ${
                 r === range
                   ? "border-primary text-primary bg-blue-50"
                   : "border-border text-muted-foreground hover:border-primary hover:text-primary"
@@ -267,7 +267,7 @@ export function EquityCurve({ history }: Props) {
                 type="datetime-local"
                 value={form.ts}
                 onChange={(e) => setForm((f) => ({ ...f, ts: e.target.value }))}
-                className="h-8 border border-border rounded-sm px-2 text-xs font-mono"
+                className="h-8 border border-border rounded-sm px-2 text-xs font-data"
               />
             </div>
             <div className="space-y-1">
@@ -287,7 +287,7 @@ export function EquityCurve({ history }: Props) {
                 value={form.amount}
                 onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))}
                 placeholder="7900000"
-                className="h-8 w-28 border border-border rounded-sm px-2 text-xs font-mono"
+                className="h-8 w-28 border border-border rounded-sm px-2 text-xs font-data"
               />
             </div>
             <div className="space-y-1">
@@ -333,7 +333,7 @@ export function EquityCurve({ history }: Props) {
               <span className="text-sm">{EVENT_ICON[e.type] ?? "📌"}</span>
               <div>
                 <p className="text-xs text-foreground">{e.label}</p>
-                <p className="font-mono text-[10px] text-muted-foreground">
+                <p className="font-data text-[10px] text-muted-foreground">
                   {new Date(e.ts).toLocaleString("ko-KR", {
                     year: "numeric", month: "2-digit", day: "2-digit",
                     hour: "2-digit", minute: "2-digit",

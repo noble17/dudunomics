@@ -239,12 +239,12 @@ export function CandleChart({ ticker }: Props) {
       {/* 헤더 */}
       <div className="px-3 py-1.5 shrink-0 border-b border-[var(--color-border)] flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className="text-[9px] font-mono uppercase tracking-widest text-[var(--color-primary)]">CHART</span>
+          <span className="text-[11px] font-data uppercase tracking-widest text-[var(--color-primary)]">CHART</span>
           {last && (
             <>
-              <span className="text-[11px] font-mono font-bold text-[var(--color-text-primary)]">{ticker}</span>
-              <span className="text-[10px] font-mono text-[var(--color-text-primary)]">{last.close.toFixed(2)}</span>
-              <span className={`text-[9px] font-mono ${isUp ? "text-[#30d158]" : "text-[#ff453a]"}`}>
+              <span className="text-[13px] font-data font-bold text-[var(--color-text-primary)]">{ticker}</span>
+              <span className="text-[12px] font-data text-[var(--color-text-primary)]">{last.close.toFixed(2)}</span>
+              <span className={`text-[11px] font-data ${isUp ? "text-[#30d158]" : "text-[#ff453a]"}`}>
                 {isUp ? "▲" : "▼"}{Math.abs(change).toFixed(2)} ({changePct.toFixed(2)}%)
               </span>
             </>
@@ -253,7 +253,7 @@ export function CandleChart({ ticker }: Props) {
         <div className="flex gap-1 items-center">
           <button
             onClick={() => setShowIndicators((v) => !v)}
-            className={`px-1.5 py-0.5 text-[9px] font-mono border transition-colors ${
+            className={`px-1.5 py-0.5 text-[11px] font-data border transition-colors ${
               showIndicators
                 ? "border-[var(--color-primary)] text-[var(--color-primary)] bg-[var(--color-primary)]/10"
                 : "border-[var(--color-border)] text-[var(--color-text-muted)] hover:border-[var(--color-primary)]"
@@ -265,7 +265,7 @@ export function CandleChart({ ticker }: Props) {
             <button
               key={p}
               onClick={() => setPeriod(p)}
-              className={`px-1.5 py-0.5 text-[9px] font-mono border transition-colors ${
+              className={`px-1.5 py-0.5 text-[11px] font-data border transition-colors ${
                 p === period
                   ? "border-[var(--color-primary)] text-[var(--color-primary)]"
                   : "border-[var(--color-border)] text-[var(--color-text-muted)] hover:border-[var(--color-primary)] hover:text-[var(--color-primary)]"
@@ -281,12 +281,12 @@ export function CandleChart({ ticker }: Props) {
       <div className="flex-1 relative overflow-hidden">
         {isLoading && !data && (
           <div className="absolute inset-0 flex items-center justify-center">
-            <span className="text-xs font-mono text-[var(--color-text-muted)]">로딩 중…</span>
+            <span className="text-xs font-data text-[var(--color-text-muted)]">로딩 중…</span>
           </div>
         )}
         {!isLoading && candles.length === 0 && (
           <div className="absolute inset-0 flex items-center justify-center">
-            <span className="text-xs font-mono text-[var(--color-text-muted)]">데이터 없음</span>
+            <span className="text-xs font-data text-[var(--color-text-muted)]">데이터 없음</span>
           </div>
         )}
         <div ref={containerRef} className="w-full h-full" />

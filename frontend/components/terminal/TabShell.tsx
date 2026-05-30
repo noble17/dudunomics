@@ -29,7 +29,7 @@ function TabShellInner() {
 export function TabShell() {
   return (
     <Suspense fallback={
-      <div className="flex-1 flex items-center justify-center text-xs font-mono text-[var(--color-text-secondary)]">
+      <div className="flex-1 flex items-center justify-center text-xs font-data text-[var(--color-text-secondary)]">
         로딩 중…
       </div>
     }>

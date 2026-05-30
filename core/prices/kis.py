@@ -297,7 +297,8 @@ class KISPriceProvider(PriceProvider):
         }
         try:
             import yfinance as yf
-            result = yf.Search(ticker, max_results=5, news_count=0, raise_errors=False)
+            from core.data.yf_session import get_session
+            result = yf.Search(ticker, max_results=5, news_count=0, raise_errors=False, session=get_session())
             for q in (result.quotes or []):
                 if q.get("symbol", "").upper() != ticker.upper():
                     continue
@@ -455,7 +456,8 @@ class KISPriceProvider(PriceProvider):
 
     def _fetch_yfinance(self, ticker: str) -> Price:
         import yfinance as yf
-        info = yf.Ticker(ticker).fast_info
+        from core.data.yf_session import get_session
+        info = yf.Ticker(ticker, session=get_session()).fast_info
         return Price(
             ticker=ticker,
             current=float(info.last_price),

@@ -50,27 +50,27 @@ export function PositionsPanel({ onTickerSelect, selectedTicker }: Props) {
   }
 
   if (isLoading) return (
-    <div className="p-3 text-[10px] font-mono text-[var(--color-text-muted)]">로딩 중…</div>
+    <div className="p-3 text-[12px] font-data text-[var(--color-text-muted)]">로딩 중…</div>
   );
   if (!snapshot?.rows.length) return (
     <div className="flex flex-col h-full overflow-hidden">
-      <div className="px-3 py-1.5 text-[9px] font-mono uppercase tracking-widest text-[var(--color-primary)] border-b border-[var(--color-border)] shrink-0 flex items-center justify-between">
+      <div className="px-3 py-1.5 text-[11px] font-data uppercase tracking-widest text-[var(--color-primary)] border-b border-[var(--color-border)] shrink-0 flex items-center justify-between">
         <span>POSITIONS</span>
         <button
           onClick={handleSync}
           disabled={syncing}
-          className="flex items-center gap-1 text-[8px] px-1.5 py-0.5 border border-[var(--color-border)] text-[var(--color-text-muted)] hover:text-[var(--color-primary)] hover:border-[var(--color-primary)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 border border-[var(--color-border)] text-[var(--color-text-muted)] hover:text-[var(--color-primary)] hover:border-[var(--color-primary)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         >
           <RefreshCw size={9} className={syncing ? "animate-spin" : ""} />
           KIS
         </button>
       </div>
-      <div className="p-3 text-[10px] font-mono text-[var(--color-text-muted)]">보유 종목 없음</div>
+      <div className="p-3 text-[12px] font-data text-[var(--color-text-muted)]">보유 종목 없음</div>
       <div className="fixed top-4 right-4 z-50 flex flex-col gap-1.5 pointer-events-none">
         {toasts.map((t) => (
           <div
             key={t.id}
-            className={`px-3 py-2 text-[10px] font-mono shadow-lg border ${
+            className={`px-3 py-2 text-[12px] font-data shadow-lg border ${
               t.isError
                 ? "bg-[var(--color-bg-secondary)] border-red-500 text-red-400"
                 : "bg-[var(--color-bg-secondary)] border-[var(--color-primary)] text-[var(--color-text-primary)]"
@@ -92,7 +92,7 @@ export function PositionsPanel({ onTickerSelect, selectedTicker }: Props) {
         {toasts.map((t) => (
           <div
             key={t.id}
-            className={`px-3 py-2 text-[10px] font-mono shadow-lg border ${
+            className={`px-3 py-2 text-[12px] font-data shadow-lg border ${
               t.isError
                 ? "bg-[var(--color-bg-secondary)] border-red-500 text-red-400"
                 : "bg-[var(--color-bg-secondary)] border-[var(--color-primary)] text-[var(--color-text-primary)]"
@@ -104,12 +104,12 @@ export function PositionsPanel({ onTickerSelect, selectedTicker }: Props) {
       </div>
 
       {/* 헤더 */}
-      <div className="px-3 py-1.5 text-[9px] font-mono uppercase tracking-widest text-[var(--color-primary)] border-b border-[var(--color-border)] shrink-0 flex items-center justify-between">
+      <div className="px-3 py-1.5 text-[11px] font-data uppercase tracking-widest text-[var(--color-primary)] border-b border-[var(--color-border)] shrink-0 flex items-center justify-between">
         <span>POSITIONS</span>
         <button
           onClick={handleSync}
           disabled={syncing}
-          className="flex items-center gap-1 text-[8px] px-1.5 py-0.5 border border-[var(--color-border)] text-[var(--color-text-muted)] hover:text-[var(--color-primary)] hover:border-[var(--color-primary)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 border border-[var(--color-border)] text-[var(--color-text-muted)] hover:text-[var(--color-primary)] hover:border-[var(--color-primary)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         >
           <RefreshCw size={9} className={syncing ? "animate-spin" : ""} />
           KIS
@@ -119,7 +119,7 @@ export function PositionsPanel({ onTickerSelect, selectedTicker }: Props) {
       {/* 종목 리스트 */}
       <div className="flex-1 overflow-auto">
         <div className="px-3 py-1">
-          <div className="grid grid-cols-3 text-[9px] font-mono text-[var(--color-text-muted)] mb-1 uppercase">
+          <div className="grid grid-cols-3 text-[11px] font-data text-[var(--color-text-muted)] mb-1 uppercase">
             <span>Ticker</span>
             <span className="text-right">수익률</span>
             <span className="text-right">평가액</span>
@@ -128,7 +128,7 @@ export function PositionsPanel({ onTickerSelect, selectedTicker }: Props) {
             <div
               key={row.ticker}
               onClick={() => onTickerSelect?.(row.ticker)}
-              className={`grid grid-cols-3 py-1 border-b border-[var(--color-border)] cursor-pointer hover:bg-[var(--color-bg-tertiary)] text-[10px] font-mono ${
+              className={`grid grid-cols-3 py-1 border-b border-[var(--color-border)] cursor-pointer hover:bg-[var(--color-bg-tertiary)] text-[12px] font-data ${
                 selectedTicker === row.ticker ? "bg-[var(--color-bg-tertiary)]" : ""
               }`}
             >
@@ -146,13 +146,13 @@ export function PositionsPanel({ onTickerSelect, selectedTicker }: Props) {
 
       {/* 하단 요약 */}
       <div className="px-3 py-2 border-t border-[var(--color-border)] shrink-0 space-y-0.5">
-        <div className="flex justify-between text-[10px] font-mono">
+        <div className="flex justify-between text-[12px] font-data">
           <span className="text-[var(--color-text-muted)]">총 평가</span>
           <span className="text-[var(--color-text-primary)]">
             ₩{(snapshot.total_equity_krw / 1_000_000).toFixed(1)}M
           </span>
         </div>
-        <div className="flex justify-between text-[10px] font-mono">
+        <div className="flex justify-between text-[12px] font-data">
           <span className="text-[var(--color-text-muted)]">실현 손익</span>
           <span className={realizedPnl >= 0 ? "text-green-400" : "text-red-400"}>
             {realizedPnl >= 0 ? "+" : ""}₩{(realizedPnl / 10_000).toFixed(0)}만

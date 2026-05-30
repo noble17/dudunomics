@@ -67,7 +67,7 @@ export function AIOverlay({ ticker, initialSummary, onClose }: Props) {
       <div className="relative flex flex-col bg-[#111] border-t border-[var(--color-border)] h-[60vh] z-10">
         {/* 헤더 */}
         <div className="flex items-center justify-between px-4 py-2 border-b border-[var(--color-border)] shrink-0">
-          <span className="text-[10px] font-mono uppercase tracking-widest text-[var(--color-primary)]">
+          <span className="text-[12px] font-data uppercase tracking-widest text-[var(--color-primary)]">
             AI ASSISTANT — {ticker}
           </span>
           <button
@@ -81,7 +81,7 @@ export function AIOverlay({ ticker, initialSummary, onClose }: Props) {
         {/* 메시지 목록 */}
         <div className="flex-1 overflow-y-auto p-4 space-y-3">
           {messages.length === 0 && (
-            <p className="text-[11px] font-mono text-[var(--color-text-muted)] text-center mt-8">
+            <p className="text-[13px] font-data text-[var(--color-text-muted)] text-center mt-8">
               {ticker}에 대해 질문해보세요
             </p>
           )}
@@ -92,7 +92,7 @@ export function AIOverlay({ ticker, initialSummary, onClose }: Props) {
             >
               <div
                 className={[
-                  "max-w-[80%] px-3 py-2 rounded text-[11px] font-mono leading-relaxed whitespace-pre-wrap",
+                  "max-w-[80%] px-3 py-2 rounded text-[13px] font-data leading-relaxed whitespace-pre-wrap",
                   msg.role === "user"
                     ? "bg-[var(--color-primary)] text-black"
                     : "bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)]",
@@ -114,12 +114,12 @@ export function AIOverlay({ ticker, initialSummary, onClose }: Props) {
             onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSend()}
             placeholder={`${ticker} 에 대해 질문…`}
             disabled={streaming}
-            className="flex-1 bg-[var(--color-bg-secondary)] border border-[var(--color-border)] rounded px-3 py-1.5 text-[11px] font-mono text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-primary)] disabled:opacity-50"
+            className="flex-1 bg-[var(--color-bg-secondary)] border border-[var(--color-border)] rounded px-3 py-1.5 text-[13px] font-data text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-primary)] disabled:opacity-50"
           />
           <button
             onClick={handleSend}
             disabled={!input.trim() || streaming}
-            className="px-3 py-1.5 bg-[var(--color-primary)] text-black text-[10px] font-mono rounded hover:opacity-90 disabled:opacity-40 transition-opacity"
+            className="px-3 py-1.5 bg-[var(--color-primary)] text-black text-[12px] font-data rounded hover:opacity-90 disabled:opacity-40 transition-opacity"
           >
             전송
           </button>

@@ -55,9 +55,9 @@ export function MetricGrid({ score }: { score: QuantScore }) {
     },
     {
       label: "PBR",
-      value: fmt(score.raw_pbr),
-      sub: "S&P500 avg ~4x",
-      colorClass: metricColor(score.raw_pbr, true, 4, 10),
+      value: score.raw_pbr !== null && score.raw_pbr < 0 ? "—" : fmt(score.raw_pbr),
+      sub: score.raw_pbr !== null && score.raw_pbr < 0 ? "Negative equity" : "S&P500 avg ~4x",
+      colorClass: score.raw_pbr !== null && score.raw_pbr < 0 ? "text-muted-foreground" : metricColor(score.raw_pbr, true, 4, 10),
     },
     {
       label: "PSR",

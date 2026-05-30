@@ -7,7 +7,7 @@ import { CommandPalette } from "@/components/terminal/CommandPalette";
 const TabShell = dynamic(
   () => import("@/components/terminal/TabShell").then(m => m.TabShell),
   { ssr: false, loading: () => (
-    <div className="flex-1 flex items-center justify-center text-xs font-mono text-[var(--color-text-secondary)]">
+    <div className="flex-1 flex items-center justify-center text-xs font-data text-[var(--color-text-secondary)]">
       터미널 로딩 중…
     </div>
   )}
