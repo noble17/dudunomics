@@ -21,6 +21,7 @@ from api.routers.candles import router as candles_router
 from api.routers.news import router as news_router
 from api.routers.ai import router as ai_router
 from api.routers.alerts import router as alerts_router
+from api.routers.trades import router as trades_router
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
@@ -59,6 +60,7 @@ app.include_router(candles_router)
 app.include_router(news_router)
 app.include_router(ai_router)
 app.include_router(alerts_router)
+app.include_router(trades_router)
 
 @app.get("/health")
 def health():
