@@ -1,6 +1,6 @@
 """확장 펀더멘탈 스냅샷 — PBR, PSR, ROE, D/E Ratio, CFO, EPS TTM 페치.
 
-yfinance Ticker.info 딕셔너리에서 필드 추출.
+1차: fundamentals_scraper (Finviz + StockAnalysis) → 2차(fallback): yfinance Ticker.info
 병렬 페치로 500개 종목 처리 시간 최소화.
 """
 from __future__ import annotations
@@ -8,6 +8,8 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from datetime import date
+
+from core.data.fundamentals_scraper import fetch_fundamentals as _scrape
 
 log = logging.getLogger(__name__)
 
@@ -44,11 +46,30 @@ def _safe(info: dict, key: str) -> float | None:
 
 
 def _fetch_one(ticker: str, as_of: date) -> ExtendedSnapshot:
-    # 국내 종목(.KS/.KQ)은 yfinance fundamentals 커버리지 없음 → 즉시 빈 스냅샷
+    # 국내 종목(.KS/.KQ)은 fundamentals 커버리지 없음 → 즉시 빈 스냅샷
     t_upper = ticker.upper()
     if t_upper.endswith(".KS") or t_upper.endswith(".KQ"):
         return ExtendedSnapshot(ticker=ticker, as_of=as_of)
 
+    # 1차: scraper (Finviz + StockAnalysis)
+    scraped = _scrape(ticker)
+    if scraped is not None:
+        return ExtendedSnapshot(
+            ticker=ticker,
+            as_of=as_of,
+            company_name=scraped.short_name or ticker,
+            forward_pe=scraped.forward_pe,
+            trailing_pe=scraped.trailing_pe,
+            pbr=scraped.price_to_book,
+            psr=scraped.price_to_sales,
+            forward_eps=scraped.forward_eps,
+            eps_ttm=scraped.trailing_eps,
+            roe=scraped.return_on_equity,
+            debt_to_equity=scraped.debt_to_equity,
+            operating_cashflow=scraped.operating_cashflow,
+        )
+
+    # 최후 fallback: yfinance
     import yfinance as yf
     from core.data.yf_session import get_session
     try:

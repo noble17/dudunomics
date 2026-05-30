@@ -13,8 +13,10 @@ def test_portfolio_empty(client):
 
 
 def test_portfolio_with_holdings(client):
-    repo.upsert_holding("005930.KS", "삼성전자", "KRW", 10, 70000)
-    repo.upsert_holding("AAPL", "Apple", "USD", 5, 175.0)
+    user = repo.get_user_by_email("test@test.com")
+    uid = user["id"]
+    repo.upsert_holding(uid, "005930.KS", "삼성전자", "KRW", 10, 70000)
+    repo.upsert_holding(uid, "AAPL", "Apple", "USD", 5, 175.0)
 
     mock_prices = {
         "005930.KS": Price(ticker="005930.KS", current=75000, currency="KRW"),

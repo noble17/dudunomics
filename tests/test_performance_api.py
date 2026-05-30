@@ -71,7 +71,8 @@ def test_period_filter_invalid_defaults_to_6m(perf_client):
 
 
 def test_yfinance_failure_graceful_fallback(perf_client):
-    with patch("yfinance.download", side_effect=Exception("network error")):
+    # fetch_index가 exception을 발생시켜도 200 반환 + benchmark는 비어야 함
+    with patch("api.routers.portfolio.fetch_index", side_effect=RuntimeError("network error")):
         res = perf_client.get("/api/portfolio/performance?period=1m")
     assert res.status_code == 200
     data = res.json()

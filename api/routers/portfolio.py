@@ -1,10 +1,11 @@
-from datetime import datetime
+from datetime import datetime, date, timedelta
 from fastapi import APIRouter, Depends
 from core.auth.deps import current_user, CurrentUser
 from api.models import PortfolioRow, PortfolioSnapshot, SnapshotHistory, EventIn, EventOut, PerformanceOut, BenchmarkStats, PerformanceChartPoint, RebalancingRow
 import core.repository as repo
 from core.fx import get_fx_provider
 from core.prices.kis import KISPriceProvider
+from core.data.ohlcv_cache import fetch_index
 
 router = APIRouter(prefix="/api/portfolio", tags=["portfolio"])
 
@@ -122,25 +123,22 @@ def get_performance(
     chart: list[PerformanceChartPoint] = []
 
     try:
-        import yfinance as yf
-        from datetime import date, timedelta
-
         days = {"1m": 30, "3m": 90, "6m": 180, "1y": 365, "all": 1825}[period]
-        start = (date.today() - timedelta(days=days)).isoformat()
-        end = date.today().isoformat()
+        start_date = date.today() - timedelta(days=days)
+        end_date = date.today()
 
-        kospi_df = yf.download("^KS11", start=start, end=end, progress=False)["Close"]
-        sp500_df = yf.download("^GSPC", start=start, end=end, progress=False)["Close"]
+        kospi_series = fetch_index("^KS11", start=start_date, end=end_date)
+        sp500_series = fetch_index("^GSPC", start=start_date, end=end_date)
 
         def to_cum_return(series) -> dict[str, float]:
             if series.empty:
                 return {}
             base = float(series.iloc[0])
-            return {str(d.date()): round((float(v) - base) / base * 100, 2)
+            return {str(d.date() if hasattr(d, "date") else d): round((float(v) - base) / base * 100, 2)
                     for d, v in series.items() if base > 0}
 
-        kospi_map = to_cum_return(kospi_df)
-        sp500_map = to_cum_return(sp500_df)
+        kospi_map = to_cum_return(kospi_series)
+        sp500_map = to_cum_return(sp500_series)
 
         port_map: dict[str, float] = {}
         if equity_series:

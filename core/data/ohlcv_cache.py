@@ -9,8 +9,6 @@ import logging
 from datetime import date, timedelta
 
 import pandas as pd
-import yfinance as yf
-from yfinance.exceptions import YFRateLimitError
 from sqlalchemy import text
 
 from core import repository as repo
@@ -95,6 +93,7 @@ def _fetch_fdr(ticker: str, start: date, end: date) -> pd.DataFrame:
 
 def _fetch_yfinance(ticker: str, start: date, end: date) -> pd.DataFrame:
     """yfinance fallback — 해외 종목 단건. bulk 경로가 없을 때 사용."""
+    import yfinance as yf
     from core.data.yf_session import get_session
     t = yf.Ticker(ticker, session=get_session())
     df = t.history(start=str(start), end=str(end), auto_adjust=True)
@@ -115,6 +114,7 @@ def _fetch_yfinance_bulk(tickers: list[str], start: date, end: date) -> dict[str
 
     log.warning("yf bulk fallback activated for %d tickers: %s...", len(tickers), tickers[:3])
 
+    import yfinance as yf
     from core.data.yf_session import get_session
     # yf.download는 직접 session 파라미터를 지원하지 않으므로 shared session에 주입
     yf.shared._requests_session = get_session()
@@ -165,6 +165,7 @@ def _fetch_and_store(tickers: list[str], start: date, end: date) -> list[str]:
     - 해외 종목: KIS API (개별) → 실패 종목만 yfinance bulk fallback
     """
     from core.prices.kis import fetch_ohlcv_domestic, fetch_ohlcv_overseas
+    from yfinance.exceptions import YFRateLimitError
 
     warns: list[str] = []
     domestic_tickers = [t for t in tickers if is_domestic(t)]

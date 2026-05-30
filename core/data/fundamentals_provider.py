@@ -1,10 +1,14 @@
-"""Forward fundamentals 스냅샷 페치 (yfinance)."""
+"""Forward fundamentals 스냅샷 페치.
+
+1차: fundamentals_scraper (Finviz + StockAnalysis) → 2차(fallback): yfinance
+"""
 from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
 from datetime import date
 
+from core.data.fundamentals_scraper import fetch_fundamentals as _scrape
 from core.data.yf_session import get_session
 
 
@@ -31,6 +35,23 @@ class FundamentalSnapshot:
 
 
 def _fetch_one(ticker: str, as_of: date) -> FundamentalSnapshot:
+    # 1차: scraper (Finviz + StockAnalysis)
+    scraped = _scrape(ticker)
+    if scraped is not None:
+        return FundamentalSnapshot(
+            ticker=ticker,
+            as_of=as_of,
+            forward_eps=scraped.forward_eps,
+            forward_pe=scraped.forward_pe,
+            trailing_pe=scraped.trailing_pe,
+            raw_json=json.dumps({
+                "forwardEps": scraped.forward_eps,
+                "forwardPE": scraped.forward_pe,
+                "trailingPE": scraped.trailing_pe,
+            }),
+        )
+
+    # 최후 fallback: yfinance
     import yfinance as yf
     try:
         info = yf.Ticker(ticker, session=get_session()).info

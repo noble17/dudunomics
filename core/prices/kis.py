@@ -329,10 +329,49 @@ class KISPriceProvider(PriceProvider):
     }
 
     def search(self, query: str, max_results: int = 20) -> list[dict]:
-        """키워드 종목 검색 (Yahoo Finance autocomplete v6 + v1 중복 이름 보완).
+        """키워드 종목 검색.
 
+        1차: search_provider (StockAnalysis → Yahoo autocomplete fallback)
+        2차(fallback): 기존 Yahoo autocomplete 직접 호출 + 우선주 이름 보완 로직
         국장(KRX)과 미장(NASDAQ/NYSE/AMEX)만 반환. market 필드 포함.
         """
+        # 1차: search_provider
+        try:
+            from core.data.search_provider import search as _sp_search
+            sp_results = _sp_search(query, max_results)
+            if sp_results:
+                hits = []
+                for r in sp_results:
+                    exch = r.get("exchange", "")
+                    market = self._EXCH_TO_MARKET.get(exch)
+                    if not market:
+                        # StockAnalysis exchange names differ — best-effort mapping
+                        exch_upper = exch.upper()
+                        if "NASDAQ" in exch_upper:
+                            market = "NASDAQ"
+                        elif "NYSE" in exch_upper:
+                            market = "NYSE"
+                        elif "AMEX" in exch_upper or "ARCA" in exch_upper:
+                            market = "AMEX"
+                        elif "KRX" in exch_upper or "KOSPI" in exch_upper or "KOSDAQ" in exch_upper:
+                            market = "KRX"
+                        else:
+                            continue  # 미지원 거래소 제외
+                    hits.append({
+                        "ticker": r.get("ticker", ""),
+                        "name": r.get("name", ""),
+                        "exchange": exch,
+                        "market": market,
+                        "type": r.get("type", ""),
+                    })
+                    if len(hits) >= 8:
+                        break
+                if hits:
+                    return hits
+        except Exception as e:
+            log.debug("search_provider 1차 실패 (%s): %s", query, e)
+
+        # 2차 fallback: Yahoo Finance 직접 호출
         try:
             res = requests.get(
                 "https://query2.finance.yahoo.com/v6/finance/autocomplete",

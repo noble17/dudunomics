@@ -49,7 +49,9 @@ class TestFetchSnapshots:
         from core.data.fundamentals_provider import fetch_snapshots
 
         mock_info = {"forwardEps": 5.0, "forwardPE": 20.0, "trailingPE": 22.0}
-        with patch("yfinance.Ticker") as mock_ticker_cls:
+        # scraper를 None으로 mock → yf fallback 경로로 진입
+        with patch("core.data.fundamentals_provider._scrape", return_value=None), \
+             patch("yfinance.Ticker") as mock_ticker_cls:
             mock_ticker_cls.return_value.info = mock_info
             results = fetch_snapshots(["AAPL", "MSFT"])
 
@@ -71,7 +73,9 @@ class TestFetchSnapshots:
                 mock.info = {"forwardEps": 2.0, "forwardPE": 15.0, "trailingPE": 16.0}
             return mock
 
-        with patch("yfinance.Ticker", side_effect=side_effect):
+        # scraper를 None으로 mock → yf fallback 경로로 진입
+        with patch("core.data.fundamentals_provider._scrape", return_value=None), \
+             patch("yfinance.Ticker", side_effect=side_effect):
             results = fetch_snapshots(["AAPL", "INVALID"])
 
         ticker_map = {r.ticker: r for r in results}

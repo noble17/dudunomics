@@ -32,10 +32,12 @@ def news_client(fresh_db, monkeypatch):
 
 
 def test_news_returns_items(news_client):
-    """정상 응답: yfinance mock → NewsOut 구조"""
+    """정상 응답: yfinance mock → NewsOut 구조 (native provider는 빈 리스트로 mock)"""
     mock_ticker = MagicMock()
     mock_ticker.news = YFINANCE_NEWS
-    with patch("api.routers.news.yf.Ticker", return_value=mock_ticker):
+    # native provider를 비워서 yf fallback이 동작하도록 함
+    with patch("api.routers.news._fetch_news_native", return_value=[]), \
+         patch("yfinance.Ticker", return_value=mock_ticker):
         res = news_client.get("/api/news?ticker=AMZN&limit=10")
     assert res.status_code == 200
     body = res.json()
@@ -48,10 +50,11 @@ def test_news_returns_items(news_client):
 
 
 def test_news_returns_empty_when_no_news(news_client):
-    """뉴스 없을 때 빈 리스트 반환"""
+    """뉴스 없을 때 빈 리스트 반환 (native + yf 모두 빈 리스트)"""
     mock_ticker = MagicMock()
     mock_ticker.news = []
-    with patch("api.routers.news.yf.Ticker", return_value=mock_ticker):
+    with patch("api.routers.news._fetch_news_native", return_value=[]), \
+         patch("yfinance.Ticker", return_value=mock_ticker):
         res = news_client.get("/api/news?ticker=AMZN")
     assert res.status_code == 200
     assert res.json()["items"] == []
