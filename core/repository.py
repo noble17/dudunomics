@@ -947,3 +947,196 @@ def mark_all_alert_events_read(user_id: int) -> None:
             "UPDATE user_alert_events SET read = TRUE WHERE user_id = :u AND read = FALSE"
         ), {"u": user_id})
         s.commit()
+
+
+# ── Trades ────────────────────────────────────────────────────────────────────
+
+def create_trade(
+    user_id: int, ticker: str, market: str | None,
+    trade_type: str, quantity: float, price: float,
+    currency: str, traded_at: str, fee: float = 0, note: str | None = None
+) -> int:
+    with session() as s:
+        row = s.execute(text("SELECT nextval('trades_id_seq')")).fetchone()
+        trade_id = row[0]
+        s.execute(text("""
+            INSERT INTO trades
+              (id, user_id, ticker, market, trade_type, quantity, price, currency, traded_at, fee, note)
+            VALUES
+              (:id, :uid, :ticker, :market, :type, :qty, :price, :cur, :date, :fee, :note)
+        """), {"id": trade_id, "uid": user_id, "ticker": ticker, "market": market,
+               "type": trade_type, "qty": quantity, "price": price, "cur": currency,
+               "date": traded_at, "fee": fee, "note": note})
+        s.commit()
+        _sync_holding_from_trades(s, user_id, ticker)
+        s.commit()
+    return trade_id
+
+
+def get_trades(user_id: int, ticker: str | None = None) -> list[dict]:
+    with session() as s:
+        if ticker:
+            rows = s.execute(text("""
+                SELECT id, ticker, market, trade_type, quantity, price, currency,
+                       traded_at, fee, note, created_at
+                FROM trades WHERE user_id = :uid AND ticker = :ticker
+                ORDER BY traded_at DESC, created_at DESC
+            """), {"uid": user_id, "ticker": ticker}).fetchall()
+        else:
+            rows = s.execute(text("""
+                SELECT id, ticker, market, trade_type, quantity, price, currency,
+                       traded_at, fee, note, created_at
+                FROM trades WHERE user_id = :uid
+                ORDER BY traded_at DESC, created_at DESC
+            """), {"uid": user_id}).fetchall()
+    cols = ["id", "ticker", "market", "trade_type", "quantity", "price", "currency",
+            "traded_at", "fee", "note", "created_at"]
+    return [dict(zip(cols, r)) for r in rows]
+
+
+def delete_trade(user_id: int, trade_id: int) -> bool:
+    with session() as s:
+        row = s.execute(text(
+            "SELECT ticker FROM trades WHERE id = :id AND user_id = :uid"
+        ), {"id": trade_id, "uid": user_id}).fetchone()
+        if not row:
+            return False
+        ticker = row[0]
+        s.execute(text(
+            "DELETE FROM trades WHERE id = :id AND user_id = :uid"
+        ), {"id": trade_id, "uid": user_id})
+        s.commit()
+        _sync_holding_from_trades(s, user_id, ticker)
+        s.commit()
+    return True
+
+
+def _sync_holding_from_trades(s, user_id: int, ticker: str) -> None:
+    """거래 내역에서 avg_price/quantity를 재계산해 holdings에 반영."""
+    rows = s.execute(text("""
+        SELECT trade_type, quantity, price
+        FROM trades
+        WHERE user_id = :uid AND ticker = :ticker
+        ORDER BY traded_at ASC, created_at ASC
+    """), {"uid": user_id, "ticker": ticker}).fetchall()
+
+    total_qty = 0.0
+    total_cost = 0.0
+    for trade_type, qty, price in rows:
+        if trade_type == "BUY":
+            total_cost += qty * price
+            total_qty += qty
+        elif trade_type == "SELL":
+            total_qty -= qty
+
+    if total_qty <= 0:
+        s.execute(text(
+            "DELETE FROM holdings WHERE user_id = :uid AND ticker = :ticker"
+        ), {"uid": user_id, "ticker": ticker})
+        return
+
+    buy_qty = sum(qty for tt, qty, _ in rows if tt == "BUY")
+    avg_price = total_cost / buy_qty if buy_qty > 0 else 0.0
+
+    existing = s.execute(text(
+        "SELECT ticker FROM holdings WHERE user_id = :uid AND ticker = :ticker"
+    ), {"uid": user_id, "ticker": ticker}).fetchone()
+
+    if existing:
+        s.execute(text("""
+            UPDATE holdings SET quantity = :qty, avg_price = :avg, updated_at = current_timestamp
+            WHERE user_id = :uid AND ticker = :ticker
+        """), {"qty": total_qty, "avg": avg_price, "uid": user_id, "ticker": ticker})
+
+
+def get_realized_pnl(user_id: int) -> float:
+    """전체 실현 손익 합산. SELL 시점의 avg_price 기준."""
+    trades = get_trades(user_id)
+    by_ticker: dict[str, list] = {}
+    for t in sorted(trades, key=lambda x: (x["traded_at"], str(x["created_at"]))):
+        by_ticker.setdefault(t["ticker"], []).append(t)
+
+    total_pnl = 0.0
+    for ticker_trades in by_ticker.values():
+        buy_qty = 0.0
+        buy_cost = 0.0
+        for t in ticker_trades:
+            if t["trade_type"] == "BUY":
+                buy_qty += t["quantity"]
+                buy_cost += t["quantity"] * t["price"]
+            elif t["trade_type"] == "SELL" and buy_qty > 0:
+                avg = buy_cost / buy_qty
+                total_pnl += (t["price"] - avg) * t["quantity"]
+    return total_pnl
+
+
+# ── Performance ───────────────────────────────────────────────────────────────
+
+import math
+
+
+def _period_to_days(period: str) -> int:
+    return {"1m": 30, "3m": 90, "6m": 180, "1y": 365, "all": 9999}[period]
+
+
+def get_portfolio_returns(user_id: int, period: str = "6m") -> list[dict]:
+    """portfolio_snapshots에서 일별 수익률 시계열 반환."""
+    days = _period_to_days(period)
+    with session() as s:
+        rows = s.execute(text("""
+            SELECT ts::DATE as date, total_equity_krw
+            FROM portfolio_snapshots
+            WHERE user_id = :uid
+              AND ts >= current_timestamp - INTERVAL :days DAY
+            ORDER BY date ASC
+        """), {"uid": user_id, "days": days}).fetchall()
+    return [{"date": str(r[0]), "equity": float(r[1])} for r in rows]
+
+
+def calc_performance(equity_series: list[dict]) -> dict:
+    """Sharpe, MDD, total_return 계산."""
+    if len(equity_series) < 2:
+        return {"sharpe": 0.0, "mdd": 0.0, "total_return": 0.0, "annualized_return": 0.0}
+
+    equities = [e["equity"] for e in equity_series]
+    returns = [(equities[i] - equities[i-1]) / equities[i-1]
+               for i in range(1, len(equities)) if equities[i-1] > 0]
+
+    if not returns:
+        return {"sharpe": 0.0, "mdd": 0.0, "total_return": 0.0, "annualized_return": 0.0}
+
+    n = len(returns)
+    mean_r = sum(returns) / n
+    variance = sum((r - mean_r) ** 2 for r in returns) / n
+    std_r = math.sqrt(variance) if variance > 0 else 0.0
+    sharpe = (mean_r / std_r * math.sqrt(252)) if std_r > 0 else 0.0
+
+    # MDD
+    peak = equities[0]
+    mdd = 0.0
+    for e in equities:
+        if e > peak:
+            peak = e
+        dd = (peak - e) / peak if peak > 0 else 0
+        if dd > mdd:
+            mdd = dd
+
+    total_return = (equities[-1] - equities[0]) / equities[0] * 100 if equities[0] > 0 else 0
+    days = len(equities)
+    annualized = ((1 + total_return / 100) ** (365 / days) - 1) * 100 if days > 0 else 0
+
+    return {
+        "sharpe": round(sharpe, 3),
+        "mdd": round(-mdd * 100, 2),
+        "total_return": round(total_return, 2),
+        "annualized_return": round(annualized, 2),
+    }
+
+
+def set_holding_target_weight(user_id: int, ticker: str, target_weight: float | None) -> None:
+    with session() as s:
+        s.execute(text("""
+            UPDATE holdings SET target_weight = :tw
+            WHERE user_id = :uid AND ticker = :ticker
+        """), {"tw": target_weight, "uid": user_id, "ticker": ticker})
+        s.commit()
