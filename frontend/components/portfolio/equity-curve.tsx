@@ -8,6 +8,7 @@ import {
 } from "recharts";
 import { portfolioApi } from "@/lib/api";
 import type { EventOut, SnapshotHistory } from "@/lib/types";
+import { chartTheme } from "@/lib/design-tokens";
 
 interface Props { history: SnapshotHistory[] }
 
@@ -48,8 +49,8 @@ function TwoLineTick({ x, y, payload }: { x?: number; y?: number; payload?: { va
   const time = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
   return (
     <g transform={`translate(${x},${y})`}>
-      <text textAnchor="middle" dy={12} fontSize={10} fill="#444444" fontFamily={MONO}>{time}</text>
-      <text textAnchor="middle" dy={23} fontSize={9} fill="#999999" fontFamily={MONO}>{date}</text>
+      <text textAnchor="middle" dy={12} fontSize={10} fill={chartTheme.text} fontFamily={MONO}>{time}</text>
+      <text textAnchor="middle" dy={23} fontSize={9} fill={chartTheme.text} fontFamily={MONO}>{date}</text>
     </g>
   );
 }
@@ -188,7 +189,7 @@ export function EquityCurve({ history }: Props) {
       {/* 메인 차트 */}
       <ResponsiveContainer width="100%" height={240}>
         <LineChart data={filtered} margin={{ top: 20, right: 8, bottom: 0, left: 8 }}>
-          <CartesianGrid strokeDasharray="4 4" stroke="#EDEEF1" />
+          <CartesianGrid strokeDasharray="4 4" stroke={chartTheme.grid} />
           <XAxis
             dataKey="ts"
             tick={<TwoLineTick />}
@@ -197,7 +198,7 @@ export function EquityCurve({ history }: Props) {
           />
           <YAxis
             tickFormatter={(v) => `₩${(v / 1_000_000).toFixed(0)}M`}
-            tick={{ fontSize: 10, fill: "#666666", fontFamily: MONO }}
+            tick={{ fontSize: 10, fill: chartTheme.text, fontFamily: MONO }}
             width={55}
           />
           <Tooltip
@@ -207,32 +208,33 @@ export function EquityCurve({ history }: Props) {
             ]}
             labelFormatter={(ts) => fmtTick(String(ts))}
             contentStyle={{
-              background: "#FFFFFF",
-              border: "1px solid #BEC1C6",
+              background: chartTheme.bg,
+              border: `1px solid ${chartTheme.grid}`,
               borderRadius: 4,
               fontFamily: MONO,
               fontSize: 12,
+              color: chartTheme.upText,
             }}
           />
           <Legend
             formatter={(v) => (v === "equity" ? "주식평가액" : "순자산")}
-            wrapperStyle={{ fontSize: 11, fontFamily: MONO, color: "#666666" }}
+            wrapperStyle={{ fontSize: 11, fontFamily: MONO, color: chartTheme.text }}
           />
           {visibleEvents.map((e) => (
             <ReferenceLine
               key={e.id}
               x={e.nearestTs}
-              stroke="#E8812A"
+              stroke={chartTheme.palette[7]}
               strokeDasharray="4 3"
               strokeWidth={1.5}
-              label={{ value: e.label, position: "top", fontSize: 10, fill: "#E8812A", fontFamily: MONO }}
+              label={{ value: e.label, position: "top", fontSize: 10, fill: chartTheme.palette[7], fontFamily: MONO }}
             />
           ))}
-          <Line type="monotone" dataKey="equity" stroke="#1375EC" strokeWidth={2} dot={false} />
+          <Line type="monotone" dataKey="equity" stroke={chartTheme.brand} strokeWidth={2} dot={false} />
           <Line
             type="monotone"
             dataKey="total"
-            stroke="#BEC1C6"
+            stroke={chartTheme.cash}
             strokeWidth={1.5}
             strokeDasharray="4 2"
             dot={false}
@@ -240,7 +242,7 @@ export function EquityCurve({ history }: Props) {
           <Brush
             dataKey="ts"
             height={24}
-            stroke="#1375EC"
+            stroke={chartTheme.brand}
             travellerWidth={8}
             tickFormatter={fmtTick}
           />
@@ -260,7 +262,7 @@ export function EquityCurve({ history }: Props) {
         </div>
 
         {showForm && (
-          <div className="px-4 py-3 border-b border-border flex flex-wrap gap-2 items-end bg-[#F9FAFC]">
+          <div className="px-4 py-3 border-b border-border flex flex-wrap gap-2 items-end bg-[var(--secondary)]">
             <div className="space-y-1">
               <label className="block text-[10px] text-muted-foreground">날짜/시간</label>
               <input
@@ -327,7 +329,7 @@ export function EquityCurve({ history }: Props) {
         {(events as EventOut[]).map((e) => (
           <div
             key={e.id}
-            className="flex items-center justify-between px-4 py-2 border-b border-border last:border-0 hover:bg-[#F4F5F7]"
+            className="flex items-center justify-between px-4 py-2 border-b border-border last:border-0 hover:bg-[var(--secondary)]"
           >
             <div className="flex items-center gap-2">
               <span className="text-sm">{EVENT_ICON[e.type] ?? "📌"}</span>

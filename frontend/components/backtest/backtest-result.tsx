@@ -9,13 +9,11 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { KpiCard } from "@/components/common/kpi-card";
 import type { BacktestRunOut } from "@/lib/types";
+import { chartTheme } from "@/lib/design-tokens";
 
 const MONO = "var(--font-roboto-mono, 'Roboto Mono', monospace)";
 
-const CHART_COLORS = [
-  "#1375EC", "#DD3C44", "#0062DF", "#E67E22", "#27AE60",
-  "#8E44AD", "#16A085", "#C0392B", "#2980B9", "#D35400",
-];
+const CHART_COLORS = chartTheme.palette as unknown as string[];
 
 function fmt(n: number, digits = 2) {
   return `${n >= 0 ? "+" : ""}${n.toFixed(digits)}%`;
@@ -85,23 +83,23 @@ export function BacktestResult({ result }: { result: BacktestRunOut }) {
                 <AreaChart data={result.equity_curve} margin={{ top: 4, right: 8, bottom: 0, left: 8 }}>
                   <defs>
                     <linearGradient id="bt" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%"  stopColor="#1375EC" stopOpacity={0.18} />
-                      <stop offset="95%" stopColor="#1375EC" stopOpacity={0} />
+                      <stop offset="5%"  stopColor={chartTheme.brand} stopOpacity={0.18} />
+                      <stop offset="95%" stopColor={chartTheme.brand} stopOpacity={0} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="4 4" stroke="#EDEEF1" />
-                  <XAxis dataKey="ts" tick={{ fontSize: 10, fill: "#666666", fontFamily: MONO }} tickCount={8} />
+                  <CartesianGrid strokeDasharray="4 4" stroke={chartTheme.grid} />
+                  <XAxis dataKey="ts" tick={{ fontSize: 10, fill: chartTheme.text, fontFamily: MONO }} tickCount={8} />
                   <YAxis
                     tickFormatter={(v) => `₩${(v / 1_000_000).toFixed(1)}M`}
-                    tick={{ fontSize: 10, fill: "#666666", fontFamily: MONO }}
+                    tick={{ fontSize: 10, fill: chartTheme.text, fontFamily: MONO }}
                   />
                   <Tooltip
                     formatter={(v: unknown) => typeof v === "number" ? [`₩${v.toLocaleString()}`] : [String(v)]}
-                    contentStyle={{ background: "#FFFFFF", border: "1px solid #BEC1C6", borderRadius: 4, fontFamily: MONO, fontSize: 12 }}
-                    labelStyle={{ color: "#1A2434" }}
-                    itemStyle={{ color: "#1375EC" }}
+                    contentStyle={{ background: chartTheme.bg, border: `1px solid ${chartTheme.grid}`, borderRadius: 4, fontFamily: MONO, fontSize: 12 }}
+                    labelStyle={{ color: chartTheme.upText }}
+                    itemStyle={{ color: chartTheme.brand }}
                   />
-                  <Area type="monotone" dataKey="equity" stroke="#1375EC" fill="url(#bt)" strokeWidth={2} dot={false} />
+                  <Area type="monotone" dataKey="equity" stroke={chartTheme.brand} fill="url(#bt)" strokeWidth={2} dot={false} />
                 </AreaChart>
               </ResponsiveContainer>
             </CardContent>
@@ -120,15 +118,15 @@ export function BacktestResult({ result }: { result: BacktestRunOut }) {
                   <p className="mb-3 text-[11px] font-medium text-muted-foreground">비중 변화</p>
                   <ResponsiveContainer width="100%" height={220}>
                     <AreaChart data={result.weights_history} margin={{ top: 4, right: 8, bottom: 0, left: 8 }}>
-                      <CartesianGrid strokeDasharray="4 4" stroke="#EDEEF1" />
-                      <XAxis dataKey="ts" tick={{ fontSize: 10, fill: "#666666", fontFamily: MONO }} tickCount={6} />
-                      <YAxis tickFormatter={(v) => `${(v * 100).toFixed(0)}%`} tick={{ fontSize: 10, fill: "#666666", fontFamily: MONO }} domain={[0, 1]} />
+                      <CartesianGrid strokeDasharray="4 4" stroke={chartTheme.grid} />
+                      <XAxis dataKey="ts" tick={{ fontSize: 10, fill: chartTheme.text, fontFamily: MONO }} tickCount={6} />
+                      <YAxis tickFormatter={(v) => `${(v * 100).toFixed(0)}%`} tick={{ fontSize: 10, fill: chartTheme.text, fontFamily: MONO }} domain={[0, 1]} />
                       <Tooltip
                         formatter={(v: unknown, name: unknown) => [
                           typeof v === "number" ? `${(v * 100).toFixed(1)}%` : String(v),
                           String(name ?? ""),
                         ]}
-                        contentStyle={{ background: "#FFFFFF", border: "1px solid #BEC1C6", borderRadius: 4, fontFamily: MONO, fontSize: 12 }}
+                        contentStyle={{ background: chartTheme.bg, border: `1px solid ${chartTheme.grid}`, borderRadius: 4, fontFamily: MONO, fontSize: 12 }}
                       />
                       {weightTickers.map((t, i) => (
                         <Area
@@ -175,26 +173,26 @@ export function BacktestResult({ result }: { result: BacktestRunOut }) {
                   <p className="mb-3 text-[11px] font-medium text-muted-foreground">종목별 기여도 (원)</p>
                   <ResponsiveContainer width="100%" height={Math.max(160, contribData.length * 32)}>
                     <BarChart data={contribData} layout="vertical" margin={{ top: 4, right: 40, bottom: 0, left: 40 }}>
-                      <CartesianGrid strokeDasharray="4 4" stroke="#EDEEF1" horizontal={false} />
+                      <CartesianGrid strokeDasharray="4 4" stroke={chartTheme.grid} horizontal={false} />
                       <XAxis
                         type="number"
                         tickFormatter={(v) => `${(v / 10000).toFixed(0)}만`}
-                        tick={{ fontSize: 10, fill: "#666666", fontFamily: MONO }}
+                        tick={{ fontSize: 10, fill: chartTheme.text, fontFamily: MONO }}
                       />
-                      <YAxis type="category" dataKey="ticker" tick={{ fontSize: 10, fill: "#333333", fontFamily: MONO }} width={52} />
+                      <YAxis type="category" dataKey="ticker" tick={{ fontSize: 10, fill: chartTheme.text, fontFamily: MONO }} width={52} />
                       <Tooltip
                         formatter={(v: unknown) => typeof v === "number" ? [`₩${v.toLocaleString()}`] : [String(v)]}
-                        contentStyle={{ background: "#FFFFFF", border: "1px solid #BEC1C6", borderRadius: 4, fontFamily: MONO, fontSize: 12 }}
+                        contentStyle={{ background: chartTheme.bg, border: `1px solid ${chartTheme.grid}`, borderRadius: 4, fontFamily: MONO, fontSize: 12 }}
                       />
                       <Bar dataKey="value" radius={0}>
                         {contribData.map((entry, i) => (
-                          <Cell key={i} fill={entry.value >= 0 ? "#DD3C44" : "#1375EC"} />
+                          <Cell key={i} fill={entry.value >= 0 ? chartTheme.up : chartTheme.down} />
                         ))}
                         <LabelList
                           dataKey="value"
                           position="right"
                           formatter={(v: unknown) => typeof v === "number" ? `${(v / 10000).toFixed(0)}만` : ""}
-                          style={{ fontSize: 10, fontFamily: MONO, fill: "#666666" }}
+                          style={{ fontSize: 10, fontFamily: MONO, fill: chartTheme.text }}
                         />
                       </Bar>
                     </BarChart>
@@ -232,7 +230,7 @@ export function BacktestResult({ result }: { result: BacktestRunOut }) {
                             <tr key={i} className="border-b border-border">
                               <td className="py-1 pr-4 text-muted-foreground">{date}</td>
                               <td className="py-1 pr-4">데드크로스</td>
-                              <td className="py-1 pr-4 text-[#DD3C44]">{ticker} 청산</td>
+                              <td className="py-1 pr-4 text-rise">{ticker} 청산</td>
                               <td className="py-1 text-right">{amount}</td>
                             </tr>
                           );

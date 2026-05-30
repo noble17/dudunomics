@@ -4,6 +4,7 @@ import { createChart, ColorType, CrosshairMode } from "lightweight-charts";
 import useSWR from "swr";
 import { candlesApi } from "@/lib/api";
 import type { CandleItem, IndicatorsData } from "@/lib/types";
+import { chartTheme } from "@/lib/design-tokens";
 
 type Period = "5D" | "1M" | "3M" | "6M" | "1Y";
 const PERIODS: Period[] = ["5D", "1M", "3M", "6M", "1Y"];
@@ -23,8 +24,8 @@ const SCALE_MARGINS = {
 const MA_COLORS: Record<string, string> = {
   "5":   "#ff9f0a",
   "20":  "#ffd60a",
-  "60":  "#30d158",
-  "120": "#64d2ff",
+  "60":  chartTheme.palette[0],   // brand blue
+  "120": "#22d3ee",
 };
 
 export function CandleChart({ ticker }: Props) {
@@ -48,16 +49,16 @@ export function CandleChart({ ticker }: Props) {
 
     const chart = createChart(container, {
       layout: {
-        background: { type: ColorType.Solid, color: "#0a0a0a" },
-        textColor: "#636366",
+        background: { type: ColorType.Solid, color: chartTheme.bg },
+        textColor: chartTheme.text,
       },
       grid: {
-        vertLines: { color: "#1a1a1a" },
-        horzLines: { color: "#1a1a1a" },
+        vertLines: { color: chartTheme.grid },
+        horzLines: { color: chartTheme.grid },
       },
       crosshair: { mode: CrosshairMode.Normal },
-      rightPriceScale: { borderColor: "#1a1a1a" },
-      timeScale: { borderColor: "#1a1a1a", timeVisible: false },
+      rightPriceScale: { borderColor: chartTheme.axisLine },
+      timeScale: { borderColor: chartTheme.axisLine, timeVisible: false },
       width: container.clientWidth,
       height: container.clientHeight,
     });
@@ -66,9 +67,9 @@ export function CandleChart({ ticker }: Props) {
     chart.priceScale("right").applyOptions({ scaleMargins: SCALE_MARGINS.candle });
 
     const candleSeries = chart.addCandlestickSeries({
-      upColor: "#30d158", downColor: "#ff453a",
-      borderUpColor: "#30d158", borderDownColor: "#ff453a",
-      wickUpColor: "#30d158", wickDownColor: "#ff453a",
+      upColor: chartTheme.up, downColor: chartTheme.down,
+      borderUpColor: chartTheme.up, borderDownColor: chartTheme.down,
+      wickUpColor: chartTheme.up, wickDownColor: chartTheme.down,
     });
 
     // ── 볼륨 ─────────────────────────────────────────────────
@@ -90,13 +91,13 @@ export function CandleChart({ ticker }: Props) {
     chart.priceScale("rsi_scale").applyOptions({
       scaleMargins: SCALE_MARGINS.rsi,
     });
-    rsiSeries.createPriceLine({ price: 70, color: "#30d158", lineStyle: 2, lineWidth: 1, axisLabelVisible: true, title: "70" });
-    rsiSeries.createPriceLine({ price: 30, color: "#ff453a", lineStyle: 2, lineWidth: 1, axisLabelVisible: true, title: "30" });
+    rsiSeries.createPriceLine({ price: 70, color: chartTheme.up, lineStyle: 2, lineWidth: 1, axisLabelVisible: true, title: "70" });
+    rsiSeries.createPriceLine({ price: 30, color: chartTheme.down, lineStyle: 2, lineWidth: 1, axisLabelVisible: true, title: "30" });
 
     // ── MACD ─────────────────────────────────────────────────
     const macdLineSeries = chart.addLineSeries({
       priceScaleId: "macd_scale",
-      color: "#0a84ff",
+      color: chartTheme.brand,
       lineWidth: 1,
     });
     const macdSignalSeries = chart.addLineSeries({
@@ -191,7 +192,7 @@ export function CandleChart({ ticker }: Props) {
 
     s.volume.setData(data.candles.map((c: CandleItem) => ({
       time: c.time, value: c.volume,
-      color: c.close >= c.open ? "rgba(48,209,88,0.35)" : "rgba(255,69,58,0.35)",
+      color: c.close >= c.open ? `${chartTheme.up}59` : `${chartTheme.down}59`,
     })));
 
     const ind: IndicatorsData | null | undefined = data.indicators;
@@ -217,7 +218,7 @@ export function CandleChart({ ticker }: Props) {
       (ind?.macd?.histogram ?? []).map((pt) => ({
         time: pt.time,
         value: pt.value,
-        color: pt.value >= 0 ? "rgba(48,209,88,0.6)" : "rgba(255,69,58,0.6)",
+        color: pt.value >= 0 ? `${chartTheme.up}99` : `${chartTheme.down}99`,
       }))
     );
 
@@ -239,12 +240,12 @@ export function CandleChart({ ticker }: Props) {
       {/* 헤더 */}
       <div className="px-3 py-1.5 shrink-0 border-b border-[var(--color-border)] flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className="text-[11px] font-data uppercase tracking-widest text-[var(--color-primary)]">CHART</span>
+          <span className="text-[11px] font-data uppercase tracking-widest text-[var(--color-primary)]">차트</span>
           {last && (
             <>
               <span className="text-[13px] font-data font-bold text-[var(--color-text-primary)]">{ticker}</span>
               <span className="text-[12px] font-data text-[var(--color-text-primary)]">{last.close.toFixed(2)}</span>
-              <span className={`text-[11px] font-data ${isUp ? "text-[#30d158]" : "text-[#ff453a]"}`}>
+              <span className={`text-[11px] font-data ${isUp ? "text-rise" : "text-fall"}`}>
                 {isUp ? "▲" : "▼"}{Math.abs(change).toFixed(2)} ({changePct.toFixed(2)}%)
               </span>
             </>

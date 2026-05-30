@@ -4,17 +4,9 @@
 import { useState } from "react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 import type { PortfolioRow } from "@/lib/types";
+import { chartTheme } from "@/lib/design-tokens";
 
-const COLORS = [
-  "#1375EC",
-  "#DD3C44",
-  "#003597",
-  "#666666",
-  "#BEC1C6",
-  "rgba(19,117,236,0.55)",
-  "rgba(221,60,68,0.55)",
-  "rgba(0,53,151,0.55)",
-];
+const COLORS = chartTheme.palette as unknown as string[];
 
 type Tab = "전체" | "국장" | "미장" | "섹터";
 const TABS: Tab[] = ["전체", "국장", "미장", "섹터"];
@@ -26,7 +18,7 @@ function formatMan(krw: number) {
 
 interface ChartItem { name: string; value: number; krw: number; color: string }
 
-const CASH_COLOR = "#8B9CB6";
+const CASH_COLOR = chartTheme.cash;
 
 interface Props { rows: PortfolioRow[]; cashKrw?: number }
 
@@ -125,10 +117,10 @@ export function WeightPie({ rows, cashKrw = 0 }: Props) {
                 </Pie>
                 <Tooltip
                   formatter={(v) => typeof v === "number" ? `${v.toFixed(1)}%` : v}
-                  contentStyle={{ background: "#FFFFFF", border: "1px solid #BEC1C6", borderRadius: 4, fontFamily: "var(--font-roboto-mono, 'Roboto Mono', monospace)", fontSize: 12 }}
+                  contentStyle={{ background: chartTheme.bg, border: `1px solid ${chartTheme.grid}`, borderRadius: 4, fontFamily: "var(--font-roboto-mono, 'Roboto Mono', monospace)", fontSize: 12 }}
                   wrapperStyle={{ zIndex: 50 }}
-                  labelStyle={{ color: "#1A2434" }}
-                  itemStyle={{ color: "#1375EC" }}
+                  labelStyle={{ color: chartTheme.upText }}
+                  itemStyle={{ color: chartTheme.brand }}
                 />
               </PieChart>
             </ResponsiveContainer>

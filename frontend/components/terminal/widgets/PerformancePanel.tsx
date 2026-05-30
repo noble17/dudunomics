@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from "react";
 import useSWR from "swr";
 import { performanceApi } from "@/lib/api";
 import { createChart, ColorType, LineStyle } from "lightweight-charts";
+import { chartTheme } from "@/lib/design-tokens";
 
 type Period = "1m" | "3m" | "6m" | "1y" | "all";
 const PERIODS: Period[] = ["1m", "3m", "6m", "1y", "all"];
@@ -13,15 +14,15 @@ function PerformanceChart({ data }: { data: { date: string; portfolio: number; k
   useEffect(() => {
     if (!containerRef.current || !data.length) return;
     const chart = createChart(containerRef.current, {
-      layout: { background: { type: ColorType.Solid, color: "#0d1929" }, textColor: "#888" },
-      grid: { vertLines: { color: "#1e3a5f" }, horzLines: { color: "#1e3a5f" } },
+      layout: { background: { type: ColorType.Solid, color: chartTheme.bg }, textColor: chartTheme.text },
+      grid: { vertLines: { color: chartTheme.grid }, horzLines: { color: chartTheme.grid } },
       width: containerRef.current.clientWidth,
       height: 140,
-      rightPriceScale: { borderColor: "#1e3a5f" },
-      timeScale: { borderColor: "#1e3a5f" },
+      rightPriceScale: { borderColor: chartTheme.axisLine },
+      timeScale: { borderColor: chartTheme.axisLine },
     });
-    const portSeries = chart.addLineSeries({ color: "#4a9eff", lineWidth: 2 });
-    const kospiSeries = chart.addLineSeries({ color: "#26c940", lineWidth: 1, lineStyle: LineStyle.Dashed });
+    const portSeries = chart.addLineSeries({ color: chartTheme.brand, lineWidth: 2 });
+    const kospiSeries = chart.addLineSeries({ color: chartTheme.palette[4], lineWidth: 1, lineStyle: LineStyle.Dashed });
     const sp500Series = chart.addLineSeries({ color: "#ff9500", lineWidth: 1, lineStyle: LineStyle.Dashed });
 
     portSeries.setData(data.map(d => ({ time: d.date as any, value: d.portfolio })));
@@ -96,8 +97,8 @@ export function PerformancePanel() {
           )}
         </div>
         <div className="flex gap-3 mt-1.5 text-[11px] font-data">
-          <span className="text-[#4a9eff]">■ 포트폴리오</span>
-          <span className="text-[#26c940]">■ KOSPI</span>
+          <span className="text-[#3182f6]">■ 포트폴리오</span>
+          <span className="text-[#a78bfa]">■ KOSPI</span>
           <span className="text-[#ff9500]">■ S&P500</span>
         </div>
       </div>
