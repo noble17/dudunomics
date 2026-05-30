@@ -73,10 +73,12 @@ def _make_fake_single_ticker_df(ticker: str, n: int = 10) -> pd.DataFrame:
 
 
 def test_fetch_ohlcv_cache_miss_calls_yfinance():
-    """캐시 없으면 yfinance 호출."""
+    """캐시 없으면 KIS 실패 시 yfinance 호출."""
+    import pandas as pd
     from core.data import ohlcv_cache
     fake = _make_fake_single_ticker_df("AAPL")
-    with patch("yfinance.download", return_value=fake) as mock_dl:
+    with patch("core.prices.kis.fetch_ohlcv_overseas", return_value=pd.DataFrame()), \
+         patch("yfinance.download", return_value=fake) as mock_dl:
         prices, warns = ohlcv_cache.fetch_ohlcv(
             ["AAPL"], date(2023, 1, 2), date(2023, 1, 13)
         )
@@ -130,11 +132,13 @@ def test_fetch_ohlcv_stores_data_in_cache():
 
 
 def test_fetch_index_cache_miss_calls_yfinance():
-    """인덱스 캐시 없으면 yfinance 호출."""
+    """인덱스 캐시 없으면 KIS 실패 시 yfinance 호출."""
+    import pandas as pd
     from core.data import ohlcv_cache
     fake = _make_fake_single_ticker_df("SPY", n=5)
 
-    with patch("yfinance.download", return_value=fake) as mock_dl:
+    with patch("core.prices.kis.fetch_ohlcv_overseas", return_value=pd.DataFrame()), \
+         patch("yfinance.download", return_value=fake) as mock_dl:
         series = ohlcv_cache.fetch_index("SPY", date(2023, 1, 2), date(2023, 1, 6))
     assert mock_dl.called
     assert not series.empty
