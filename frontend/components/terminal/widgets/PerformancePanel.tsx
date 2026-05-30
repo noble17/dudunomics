@@ -75,21 +75,21 @@ export function PerformancePanel() {
           <div><span className="text-[var(--color-text-muted)]">Sharpe </span>
             <span className="text-[var(--color-text-primary)]">{data?.sharpe.toFixed(2) ?? "—"}</span></div>
           <div><span className="text-[var(--color-text-muted)]">MDD </span>
-            <span className="text-red-400">{data ? `${data.mdd.toFixed(1)}%` : "—"}</span></div>
+            <span className="text-fall">{data ? `${data.mdd.toFixed(1)}%` : "—"}</span></div>
           <div><span className="text-[var(--color-text-muted)]">YTD </span>
-            <span className={data && data.total_return >= 0 ? "text-green-400" : "text-red-400"}>
+            <span className={data && data.total_return >= 0 ? "text-rise" : "text-fall"}>
               {data ? `${data.total_return >= 0 ? "+" : ""}${data.total_return.toFixed(1)}%` : "—"}
             </span></div>
           {data?.benchmark?.kospi && (
             <div><span className="text-[var(--color-text-muted)]">vs KOSPI </span>
-              <span className={data.total_return >= data.benchmark.kospi.return_pct ? "text-green-400" : "text-red-400"}>
+              <span className={data.total_return >= data.benchmark.kospi.return_pct ? "text-rise" : "text-fall"}>
                 {(data.total_return - data.benchmark.kospi.return_pct) >= 0 ? "+" : ""}
                 {(data.total_return - data.benchmark.kospi.return_pct).toFixed(1)}%
               </span></div>
           )}
           {data?.benchmark?.sp500 && (
             <div><span className="text-[var(--color-text-muted)]">vs S&P </span>
-              <span className={data.total_return >= data.benchmark.sp500.return_pct ? "text-green-400" : "text-red-400"}>
+              <span className={data.total_return >= data.benchmark.sp500.return_pct ? "text-rise" : "text-fall"}>
                 {(data.total_return - data.benchmark.sp500.return_pct) >= 0 ? "+" : ""}
                 {(data.total_return - data.benchmark.sp500.return_pct).toFixed(1)}%
               </span></div>

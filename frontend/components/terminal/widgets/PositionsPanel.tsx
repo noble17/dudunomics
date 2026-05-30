@@ -133,7 +133,7 @@ export function PositionsPanel({ onTickerSelect, selectedTicker }: Props) {
               }`}
             >
               <span className="text-[var(--color-text-primary)]">{row.ticker}</span>
-              <span className={`text-right ${row.return_pct >= 0 ? "text-green-400" : "text-red-400"}`}>
+              <span className={`text-right ${row.return_pct >= 0 ? "text-rise" : "text-fall"}`}>
                 {row.return_pct >= 0 ? "+" : ""}{row.return_pct.toFixed(1)}%
               </span>
               <span className="text-right text-[var(--color-text-secondary)]">
@@ -154,7 +154,7 @@ export function PositionsPanel({ onTickerSelect, selectedTicker }: Props) {
         </div>
         <div className="flex justify-between text-[12px] font-data">
           <span className="text-[var(--color-text-muted)]">실현 손익</span>
-          <span className={realizedPnl >= 0 ? "text-green-400" : "text-red-400"}>
+          <span className={realizedPnl >= 0 ? "text-rise" : "text-fall"}>
             {realizedPnl >= 0 ? "+" : ""}₩{(realizedPnl / 10_000).toFixed(0)}만
           </span>
         </div>

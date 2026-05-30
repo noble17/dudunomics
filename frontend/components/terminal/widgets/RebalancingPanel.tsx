@@ -65,10 +65,10 @@ export function RebalancingPanel() {
             </div>
             <div className="text-right text-[12px] font-data">
               {row.action === "BUY" && (
-                <span className="text-green-400">▲ ₩{(row.amount_krw / 10_000).toFixed(0)}만</span>
+                <span className="text-rise">▲ ₩{(row.amount_krw / 10_000).toFixed(0)}만</span>
               )}
               {row.action === "SELL" && (
-                <span className="text-red-400">▼ ₩{(row.amount_krw / 10_000).toFixed(0)}만</span>
+                <span className="text-fall">▼ ₩{(row.amount_krw / 10_000).toFixed(0)}만</span>
               )}
               {row.action === "HOLD" && <span className="text-[var(--color-text-muted)]">HOLD</span>}
               {row.action === "NO_TARGET" && (

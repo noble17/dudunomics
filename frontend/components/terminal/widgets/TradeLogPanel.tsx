@@ -35,7 +35,7 @@ function AddTradeModal({ onClose, onSave }: { onClose: () => void; onSave: () =>
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
       <div className="bg-[var(--color-bg-secondary)] border border-[var(--color-border)] p-4 w-72 font-data">
         <div className="text-[13px] uppercase tracking-widest text-[var(--color-primary)] mb-3">거래 추가</div>
-        {error && <div className="text-red-400 text-[12px] mb-2">{error}</div>}
+        {error && <div className="text-error text-[12px] mb-2">{error}</div>}
         <div className="space-y-2">
           <div>
             <label className="text-[11px] text-[var(--color-text-muted)] uppercase block mb-0.5">Ticker</label>
@@ -47,7 +47,7 @@ function AddTradeModal({ onClose, onSave }: { onClose: () => void; onSave: () =>
               <button key={t} onClick={() => setForm(f => ({ ...f, trade_type: t }))}
                 className={`flex-1 py-1 text-[12px] border ${
                   form.trade_type === t
-                    ? t === "BUY" ? "border-green-500 text-green-400" : "border-red-500 text-red-400"
+                    ? t === "BUY" ? "border-[#dc2e47] text-rise" : "border-[#3182f6] text-fall"
                     : "border-[var(--color-border)] text-[var(--color-text-muted)]"
                 }`}>
                 {t}
@@ -131,7 +131,7 @@ export function TradeLogPanel({ filterTicker }: Props) {
             <div key={trade.id}
               className="grid grid-cols-5 py-1.5 border-b border-[var(--color-border)] items-center text-[12px] font-data group">
               <span className="text-[var(--color-text-muted)] text-[11px]">{trade.traded_at}</span>
-              <span className={trade.trade_type === "BUY" ? "text-green-400" : "text-red-400"}>
+              <span className={trade.trade_type === "BUY" ? "text-rise" : "text-fall"}>
                 {trade.trade_type}
               </span>
               <span className="text-[var(--color-text-primary)]">{trade.ticker}</span>
@@ -140,7 +140,7 @@ export function TradeLogPanel({ filterTicker }: Props) {
               </span>
               <div className="text-right">
                 <button onClick={() => handleDelete(trade.id)}
-                  className="opacity-0 group-hover:opacity-100 text-[11px] text-red-400 hover:text-red-300 transition-opacity">
+                  className="opacity-0 group-hover:opacity-100 text-[11px] text-error hover:opacity-70 transition-opacity">
                   삭제
                 </button>
               </div>
