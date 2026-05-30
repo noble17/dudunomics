@@ -1081,15 +1081,17 @@ def _period_to_days(period: str) -> int:
 
 def get_portfolio_returns(user_id: int, period: str = "6m") -> list[dict]:
     """portfolio_snapshots에서 일별 수익률 시계열 반환."""
+    from datetime import datetime, timedelta
     days = _period_to_days(period)
+    cutoff = datetime.now() - timedelta(days=days)
     with session() as s:
         rows = s.execute(text("""
             SELECT ts::DATE as date, total_equity_krw
             FROM portfolio_snapshots
             WHERE user_id = :uid
-              AND ts >= current_timestamp - INTERVAL :days DAY
+              AND ts >= :cutoff
             ORDER BY date ASC
-        """), {"uid": user_id, "days": days}).fetchall()
+        """), {"uid": user_id, "cutoff": cutoff}).fetchall()
     return [{"date": str(r[0]), "equity": float(r[1])} for r in rows]
 
 
