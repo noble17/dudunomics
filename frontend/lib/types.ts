@@ -286,3 +286,57 @@ export interface AlertIn {
   condition_type: AlertConditionType
   condition_value?: number | null
 }
+
+// ── M8 Trades ──────────────────────────────────────────────────────────────
+
+export interface TradeIn {
+  ticker: string;
+  market?: string;
+  trade_type: "BUY" | "SELL";
+  quantity: number;
+  price: number;
+  currency: "KRW" | "USD";
+  traded_at: string;
+  fee?: number;
+  note?: string;
+}
+
+export interface TradeOut extends TradeIn {
+  id: number;
+  created_at: string;
+}
+
+// ── M8 Performance ─────────────────────────────────────────────────────────
+
+export interface BenchmarkStats {
+  return_pct: number;
+  correlation: number;
+}
+
+export interface PerformanceChartPoint {
+  date: string;
+  portfolio: number;
+  kospi: number;
+  sp500: number;
+}
+
+export interface PerformanceData {
+  sharpe: number;
+  mdd: number;
+  total_return: number;
+  annualized_return: number;
+  benchmark: Record<string, BenchmarkStats>;
+  chart: PerformanceChartPoint[];
+}
+
+// ── M8 Rebalancing ─────────────────────────────────────────────────────────
+
+export interface RebalancingRow {
+  ticker: string;
+  name: string;
+  current_weight: number;
+  target_weight: number | null;
+  diff_weight: number | null;
+  action: "BUY" | "SELL" | "HOLD" | "NO_TARGET";
+  amount_krw: number;
+}

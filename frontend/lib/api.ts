@@ -8,6 +8,7 @@ import type {
   QuotesOut,
   NewsOut, AISummaryOut, ChatMessage,
   AlertCondition, AlertEvent, AlertIn,
+  TradeIn, TradeOut, PerformanceData, RebalancingRow,
 } from "./types";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -146,4 +147,28 @@ export const aiApi = {
       }
     }
   },
+};
+
+export const tradesApi = {
+  list: (ticker?: string): Promise<TradeOut[]> =>
+    request<TradeOut[]>(`/api/trades${ticker ? `?ticker=${encodeURIComponent(ticker)}` : ""}`),
+  create: (body: TradeIn): Promise<TradeOut> =>
+    request<TradeOut>("/api/trades", { method: "POST", body: JSON.stringify(body) }),
+  delete: (id: number): Promise<{ ok: boolean }> =>
+    request<{ ok: boolean }>(`/api/trades/${id}`, { method: "DELETE" }),
+};
+
+export const performanceApi = {
+  get: (period = "6m"): Promise<PerformanceData> =>
+    request<PerformanceData>(`/api/portfolio/performance?period=${period}`),
+};
+
+export const rebalancingApi = {
+  get: (): Promise<RebalancingRow[]> =>
+    request<RebalancingRow[]>("/api/portfolio/rebalancing"),
+  setTargetWeight: (ticker: string, target_weight: number | null) =>
+    request<{ ok: boolean; total_target_weight: number; over_100: boolean }>(
+      `/api/holdings/${ticker}`,
+      { method: "PATCH", body: JSON.stringify({ target_weight }) }
+    ),
 };
