@@ -636,3 +636,124 @@ def fetch_ohlcv_overseas(
     return pd.DataFrame()
 
 
+# ── 계좌 잔고 조회 (모듈 레벨 함수) ────────────────────────────────────────────
+
+_EXCD_TO_MARKET_BALANCE: dict[str, str] = {
+    "NASD": "NASDAQ", "NYSE": "NYSE", "AMEX": "AMEX",
+    "NAS":  "NASDAQ", "NYS":  "NYSE", "AMS":  "AMEX",
+}
+
+_CANO = "63241945"
+_ACNT_PRDT_CD = "01"
+
+
+def fetch_balance_domestic() -> list[dict]:
+    """KIS 국내 계좌 잔고 조회. 토큰 없음 or 오류 시 빈 리스트."""
+    token = _get_token()
+    if not token:
+        return []
+
+    results: list[dict] = []
+    ctx_fk = ""
+    ctx_nk = ""
+
+    for _ in range(10):
+        res = requests.get(
+            f"{KIS_BASE}/uapi/domestic-stock/v1/trading/inquire-balance",
+            params={
+                "CANO": _CANO,
+                "ACNT_PRDT_CD": _ACNT_PRDT_CD,
+                "AFHR_FLPR_YN": "N",
+                "OFL_YN": "",
+                "INQR_DVSN": "02",
+                "UNPR_DVSN": "05",
+                "FUND_STTL_ICLD_YN": "N",
+                "FNCG_AMT_AUTO_RDPT_YN": "N",
+                "PRCS_DVSN": "01",
+                "CTX_AREA_FK100": ctx_fk,
+                "CTX_AREA_NK100": ctx_nk,
+            },
+            headers=_headers("TTTC8434R", token),
+            timeout=10,
+        )
+        data = res.json()
+        if data.get("rt_cd") != "0":
+            log.warning("KIS 국내 잔고 오류: %s", data.get("msg1"))
+            break
+
+        for item in data.get("output1") or []:
+            qty = float(item.get("hldg_qty") or 0)
+            if qty <= 0:
+                continue
+            code = item.get("pdno", "")
+            results.append({
+                "ticker": f"{code}.KS",
+                "name": item.get("prdt_name") or code,
+                "quantity": qty,
+                "avg_price": float(item.get("pchs_avg_pric") or 0),
+                "currency": "KRW",
+                "market": "KRX",
+            })
+
+        tr_cont = res.headers.get("tr_cont", " ")
+        if tr_cont not in ("F", "M"):
+            break
+        output3 = data.get("output3") or {}
+        ctx_fk = output3.get("ctx_area_fk100", "")
+        ctx_nk = output3.get("ctx_area_nk100", "")
+
+    return results
+
+
+def fetch_balance_overseas() -> list[dict]:
+    """KIS 해외 계좌 잔고 조회 (전 거래소). 토큰 없음 or 오류 시 빈 리스트."""
+    token = _get_token()
+    if not token:
+        return []
+
+    results: list[dict] = []
+    ctx_fk = ""
+    ctx_nk = ""
+
+    for _ in range(10):
+        res = requests.get(
+            f"{KIS_BASE}/uapi/overseas-stock/v1/trading/inquire-balance",
+            params={
+                "CANO": _CANO,
+                "ACNT_PRDT_CD": _ACNT_PRDT_CD,
+                "OVRS_EXCG_CD": "__ALL__",
+                "TR_CRCY_CD": "USD",
+                "CTX_AREA_FK200": ctx_fk,
+                "CTX_AREA_NK200": ctx_nk,
+            },
+            headers=_headers("TTTS3012R", token),
+            timeout=10,
+        )
+        data = res.json()
+        if data.get("rt_cd") != "0":
+            log.warning("KIS 해외 잔고 오류: %s", data.get("msg1"))
+            break
+
+        for item in data.get("output1") or []:
+            qty = float(item.get("ovrs_cblc_qty") or 0)
+            if qty <= 0:
+                continue
+            excd = item.get("ovrs_excg_cd", "")
+            market = _EXCD_TO_MARKET_BALANCE.get(excd, excd)
+            results.append({
+                "ticker": item.get("ovrs_pdno", ""),
+                "name": item.get("ovrs_item_name") or item.get("ovrs_pdno", ""),
+                "quantity": qty,
+                "avg_price": float(item.get("pchs_avg_pric") or 0),
+                "currency": "USD",
+                "market": market,
+            })
+
+        tr_cont = res.headers.get("tr_cont", " ")
+        if tr_cont not in ("F", "M"):
+            break
+        output2 = data.get("output2") or {}
+        ctx_fk = output2.get("ctx_area_fk200", "")
+        ctx_nk = output2.get("ctx_area_nk200", "")
+
+    return results
