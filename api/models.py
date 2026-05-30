@@ -290,3 +290,61 @@ class ChatMessage(BaseModel):
 class ChatRequest(BaseModel):
     messages: list[ChatMessage]
     ticker: str | None = None
+
+
+# ── M8 Trades ─────────────────────────────────────────────────────────────────
+
+class TradeIn(BaseModel):
+    ticker: str
+    market: str | None = None
+    trade_type: Literal["BUY", "SELL"]
+    quantity: float
+    price: float
+    currency: Literal["KRW", "USD"]
+    traded_at: str          # "YYYY-MM-DD"
+    fee: float = 0.0
+    note: str | None = None
+
+
+class TradeOut(TradeIn):
+    id: int
+    created_at: datetime
+
+
+# ── M8 Performance ────────────────────────────────────────────────────────────
+
+class BenchmarkStats(BaseModel):
+    return_pct: float
+    correlation: float
+
+
+class PerformanceChartPoint(BaseModel):
+    date: str
+    portfolio: float
+    kospi: float
+    sp500: float
+
+
+class PerformanceOut(BaseModel):
+    sharpe: float
+    mdd: float
+    total_return: float
+    annualized_return: float
+    benchmark: dict[str, BenchmarkStats]
+    chart: list[PerformanceChartPoint]
+
+
+# ── M8 Rebalancing ────────────────────────────────────────────────────────────
+
+class RebalancingRow(BaseModel):
+    ticker: str
+    name: str
+    current_weight: float
+    target_weight: float | None
+    diff_weight: float | None
+    action: str             # "BUY" | "SELL" | "HOLD" | "NO_TARGET"
+    amount_krw: float
+
+
+class TargetWeightUpdate(BaseModel):
+    target_weight: float | None = None
