@@ -156,9 +156,9 @@ def _fetch_and_store(tickers: list[str], start: date, end: date) -> list[str]:
     """OHLCV 다운로드 후 prices_cache에 저장.
 
     - 국내 종목: KIS API → FDR fallback (개별)
-    - 해외 종목: yf.download() bulk 1회 호출 → 실패 종목만 개별 재시도
+    - 해외 종목: KIS API (개별) → 실패 종목만 yfinance bulk fallback
     """
-    from core.prices.kis import fetch_ohlcv_domestic
+    from core.prices.kis import fetch_ohlcv_domestic, fetch_ohlcv_overseas
 
     warns: list[str] = []
     domestic_tickers = [t for t in tickers if is_domestic(t)]
@@ -187,37 +187,53 @@ def _fetch_and_store(tickers: list[str], start: date, end: date) -> list[str]:
         except Exception as e:
             warns.append(f"{ticker}: 저장 실패 — {e}")
 
-    # ── 해외 종목: bulk download ──────────────────────────────────────────────
-    if overseas_tickers:
+    # ── 해외 종목: KIS 우선 → yfinance fallback ──────────────────────────────
+    if not overseas_tickers:
+        return warns
+
+    kis_failed: list[str] = []
+    for ticker in overseas_tickers:
+        df = fetch_ohlcv_overseas(ticker, start, end)
+        if df.empty:
+            kis_failed.append(ticker)
+            continue
         try:
-            bulk = _fetch_yfinance_bulk(overseas_tickers, start, end)
-        except YFRateLimitError:
-            warns.append("해외 bulk: Yahoo Finance 요청 한도 초과. 잠시 후 다시 시도하세요.")
-            return warns
+            _store_df(ticker, df)
         except Exception as e:
-            log.warning("bulk download 실패: %s — 개별 재시도", e)
-            bulk = {}
+            warns.append(f"{ticker}: 저장 실패 — {e}")
 
-        failed = [t for t in overseas_tickers if t not in bulk]
+    if not kis_failed:
+        return warns
 
-        for ticker, df in bulk.items():
-            try:
-                _store_df(ticker, df)
-            except Exception as e:
-                warns.append(f"{ticker}: 저장 실패 — {e}")
+    # yfinance fallback — KIS 실패 종목만
+    try:
+        bulk = _fetch_yfinance_bulk(kis_failed, start, end)
+    except YFRateLimitError:
+        warns.append("해외 bulk: Yahoo Finance 요청 한도 초과. 잠시 후 다시 시도하세요.")
+        return warns
+    except Exception as e:
+        log.warning("bulk download 실패: %s — 개별 재시도", e)
+        bulk = {}
 
-        # bulk에서 빠진 종목 개별 재시도
-        for ticker in failed:
-            try:
-                df = _fetch_yfinance(ticker, start, end)
-                if df.empty:
-                    warns.append(f"{ticker}: 데이터 없음")
-                    continue
-                _store_df(ticker, df)
-            except YFRateLimitError:
-                warns.append(f"{ticker}: Yahoo Finance 요청 한도 초과.")
-            except Exception as e:
-                warns.append(f"{ticker}: fetch 실패 — {e}")
+    failed = [t for t in kis_failed if t not in bulk]
+
+    for ticker, df in bulk.items():
+        try:
+            _store_df(ticker, df)
+        except Exception as e:
+            warns.append(f"{ticker}: 저장 실패 — {e}")
+
+    for ticker in failed:
+        try:
+            df = _fetch_yfinance(ticker, start, end)
+            if df.empty:
+                warns.append(f"{ticker}: 데이터 없음")
+                continue
+            _store_df(ticker, df)
+        except YFRateLimitError:
+            warns.append(f"{ticker}: Yahoo Finance 요청 한도 초과.")
+        except Exception as e:
+            warns.append(f"{ticker}: fetch 실패 — {e}")
 
     return warns
 
