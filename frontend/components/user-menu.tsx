@@ -23,7 +23,7 @@ export function UserMenu({ email }: Props) {
         {email}
       </button>
       {open && (
-        <div className="absolute right-0 top-full mt-1 w-32 bg-[var(--color-bg-secondary)] border border-[var(--color-border)] rounded shadow-lg z-[200]">
+        <div className="absolute right-0 top-full mt-1 w-32 bg-[var(--color-bg-secondary)] border border-[var(--color-border)] rounded z-[200]">
           <button
             onClick={logout}
             className="w-full text-left text-xs px-3 py-2 hover:bg-[var(--color-bg-primary)] text-[var(--color-text-primary)]"

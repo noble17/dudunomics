@@ -235,7 +235,7 @@ export function HoldingsEditor({ initialHoldings, initialCashKrw, initialCashUsd
       <div className="border border-border">
         <div className="overflow-x-auto">
         <table className="w-full text-sm">
-          <thead className="border-b border-border bg-[#F9FAFC]">
+          <thead className="border-b border-border bg-[var(--card)]">
             <tr>
               {["티커", "종목명", "섹터", "시장", "통화", "수량", "평균단가", "상태", ""].map((h) => (
                 <th key={h} className="px-4 py-3 text-left text-[11px] font-medium text-muted-foreground">{h}</th>
@@ -244,7 +244,7 @@ export function HoldingsEditor({ initialHoldings, initialCashKrw, initialCashUsd
           </thead>
           <tbody>
             {rows.map((row) => (
-              <tr key={row.id} className="border-b border-border last:border-0 hover:bg-[#F4F5F7]">
+              <tr key={row.id} className="border-b border-border last:border-0 hover:bg-[var(--secondary)]">
                 {/* 티커 + 검색 콤보 */}
                 <td className="px-4 py-2">
                   <div className="relative" onClick={(e) => e.stopPropagation()}>
@@ -263,7 +263,7 @@ export function HoldingsEditor({ initialHoldings, initialCashKrw, initialCashUsd
                     {/* 검색 드롭다운 — fixed로 렌더링해서 overflow 클리핑 우회 */}
                     {searchRowId === row.id && (searchHits.length > 0 || searching) && dropdownPos && (
                       <div
-                        className="fixed z-50 w-64 border border-border bg-card shadow-lg"
+                        className="fixed z-50 w-64 border border-border bg-card"
                         style={{ top: dropdownPos.top, left: dropdownPos.left }}
                         onClick={(e) => e.stopPropagation()}
                       >
@@ -275,7 +275,7 @@ export function HoldingsEditor({ initialHoldings, initialCashKrw, initialCashUsd
                             key={hit.ticker}
                             type="button"
                             onClick={() => selectSearchHit(row.id, hit)}
-                            className="flex w-full flex-col px-3 py-2 text-left hover:bg-[#F4F5F7]"
+                            className="flex w-full flex-col px-3 py-2 text-left hover:bg-[var(--secondary)]"
                           >
                             <span className="font-data text-xs text-foreground">{hit.ticker}</span>
                             <span className="text-xs text-muted-foreground">{hit.name} · {hit.exchange}</span>

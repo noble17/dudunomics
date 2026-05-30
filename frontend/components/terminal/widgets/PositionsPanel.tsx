@@ -70,7 +70,7 @@ export function PositionsPanel({ onTickerSelect, selectedTicker }: Props) {
         {toasts.map((t) => (
           <div
             key={t.id}
-            className={`px-3 py-2 text-[12px] font-data shadow-lg border ${
+            className={`px-3 py-2 text-[12px] font-data border ${
               t.isError
                 ? "bg-[var(--color-bg-secondary)] border-red-500 text-red-400"
                 : "bg-[var(--color-bg-secondary)] border-[var(--color-primary)] text-[var(--color-text-primary)]"
@@ -92,7 +92,7 @@ export function PositionsPanel({ onTickerSelect, selectedTicker }: Props) {
         {toasts.map((t) => (
           <div
             key={t.id}
-            className={`px-3 py-2 text-[12px] font-data shadow-lg border ${
+            className={`px-3 py-2 text-[12px] font-data border ${
               t.isError
                 ? "bg-[var(--color-bg-secondary)] border-red-500 text-red-400"
                 : "bg-[var(--color-bg-secondary)] border-[var(--color-primary)] text-[var(--color-text-primary)]"

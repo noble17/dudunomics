@@ -56,7 +56,7 @@ function HoldingsTable({ rows, usdkrw }: { rows: PortfolioRow[]; usdkrw: number 
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
-        <thead className="border-b border-border bg-[#F9FAFC]">
+        <thead className="border-b border-border bg-[var(--card)]">
           <tr>
             {["종목명", "시장", "섹터", "보유", "평균단가", "현재가", "매입액", "평가액", "평가손익", "수익률"].map((h) => (
               <th
@@ -80,7 +80,7 @@ function HoldingsTable({ rows, usdkrw }: { rows: PortfolioRow[]; usdkrw: number 
             const market = inferMarket(row.ticker);
 
             return (
-              <tr key={row.ticker} className="border-b border-border last:border-0 hover:bg-[#F4F5F7]">
+              <tr key={row.ticker} className="border-b border-border last:border-0 hover:bg-[var(--secondary)]">
                 {/* 종목명 + 티커 서브텍스트 */}
                 <td className="px-4 py-2">
                   <p className="font-data text-foreground">{row.name || row.ticker}</p>

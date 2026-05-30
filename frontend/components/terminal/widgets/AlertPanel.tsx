@@ -50,7 +50,7 @@ export function AlertPanel() {
       <div className="fixed top-4 right-4 z-50 flex flex-col gap-1.5 pointer-events-none">
         {toasts.map((t) => (
           <div key={t.id}
-            className="bg-[var(--color-bg-secondary)] border border-[var(--color-primary)] px-3 py-2 text-[12px] font-data text-[var(--color-text-primary)] shadow-lg"
+            className="bg-[var(--color-bg-secondary)] border border-[var(--color-primary)] px-3 py-2 text-[12px] font-data text-[var(--color-text-primary)]"
           >
             🔔 {t.message}
           </div>

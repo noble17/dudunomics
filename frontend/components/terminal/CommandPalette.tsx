@@ -28,7 +28,7 @@ export function CommandPalette() {
       onClick={closePalette}
     >
       <div
-        className="w-full max-w-lg bg-[var(--color-bg-secondary)] border border-[var(--color-border)] rounded-sm shadow-xl overflow-hidden"
+        className="w-full max-w-lg bg-[var(--color-bg-secondary)] border border-[var(--color-border)] rounded-sm overflow-hidden"
         onClick={e => e.stopPropagation()}
       >
         <Command className="[&_[cmdk-input]]:w-full [&_[cmdk-input]]:px-4 [&_[cmdk-input]]:py-3 [&_[cmdk-input]]:text-sm [&_[cmdk-input]]:bg-transparent [&_[cmdk-input]]:outline-none [&_[cmdk-input]]:border-b [&_[cmdk-input]]:border-[var(--color-border)] [&_[cmdk-input]]:text-[var(--color-text-primary)]">
