@@ -27,6 +27,9 @@ backtesting==0.3.3
 python-dotenv==1.0.1
 requests==2.32.3
 pyyaml==6.0.2
+selectolax>=0.4.10
+httpx[http2]>=0.28.1
+feedparser>=6.0.12
 
 # 인증
 pyjwt==2.13.0
