@@ -21,7 +21,12 @@ def fresh_db(tmp_path, monkeypatch):
 def client(fresh_db, monkeypatch):
     from fastapi.testclient import TestClient
     from api.main import app
-    # load_dotenv()가 app import 시 실행되므로 import 후에 환경변수를 제거한다
+    monkeypatch.setenv("ALLOW_SIGNUP", "true")
+    monkeypatch.setenv("JWT_SECRET", "test-secret-key-32bytes-for-tests")
     monkeypatch.delenv("BASIC_AUTH_USERNAME", raising=False)
     monkeypatch.delenv("BASIC_AUTH_PASSWORD", raising=False)
-    return TestClient(app)
+    monkeypatch.delenv("LEGACY_USER_EMAIL", raising=False)
+    monkeypatch.delenv("LEGACY_USER_PASSWORD", raising=False)
+    c = TestClient(app)
+    c.post("/api/auth/signup", json={"email": "test@test.com", "password": "password123"})
+    return c

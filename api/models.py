@@ -348,3 +348,9 @@ class RebalancingRow(BaseModel):
 
 class TargetWeightUpdate(BaseModel):
     target_weight: float | None = None
+
+
+class SyncResult(BaseModel):
+    added: int
+    updated: int
+    errors: list[str]

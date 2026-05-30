@@ -2,7 +2,8 @@ import json
 from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, Query
 from core.auth.deps import current_user, CurrentUser
-from api.models import CashUpdate, HoldingIn, HoldingOut, TickerLookupOut, TickerSearchHit, TargetWeightUpdate
+from api.models import CashUpdate, HoldingIn, HoldingOut, TickerLookupOut, TickerSearchHit, TargetWeightUpdate, SyncResult
+from core.prices.kis import fetch_balance_domestic, fetch_balance_overseas
 from core.prices.kis import KISPriceProvider
 import core.repository as repo
 
@@ -87,6 +88,31 @@ def patch_holding(ticker: str, body: TargetWeightUpdate,
     )
     warning = total_target > 100
     return {"ok": True, "total_target_weight": round(total_target, 2), "over_100": warning}
+
+
+@router.post("/sync-from-kis", response_model=SyncResult)
+def sync_from_kis(user: CurrentUser = Depends(current_user)):
+    existing = {h["ticker"] for h in repo.get_holdings(user.id)}
+    added, updated, errors = 0, 0, []
+
+    domestic = fetch_balance_domestic()
+    overseas = fetch_balance_overseas()
+
+    if not domestic and not overseas:
+        errors.append("KIS 인증 실패 또는 잔고 없음")
+        return SyncResult(added=0, updated=0, errors=errors)
+
+    for item in domestic + overseas:
+        try:
+            repo.upsert_holding(user_id=user.id, **item)
+            if item["ticker"] in existing:
+                updated += 1
+            else:
+                added += 1
+        except Exception as e:
+            errors.append(f"{item['ticker']}: {e}")
+
+    return SyncResult(added=added, updated=updated, errors=errors)
 
 
 def _backup_json(user_id: int):

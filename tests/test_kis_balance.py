@@ -114,3 +114,42 @@ class TestFetchBalanceOverseas:
             result = fetch_balance_overseas()
 
         assert result == []
+
+
+class TestSyncEndpoint:
+    def test_upserts_holdings(self, client, monkeypatch):
+        """잔고 mock → holdings에 upsert 후 added/updated 카운트 확인."""
+        domestic = [
+            {"ticker": "005930.KS", "name": "삼성전자", "quantity": 10.0,
+             "avg_price": 70000.0, "currency": "KRW", "market": "KRX"},
+        ]
+        overseas = [
+            {"ticker": "AAPL", "name": "Apple Inc", "quantity": 5.0,
+             "avg_price": 185.0, "currency": "USD", "market": "NASDAQ"},
+        ]
+        monkeypatch.setattr("api.routers.holdings.fetch_balance_domestic", lambda: domestic)
+        monkeypatch.setattr("api.routers.holdings.fetch_balance_overseas", lambda: overseas)
+
+        res = client.post("/api/holdings/sync-from-kis")
+        assert res.status_code == 200
+        body = res.json()
+        assert body["added"] == 2
+        assert body["updated"] == 0
+        assert body["errors"] == []
+
+        holdings = client.get("/api/holdings").json()
+        tickers = {h["ticker"] for h in holdings}
+        assert "005930.KS" in tickers
+        assert "AAPL" in tickers
+
+    def test_no_token_returns_error(self, client, monkeypatch):
+        """잔고 함수가 빈 리스트 반환 시 errors 포함 200 응답."""
+        monkeypatch.setattr("api.routers.holdings.fetch_balance_domestic", lambda: [])
+        monkeypatch.setattr("api.routers.holdings.fetch_balance_overseas", lambda: [])
+
+        res = client.post("/api/holdings/sync-from-kis")
+        assert res.status_code == 200
+        body = res.json()
+        assert body["added"] == 0
+        assert body["updated"] == 0
+        assert len(body["errors"]) > 0
