@@ -7,16 +7,11 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
-  /* ─── Upbit Brand ─── */
-  --color-brand-primary:        #1375EC;
-  --color-brand-primary-deep:   #0062DF;
-  --color-brand-primary-darker: #003597;
-
   /* ─── Semantic — KR 컨벤션 (빨강=상승, 파랑=하락) ─── */
-  --color-rise:      #DD3C44;
-  --color-fall:      #1375EC;
-  --color-rise-soft: rgba(221, 60, 68, 0.08);
-  --color-fall-soft: rgba(19, 117, 236, 0.08);
+  --color-rise:      #dc2e47;
+  --color-fall:      #3182f6;
+  --color-rise-soft: rgba(219,81,87,0.2);
+  --color-fall-soft: rgba(67,122,223,0.2);
 
   /* Finance (gain/loss 후방호환 — 신규 코드는 rise/fall 사용) */
   --color-gain: var(--rise);
@@ -49,85 +44,97 @@
   --color-chart-5:          var(--chart-5);
 
   /* ─── Fonts ─── */
-  --font-sans:    var(--font-roboto);
-  --font-heading: var(--font-roboto);
+  --font-sans:    var(--font-noto-sans-kr);
+  --font-heading: var(--font-noto-sans-kr);
   --font-mono:    var(--font-roboto-mono);
 
   /* ─── Border Radius ─── */
-  --radius:    4px;
-  --radius-sm: 4px;
-  --radius-md: 4px;
-  --radius-lg: 4px;
-  --radius-xl: 4px;
+  --radius:    8px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 8px;
+  --radius-xl: 8px;
 }
 
 :root {
-  /* ─── Upbit 라이트 팔레트 → shadcn semantic 변수 ─── */
-  --background:           #E9ECF1;
-  --foreground:           #333333;
-  --card:                 #FFFFFF;
-  --card-foreground:      #1A2434;
-  --popover:              #FFFFFF;
-  --popover-foreground:   #1A2434;
-  --primary:              #0062DF;
-  --primary-foreground:   #FFFFFF;
-  --secondary:            #EDEEF1;
-  --secondary-foreground: #1A2434;
-  --muted:                #F4F5F7;
-  --muted-foreground:     #666666;
-  --accent:               #1375EC;
-  --accent-foreground:    #FFFFFF;
-  --destructive:          #DD3C44;
-  --border:               #EDEEF1;
-  --input:                #BEC1C6;
-  --ring:                 #1375EC;
+  /* ─── Toss 다크 팔레트 → shadcn semantic 변수 ─── */
+  --background:           rgb(23,23,28);
+  --foreground:           rgba(242,246,255,0.9);
+  --card:                 #101013;
+  --card-foreground:      rgba(242,246,255,0.9);
+  --popover:              #202025;
+  --popover-foreground:   rgba(242,246,255,0.9);
+  --primary:              #3182f6;
+  --primary-foreground:   #ffffff;
+  --secondary:            rgb(28,28,33);
+  --secondary-foreground: rgba(253,253,254,0.89);
+  --muted:                rgb(28,28,33);
+  --muted-foreground:     rgba(242,242,255,0.47);
+  --accent:               rgb(28,28,33);
+  --accent-foreground:    rgba(242,246,255,0.9);
+  --destructive:          #dc2e47;
+  --border:               rgba(214,224,239,0.09);
+  --input:                rgba(214,224,239,0.09);
+  --ring:                 #3182f6;
 
-  /* ─── Upbit 시맨틱 ─── */
-  --rise:      #DD3C44;
-  --fall:      #1375EC;
-  --rise-soft: rgba(221, 60, 68, 0.08);
-  --fall-soft: rgba(19, 117, 236, 0.08);
-  --error:     #DD3C44;
+  /* ─── Toss KR 시맨틱 ─── */
+  --rise:      #dc2e47;
+  --fall:      #3182f6;
+  --rise-soft: rgba(219,81,87,0.2);
+  --fall-soft: rgba(67,122,223,0.2);
+  --error:     #dc2e47;
 
   /* Finance 후방호환 */
   --gain: var(--rise);
   --loss: var(--fall);
 
-  /* ─── Upbit 차트 팔레트 ─── */
-  --chart-1: #1375EC;
-  --chart-2: #DD3C44;
-  --chart-3: #003597;
-  --chart-4: #666666;
-  --chart-5: #BEC1C6;
+  /* ─── 차트 팔레트 ─── */
+  --chart-1: #3182f6;
+  --chart-2: #dc2e47;
+  --chart-3: #4391ff;
+  --chart-4: rgba(242,242,255,0.47);
+  --chart-5: rgba(214,224,239,0.4);
 
-  /* ─── Upbit 서피스 ─── */
-  --surface-body:         #E9ECF1;
-  --surface-card:         #FFFFFF;
-  --surface-table-header: #F9FAFC;
-  --surface-table-alt:    #F4F5F7;
-  --surface-neutral:      #EDEEF1;
+  /* ─── 터미널 전용 서피스 변수 (--color-bg-* 참조 컴포넌트 호환) ─── */
+  --color-bg-primary:    #101013;
+  --color-bg-secondary:  rgb(23,23,28);
+  --color-bg-tertiary:   rgb(28,28,33);
+  --color-text-primary:  rgba(242,246,255,0.9);
+  --color-text-secondary: rgba(253,253,254,0.89);
+  --color-text-muted:    rgba(242,242,255,0.47);
+  --color-connected:     #3182f6;
+  --color-placeholder:   rgba(214,224,239,0.2);
+  --color-primary-dim:   #2562b9;
+
+  /* ─── 서피스 직접 변수 ─── */
+  --surface-body:         rgb(23,23,28);
+  --surface-card:         #101013;
+  --surface-table-header: rgb(28,28,33);
+  --surface-table-alt:    rgb(28,28,33);
+  --surface-neutral:      #202025;
 
   /* ─── Border ─── */
-  --border-line:   #EDEEF1;
-  --border-strong: #BEC1C6;
+  --border-line:   rgba(214,224,239,0.09);
+  --border-strong: rgba(214,224,239,0.2);
 
   /* ─── Text ─── */
-  --text-primary:  #1A2434;
-  --text-body:     #333333;
-  --text-muted:    #666666;
-  --text-subtle:   #565D6A;
-  --text-disabled: #8E929B;
+  --text-primary:  rgba(242,246,255,0.9);
+  --text-body:     rgba(253,253,254,0.89);
+  --text-muted:    rgba(242,242,255,0.47);
+  --text-subtle:   rgba(242,242,255,0.47);
+  --text-disabled: rgba(214,224,239,0.3);
 }
 
 @layer base {
   *, *::before, *::after {
     @apply border-border outline-ring/50;
+    box-shadow: none !important;
   }
 
   body {
     @apply bg-background text-foreground;
-    font-family: var(--font-roboto), var(--font-noto-sans-kr), ui-sans-serif, system-ui, sans-serif;
-    font-size: 14px;
+    font-family: "Toss Product Sans", Tossface, -apple-system, system-ui, var(--font-noto-sans-kr), "Noto Sans KR", "Segoe UI", sans-serif;
+    font-size: 16px;
     line-height: 1.5;
     -webkit-font-smoothing: antialiased;
   }
@@ -137,7 +144,7 @@
   }
 
   .font-heading {
-    font-family: var(--font-roboto, 'Roboto', ui-sans-serif);
+    font-family: "Toss Product Sans", -apple-system, system-ui, var(--font-noto-sans-kr), sans-serif;
     font-weight: 500;
   }
 
@@ -145,8 +152,6 @@
     font-family: var(--font-roboto-mono, 'Roboto Mono', ui-monospace);
     font-feature-settings: "tnum";
   }
-
-  /* Finance 유틸리티 (Tailwind v4 @utility로 이관) */
 
   ::placeholder {
     color: var(--text-disabled);
@@ -156,33 +161,15 @@
   input[type="date"]::-webkit-calendar-picker-indicator {
     opacity: 0.5;
     cursor: pointer;
-    filter: none;
+    filter: invert(1);
   }
 }
 
-@utility text-gain  { color: #DD3C44; }
-@utility text-loss  { color: #1375EC; }
-@utility text-rise  { color: #DD3C44; }
-@utility text-fall  { color: #1375EC; }
-@utility text-error { color: #DD3C44; }
+@utility text-gain  { color: #f5445a; }
+@utility text-loss  { color: #4391ff; }
+@utility text-rise  { color: #f5445a; }
+@utility text-fall  { color: #4391ff; }
+@utility text-error { color: #dc2e47; }
 
-@utility border-t-rise { border-top-color: #DD3C44; }
-@utility border-t-fall { border-top-color: #1375EC; }
-
-/* Bloomberg Terminal 다크 테마 — /terminal 페이지 전용 스코프 */
-.terminal-dark {
-  --color-bg-primary:    #0a0a0a;
-  --color-bg-secondary:  #0f0f0f;
-  --color-bg-tertiary:   #141414;
-  --color-border:        #1a1a1a;
-  --color-border-subtle: #111111;
-  --color-text-primary:  #ffffff;
-  --color-text-secondary: #888888;
-  --color-text-muted:    #444444;
-  --color-primary:       #ff6600;
-  --color-primary-dim:   #cc5200;
-  --color-gain:          #ff4444;
-  --color-loss:          #4488ff;
-  --color-connected:     #44aa44;
-  --color-placeholder:   #333333;
-}
+@utility border-t-rise { border-top-color: #dc2e47; }
+@utility border-t-fall { border-top-color: #3182f6; }
