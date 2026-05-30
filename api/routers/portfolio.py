@@ -1,7 +1,7 @@
 from datetime import datetime
 from fastapi import APIRouter, Depends
 from core.auth.deps import current_user, CurrentUser
-from api.models import PortfolioRow, PortfolioSnapshot, SnapshotHistory, EventIn, EventOut
+from api.models import PortfolioRow, PortfolioSnapshot, SnapshotHistory, EventIn, EventOut, PerformanceOut, BenchmarkStats, PerformanceChartPoint, RebalancingRow
 import core.repository as repo
 from core.fx import get_fx_provider
 from core.prices.kis import KISPriceProvider
@@ -105,6 +105,137 @@ def add_event(body: EventIn, user: CurrentUser = Depends(current_user)):
 def delete_event(event_id: int, user: CurrentUser = Depends(current_user)):
     repo.delete_event(user.id, event_id)
     return {"ok": True}
+
+
+@router.get("/performance", response_model=PerformanceOut)
+def get_performance(
+    period: str = "6m",
+    user: CurrentUser = Depends(current_user),
+):
+    if period not in ("1m", "3m", "6m", "1y", "all"):
+        period = "6m"
+
+    equity_series = repo.get_portfolio_returns(user.id, period)
+    metrics = repo.calc_performance(equity_series)
+
+    benchmark: dict[str, BenchmarkStats] = {}
+    chart: list[PerformanceChartPoint] = []
+
+    try:
+        import yfinance as yf
+        from datetime import date, timedelta
+
+        days = {"1m": 30, "3m": 90, "6m": 180, "1y": 365, "all": 1825}[period]
+        start = (date.today() - timedelta(days=days)).isoformat()
+        end = date.today().isoformat()
+
+        kospi_df = yf.download("^KS11", start=start, end=end, progress=False)["Close"]
+        sp500_df = yf.download("^GSPC", start=start, end=end, progress=False)["Close"]
+
+        def to_cum_return(series) -> dict[str, float]:
+            if series.empty:
+                return {}
+            base = float(series.iloc[0])
+            return {str(d.date()): round((float(v) - base) / base * 100, 2)
+                    for d, v in series.items() if base > 0}
+
+        kospi_map = to_cum_return(kospi_df)
+        sp500_map = to_cum_return(sp500_df)
+
+        port_map: dict[str, float] = {}
+        if equity_series:
+            base = equity_series[0]["equity"]
+            for e in equity_series:
+                if base > 0:
+                    port_map[e["date"]] = round((e["equity"] - base) / base * 100, 2)
+
+        all_dates = sorted(set(port_map) | set(kospi_map) | set(sp500_map))
+        chart = [
+            PerformanceChartPoint(
+                date=d,
+                portfolio=port_map.get(d, 0.0),
+                kospi=kospi_map.get(d, 0.0),
+                sp500=sp500_map.get(d, 0.0),
+            )
+            for d in all_dates
+        ]
+
+        def bench_total(m: dict) -> float:
+            vals = list(m.values())
+            return vals[-1] if vals else 0.0
+
+        benchmark = {
+            "kospi": BenchmarkStats(return_pct=bench_total(kospi_map), correlation=0.0),
+            "sp500": BenchmarkStats(return_pct=bench_total(sp500_map), correlation=0.0),
+        }
+    except Exception:
+        pass
+
+    return PerformanceOut(
+        sharpe=metrics["sharpe"],
+        mdd=metrics["mdd"],
+        total_return=metrics["total_return"],
+        annualized_return=metrics["annualized_return"],
+        benchmark=benchmark,
+        chart=chart,
+    )
+
+
+@router.get("/rebalancing", response_model=list[RebalancingRow])
+def get_rebalancing(user: CurrentUser = Depends(current_user)):
+    holdings = repo.get_holdings(user.id)
+    if not holdings:
+        return []
+
+    tickers = [h["ticker"] for h in holdings]
+    markets = {h["ticker"]: h.get("market") for h in holdings}
+    prices = _price_provider.get_current_prices(tickers, markets=markets)
+    usdkrw = _get_usdkrw()
+
+    total_krw = 0.0
+    mv_map: dict[str, float] = {}
+    for h in holdings:
+        ticker = h["ticker"]
+        if ticker not in prices:
+            continue
+        p = prices[ticker]
+        mv = p.current * h["quantity"]
+        mv_krw = mv if p.currency == "KRW" else mv * usdkrw
+        mv_map[ticker] = mv_krw
+        total_krw += mv_krw
+
+    rows: list[RebalancingRow] = []
+    for h in holdings:
+        ticker = h["ticker"]
+        mv_krw = mv_map.get(ticker, 0.0)
+        current_w = round(mv_krw / total_krw * 100, 2) if total_krw > 0 else 0.0
+        target_w = h.get("target_weight")
+
+        if target_w is None:
+            action = "NO_TARGET"
+            diff = None
+            amount = 0.0
+        else:
+            diff = round(target_w - current_w, 2)
+            amount = abs(diff / 100 * total_krw)
+            if abs(diff) < 0.5:
+                action = "HOLD"
+            elif diff > 0:
+                action = "BUY"
+            else:
+                action = "SELL"
+
+        rows.append(RebalancingRow(
+            ticker=ticker,
+            name=h["name"],
+            current_weight=current_w,
+            target_weight=target_w,
+            diff_weight=diff,
+            action=action,
+            amount_krw=round(amount),
+        ))
+
+    return sorted(rows, key=lambda r: abs(r.diff_weight or 0), reverse=True)
 
 
 def _get_usdkrw() -> float:

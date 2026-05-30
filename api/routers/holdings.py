@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, Query
 from core.auth.deps import current_user, CurrentUser
-from api.models import CashUpdate, HoldingIn, HoldingOut, TickerLookupOut, TickerSearchHit
+from api.models import CashUpdate, HoldingIn, HoldingOut, TickerLookupOut, TickerSearchHit, TargetWeightUpdate
 from core.prices.kis import KISPriceProvider
 import core.repository as repo
 
@@ -71,6 +71,22 @@ def delete_holding(ticker: str, user: CurrentUser = Depends(current_user)):
     repo.delete_holding(user.id, ticker)
     _backup_json(user.id)
     return {"ok": True}
+
+
+@router.patch("/{ticker}")
+def patch_holding(ticker: str, body: TargetWeightUpdate,
+                  user: CurrentUser = Depends(current_user)):
+    holdings = repo.get_holdings(user.id)
+    if not any(h["ticker"] == ticker for h in holdings):
+        raise HTTPException(status_code=404, detail="보유 종목을 찾을 수 없습니다.")
+    repo.set_holding_target_weight(user.id, ticker, body.target_weight)
+
+    updated = repo.get_holdings(user.id)
+    total_target = sum(
+        h.get("target_weight") or 0 for h in updated if h.get("target_weight") is not None
+    )
+    warning = total_target > 100
+    return {"ok": True, "total_target_weight": round(total_target, 2), "over_100": warning}
 
 
 def _backup_json(user_id: int):
