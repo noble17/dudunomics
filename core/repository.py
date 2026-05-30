@@ -206,6 +206,22 @@ def _init_schema(engine):
         triggered_at    TIMESTAMP DEFAULT current_timestamp,
         read            BOOLEAN DEFAULT FALSE
     );
+
+    CREATE SEQUENCE IF NOT EXISTS trades_id_seq START 1;
+    CREATE TABLE IF NOT EXISTS trades (
+        id          INTEGER DEFAULT nextval('trades_id_seq') PRIMARY KEY,
+        user_id     INTEGER NOT NULL,
+        ticker      VARCHAR NOT NULL,
+        market      VARCHAR,
+        trade_type  VARCHAR NOT NULL,
+        quantity    DOUBLE NOT NULL,
+        price       DOUBLE NOT NULL,
+        currency    VARCHAR NOT NULL,
+        traded_at   VARCHAR NOT NULL,
+        fee         DOUBLE DEFAULT 0,
+        note        TEXT,
+        created_at  TIMESTAMP DEFAULT current_timestamp
+    );
     """
     with engine.connect() as conn:
         for stmt in ddl.strip().split(";"):
@@ -327,6 +343,27 @@ def _run_migrations(conn):
         conn.execute(text(
             "UPDATE portfolio_events SET user_id = 1 WHERE user_id IS NULL"
         ))
+
+    # holdings: target_weight 컬럼 추가
+    if not _has_column(conn, "holdings", "target_weight"):
+        conn.execute(text(
+            "ALTER TABLE holdings ADD COLUMN target_weight DOUBLE DEFAULT NULL"
+        ))
+
+    # trades: 기존 holdings를 Day 0 BUY로 시딩 (최초 1회)
+    seeded = conn.execute(text("SELECT COUNT(*) FROM trades")).fetchone()[0]
+    if seeded == 0:
+        holdings = conn.execute(text(
+            "SELECT user_id, ticker, market, quantity, avg_price, currency FROM holdings"
+        )).fetchall()
+        for h in holdings:
+            if h[3] > 0 and h[4] > 0:
+                conn.execute(text("""
+                    INSERT INTO trades
+                      (user_id, ticker, market, trade_type, quantity, price, currency, traded_at, fee)
+                    VALUES (:uid, :ticker, :market, 'BUY', :qty, :price, :cur, '2024-01-01', 0)
+                """), {"uid": h[0], "ticker": h[1], "market": h[2],
+                       "qty": h[3], "price": h[4], "cur": h[5]})
 
     # LEGACY 사용자 자동 생성
     legacy_email = os.getenv("LEGACY_USER_EMAIL", "")
