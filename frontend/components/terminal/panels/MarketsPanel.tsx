@@ -122,8 +122,8 @@ export function MarketsPanel() {
       <PanelGroup orientation="horizontal" className="flex-1 overflow-hidden">
         {/* 좌: Watchlist */}
         <Panel defaultSize={20} minSize={12} className="flex flex-col overflow-hidden">
-          <div className="px-3 py-1.5 text-[11px] font-data uppercase tracking-widest text-[var(--color-primary)] border-b border-[var(--color-border)] shrink-0">
-            WATCHLIST
+          <div className="px-3 py-1.5 border-b border-[var(--color-border)] shrink-0">
+            <span className="text-sm font-medium text-[var(--color-text-primary)]">관심 종목</span>
           </div>
           <div className="flex-1 overflow-auto p-2">
             <WatchlistWidget />
@@ -141,8 +141,8 @@ export function MarketsPanel() {
 
         {/* 우: Top News */}
         <Panel defaultSize={30} minSize={12} className="flex flex-col overflow-hidden">
-          <div className="px-3 py-1.5 text-[11px] font-data uppercase tracking-widest text-[var(--color-primary)] border-b border-[var(--color-border)] shrink-0">
-            TOP NEWS
+          <div className="px-3 py-1.5 border-b border-[var(--color-border)] shrink-0">
+            <span className="text-sm font-medium text-[var(--color-text-primary)]">뉴스</span>
           </div>
           <div className="flex-1 overflow-auto">
             <NewsPanel ticker={chartTicker} />
@@ -154,8 +154,8 @@ export function MarketsPanel() {
       <div className="h-[72px] shrink-0 flex border-t border-[var(--color-border)] bg-[var(--color-bg-secondary)]">
         {/* 좌: MY PORTFOLIO */}
         <div className="flex-1 flex flex-col justify-center px-4 border-r border-[var(--color-border)]">
-          <p className="text-[11px] font-data uppercase tracking-widest text-[var(--color-primary)] mb-1">
-            MY PORTFOLIO
+          <p className="text-xs font-medium text-[var(--color-text-muted)] mb-1">
+            내 포트폴리오
           </p>
           {snapshot ? (
             <div className="flex items-baseline gap-4">

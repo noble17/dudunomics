@@ -179,7 +179,7 @@ export function ToolsPanel() {
             key={tab.id}
             onClick={() => setActive(tab.id)}
             className={[
-              "px-4 py-2 text-[11px] font-data uppercase tracking-widest transition-colors",
+              "px-4 py-2 text-sm font-medium transition-colors",
               active === tab.id
                 ? "text-[var(--color-primary)] border-b-2 border-[var(--color-primary)] -mb-px"
                 : "text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]",
@@ -195,19 +195,19 @@ export function ToolsPanel() {
         {active === "backtest" && <BacktestForm />}
         {active === "position" && (
           <div className="max-w-sm">
-            <p className="text-[11px] font-data uppercase tracking-widest text-[var(--color-text-secondary)] mb-3">포지션 사이즈 계산기</p>
+            <p className="text-sm font-medium text-[var(--color-text-secondary)] mb-3">포지션 사이즈 계산기</p>
             <PositionCalc />
           </div>
         )}
         {active === "fx" && (
           <div className="max-w-sm">
-            <p className="text-[11px] font-data uppercase tracking-widest text-[var(--color-text-secondary)] mb-3">환율 변환기</p>
+            <p className="text-sm font-medium text-[var(--color-text-secondary)] mb-3">환율 변환기</p>
             <FxCalc />
           </div>
         )}
         {active === "return" && (
           <div className="max-w-sm">
-            <p className="text-[11px] font-data uppercase tracking-widest text-[var(--color-text-secondary)] mb-3">수익률 계산기</p>
+            <p className="text-sm font-medium text-[var(--color-text-secondary)] mb-3">수익률 계산기</p>
             <ReturnCalc />
           </div>
         )}

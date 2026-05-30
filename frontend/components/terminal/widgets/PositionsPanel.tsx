@@ -54,8 +54,8 @@ export function PositionsPanel({ onTickerSelect, selectedTicker }: Props) {
   );
   if (!snapshot?.rows.length) return (
     <div className="flex flex-col h-full overflow-hidden">
-      <div className="px-3 py-1.5 text-[11px] font-data uppercase tracking-widest text-[var(--color-primary)] border-b border-[var(--color-border)] shrink-0 flex items-center justify-between">
-        <span>POSITIONS</span>
+      <div className="px-3 py-1.5 border-b border-[var(--color-border)] shrink-0 flex items-center justify-between">
+        <span className="text-sm font-medium text-[var(--color-text-primary)]">보유 종목</span>
         <button
           onClick={handleSync}
           disabled={syncing}
@@ -104,8 +104,8 @@ export function PositionsPanel({ onTickerSelect, selectedTicker }: Props) {
       </div>
 
       {/* 헤더 */}
-      <div className="px-3 py-1.5 text-[11px] font-data uppercase tracking-widest text-[var(--color-primary)] border-b border-[var(--color-border)] shrink-0 flex items-center justify-between">
-        <span>POSITIONS</span>
+      <div className="px-3 py-1.5 border-b border-[var(--color-border)] shrink-0 flex items-center justify-between">
+        <span className="text-sm font-medium text-[var(--color-text-primary)]">보유 종목</span>
         <button
           onClick={handleSync}
           disabled={syncing}

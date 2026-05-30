@@ -59,14 +59,14 @@ export function AlertPanel() {
 
       <div className="flex flex-col h-full overflow-hidden text-[12px] font-data">
         {/* 헤더 */}
-        <div className="px-3 py-1.5 text-[11px] uppercase tracking-widest text-[var(--color-primary)] border-b border-[var(--color-border)] shrink-0">
-          ALERTS
+        <div className="px-3 py-1.5 border-b border-[var(--color-border)] shrink-0">
+          <span className="text-sm font-medium text-[var(--color-text-primary)]">알림</span>
         </div>
 
         <div className="flex-1 overflow-auto p-3 flex flex-col gap-4">
           {/* 추가 폼 */}
           <div className="flex flex-col gap-1.5">
-            <p className="text-[11px] uppercase tracking-widest text-[var(--color-text-secondary)]">NEW CONDITION</p>
+            <p className="text-xs font-medium text-[var(--color-text-secondary)]">새 조건</p>
             <div className="flex gap-1">
               <input
                 value={ticker}
@@ -96,7 +96,7 @@ export function AlertPanel() {
             <button
               onClick={handleAdd}
               disabled={adding || !ticker.trim() || (selectedOpt.needsValue && (!condValue.trim() || isNaN(parseFloat(condValue))))}
-              className="w-full py-1 border border-[var(--color-primary)] text-[var(--color-primary)] text-[11px] uppercase tracking-widest hover:bg-[var(--color-primary)]/10 disabled:opacity-40 transition-colors"
+              className="w-full py-1 border border-[var(--color-primary)] text-[var(--color-primary)] text-xs font-medium hover:bg-[var(--color-primary)]/10 disabled:opacity-40 transition-colors"
             >
               {adding ? "추가 중…" : "+ 추가"}
             </button>
@@ -104,7 +104,7 @@ export function AlertPanel() {
 
           {/* 활성 조건 */}
           <div>
-            <p className="text-[11px] uppercase tracking-widest text-[var(--color-text-secondary)] mb-1.5">ACTIVE</p>
+            <p className="text-xs font-medium text-[var(--color-text-secondary)] mb-1.5">활성</p>
             {conditions.length === 0 ? (
               <p className="text-[var(--color-text-muted)]">조건 없음</p>
             ) : (
@@ -132,7 +132,7 @@ export function AlertPanel() {
 
           {/* 알림 히스토리 */}
           <div>
-            <p className="text-[11px] uppercase tracking-widest text-[var(--color-text-secondary)] mb-1.5">HISTORY</p>
+            <p className="text-xs font-medium text-[var(--color-text-secondary)] mb-1.5">히스토리</p>
             {history.length === 0 ? (
               <p className="text-[var(--color-text-muted)]">내역 없음</p>
             ) : (

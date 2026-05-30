@@ -34,7 +34,7 @@ function AddTradeModal({ onClose, onSave }: { onClose: () => void; onSave: () =>
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
       <div className="bg-[var(--color-bg-secondary)] border border-[var(--color-border)] p-4 w-72 font-data">
-        <div className="text-[13px] uppercase tracking-widest text-[var(--color-primary)] mb-3">거래 추가</div>
+        <div className="text-sm font-medium text-[var(--color-text-primary)] mb-3">거래 추가</div>
         {error && <div className="text-error text-[12px] mb-2">{error}</div>}
         <div className="space-y-2">
           <div>
@@ -113,8 +113,8 @@ export function TradeLogPanel({ filterTicker }: Props) {
   return (
     <div className="flex flex-col h-full overflow-hidden">
       <div className="flex items-center justify-between px-3 py-1.5 border-b border-[var(--color-border)] shrink-0">
-        <span className="text-[11px] font-data uppercase tracking-widest text-[var(--color-primary)]">
-          TRADE LOG{filterTicker ? ` — ${filterTicker}` : ""}
+        <span className="text-sm font-medium text-[var(--color-text-primary)]">
+          거래 내역{filterTicker ? ` — ${filterTicker}` : ""}
         </span>
         <button onClick={() => setShowModal(true)}
           className="text-[11px] font-data border border-[var(--color-primary)] text-[var(--color-primary)] px-2 py-0.5 hover:bg-[var(--color-primary)] hover:text-black transition-colors">

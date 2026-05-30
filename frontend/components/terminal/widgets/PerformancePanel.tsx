@@ -47,7 +47,7 @@ export function PerformancePanel() {
   return (
     <div className="flex flex-col h-full overflow-hidden">
       <div className="flex items-center justify-between px-3 py-1.5 border-b border-[var(--color-border)] shrink-0">
-        <span className="text-[11px] font-data uppercase tracking-widest text-[var(--color-primary)]">PERFORMANCE</span>
+        <span className="text-sm font-medium text-[var(--color-text-primary)]">성과</span>
         <div className="flex gap-2">
           {PERIODS.map(p => (
             <button

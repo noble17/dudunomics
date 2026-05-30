@@ -25,8 +25,8 @@ export function RebalancingPanel() {
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      <div className="px-3 py-1.5 text-[11px] font-data uppercase tracking-widest text-[#ff9500] border-b border-[var(--color-border)] shrink-0">
-        REBALANCING
+      <div className="px-3 py-1.5 border-b border-[var(--color-border)] shrink-0">
+        <span className="text-sm font-medium text-[var(--color-text-primary)]">리밸런싱</span>
       </div>
       <div className="flex-1 overflow-auto px-3 py-1">
         {!rows?.length && (
