@@ -43,6 +43,11 @@ export const holdingsApi = {
   },
   search: (q: string) =>
     request<TickerSearchHit[]>(`/api/holdings/search?q=${encodeURIComponent(q)}`),
+  syncFromKis: () =>
+    request<{ added: number; updated: number; errors: string[] }>(
+      "/api/holdings/sync-from-kis",
+      { method: "POST" }
+    ),
 };
 
 export const portfolioApi = {
