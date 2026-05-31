@@ -50,7 +50,7 @@ def fetch_naver_quarterly(ticker: str) -> list[dict]:
         log.debug("naver quarterly 실패 (%s): %s", ticker, e)
         return []
 
-    finance_info = data.get("financeInfo", {})
+    finance_info = data.get("financeInfo") or {}
     title_list = finance_info.get("trTitleList", [])
     row_list = finance_info.get("rowList", [])
     confirmed_keys = [t["key"] for t in title_list if t.get("isConsensus") == "N"]
