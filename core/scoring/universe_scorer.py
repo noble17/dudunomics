@@ -61,7 +61,9 @@ def run_batch(universe: str = "sp500") -> dict:
     # 3. 확장 펀더멘탈 페치
     log.info("[Universe Scorer] 펀더멘탈 페치 중...")
     bs.update(universe, "펀더멘탈 페치 중 (가장 오래 걸림)", 0)
-    snaps: list[ExtendedSnapshot] = fetch_extended(tickers, max_workers=1)
+    def _progress(done: int, total: int) -> None:
+        bs.update(universe, f"펀더멘탈 페치 중 ({done}/{total})", done)
+    snaps: list[ExtendedSnapshot] = fetch_extended(tickers, max_workers=1, progress_callback=_progress)
     snap_map: dict[str, ExtendedSnapshot] = {s.ticker: s for s in snaps}
     bs.update(universe, "팩터 계산 중", len(snaps))
 
@@ -76,23 +78,15 @@ def run_batch(universe: str = "sp500") -> dict:
     eps_factor = ForwardEpsMomentumFactor()
     raw_eps: pd.Series = eps_factor.compute(tickers, today)
 
-    # 4c. Valuation raw (PER, PBR — Winsorize + Z-score는 percentile 전에 처리)
-    raw_fwd_pe = pd.Series({t: snap_map[t].forward_pe for t in tickers if t in snap_map})
-    raw_pbr    = pd.Series({t: snap_map[t].pbr       for t in tickers if t in snap_map})
+    # 4c. Valuation raw (EV/EBITDA + PER — Winsorize + Z-score)
+    raw_fwd_pe    = pd.Series({t: snap_map[t].forward_pe for t in tickers if t in snap_map})
+    raw_ev_ebitda = pd.Series({t: snap_map[t].ev_ebitda  for t in tickers if t in snap_map})
 
-    from core.factors.valuation import _winsorize_series, _combined_value_zscore
-    pe_clean  = raw_fwd_pe.dropna()
-    pbr_clean = raw_pbr.dropna()
-    if pe_clean.empty or pbr_clean.empty:
-        raw_valuation = pd.Series({t: math.nan for t in tickers})
-    else:
-        w_pe  = _winsorize_series(pe_clean)
-        w_pbr = _winsorize_series(pbr_clean)
-        common = w_pe.index.intersection(w_pbr.index)
-        if common.empty:
-            raw_valuation = pd.Series({t: math.nan for t in tickers})
-        else:
-            raw_valuation = _combined_value_zscore(w_pe[common], w_pbr[common]).reindex(tickers)
+    from core.factors.valuation import compute_valuation_zscore
+    raw_valuation = compute_valuation_zscore(
+        raw_ev_ebitda.dropna(),
+        raw_fwd_pe.dropna(),
+    ).reindex(tickers)
 
     # 4d. Quality
     raw_quality_vals: dict[str, float] = {}
@@ -158,6 +152,13 @@ def run_batch(universe: str = "sp500") -> dict:
             "above_ma200":      bool(above_ma200.get(ticker, False)),
             "cfo_positive":     bool(snap.operating_cashflow and snap.operating_cashflow > 0) if snap else False,
             "company_name":     snap.company_name if snap else None,
+            "raw_ev_ebitda":    snap.ev_ebitda if snap else None,
+            "raw_peg":          snap.peg if snap else None,
+            "raw_fcf_yield":    snap.fcf_yield if snap else None,
+            "raw_eps_momentum": _safe_float(raw_eps.get(ticker)),
+            "negative_book_value": bool(snap.negative_book_value) if snap else False,
+            "sector":           snap.sector if snap else None,
+            "industry":         snap.industry if snap else None,
         })
 
     bs.update(universe, "DB 저장 중", len(tickers))
