@@ -1,11 +1,8 @@
-"""core/factors/valuation.py — 통합 밸류에이션 팩터.
+"""core/factors/valuation.py — EV/EBITDA + PER 통합 밸류에이션 팩터.
 
-Forward PER + PBR을 Winsorizing 후 Z-score 합산.
-낮을수록 저평가이므로 백분위 계산 시 역수 처리(1 - pct).
-
-Winsorizing: 극단 아웃라이어(PER 수천배 기업)가 유니버스 Z-score를
-            왜곡하는 것을 막기 위해 1%·99% 분위수로 강제 클리핑.
-Rank Fallback: std ≈ 0인 엣지 케이스에서 rank 기반 표준화로 전환.
+EV/EBITDA(60%) + Forward PER(40%) Winsorize → Z-score 합산.
+EV/EBITDA 없는 종목은 PER 단독 z-score.
+낮을수록 저평가이므로 백분위 계산 시 ascending=False.
 """
 from __future__ import annotations
 
@@ -13,12 +10,10 @@ import logging
 from datetime import date
 from typing import ClassVar
 
-import numpy as np
 import pandas as pd
 from scipy.stats.mstats import winsorize
 
 from core.factors.base import Factor
-import core.repository as repo
 
 log = logging.getLogger(__name__)
 
@@ -31,41 +26,61 @@ def _winsorize_series(s: pd.Series, limits=(0.01, 0.01)) -> pd.Series:
     return result
 
 
-def _combined_value_zscore(
+def _zscore_series(s: pd.Series) -> pd.Series:
+    """Z-score. std ≈ 0이면 rank 기반 fallback [-1, 1]."""
+    std = s.std()
+    if std < 1e-6:
+        log.warning("Z-score std≈0 — rank fallback 사용")
+        return s.rank(pct=True) * 2 - 1
+    return (s - s.mean()) / std
+
+
+def compute_valuation_zscore(
+    ev_ebitda: pd.Series,
     fwd_pe: pd.Series,
-    pbr: pd.Series,
 ) -> pd.Series:
-    """PER + PBR Winsorize → Z-score → 평균. 낮을수록 저평가."""
-    w_pe = _winsorize_series(fwd_pe)
-    w_pbr = _winsorize_series(pbr)
+    """EV/EBITDA + PER → 통합 밸류에이션 z-score.
 
-    def to_zscore(s: pd.Series) -> pd.Series:
-        std = s.std()
-        if std < 1e-6:
-            # Fallback: rank 기반 표준화 [-1, 1] 범위
-            # std ≈ 0은 모든 종목이 동일 값인 엣지 케이스 (적자 전환 후 PE 일괄 결측 등)
-            log.warning("Z-score std≈0 — rank fallback 사용")
-            r = s.rank(pct=True)
-            return r * 2 - 1
-        return (s - s.mean()) / std
+    EV/EBITDA 있는 종목: 0.6 × EV/EBITDA_z + 0.4 × PER_z
+    EV/EBITDA 없는 종목: PER_z 단독
+    """
+    pe_clean = fwd_pe.dropna()
+    if pe_clean.empty:
+        return pd.Series(dtype=float)
 
-    combined = (to_zscore(w_pe) + to_zscore(w_pbr)) / 2
-    return combined
+    w_pe = _winsorize_series(pe_clean)
+    z_pe = _zscore_series(w_pe)
+
+    ev_clean = ev_ebitda.dropna()
+    if ev_clean.empty:
+        return z_pe.reindex(fwd_pe.index)
+
+    w_ev = _winsorize_series(ev_clean)
+    z_ev = _zscore_series(w_ev)
+
+    common = z_pe.index.intersection(z_ev.index)
+    pe_only = z_pe.index.difference(common)
+
+    combined = 0.6 * z_ev[common] + 0.4 * z_pe[common]
+    result = pd.concat([combined, z_pe[pe_only]])
+    return result.reindex(fwd_pe.index)
 
 
 class ValuationFactor(Factor):
+    """배치 외부 단일 종목 조회용. 배치는 universe_scorer 직접 사용."""
     name: ClassVar[str] = "valuation"
 
     def compute(self, tickers: list[str], as_of: date) -> pd.Series:
         from sqlalchemy import text
+        import core.repository as repo
 
         fwd_pe: dict[str, float] = {}
-        pbr: dict[str, float] = {}
+        ev_ebitda: dict[str, float] = {}
 
         with repo.session() as s:
             for ticker in tickers:
                 row = s.execute(text("""
-                    SELECT raw_fwd_pe, raw_pbr FROM quant_scores
+                    SELECT raw_fwd_pe, raw_ev_ebitda FROM quant_scores
                     WHERE ticker = :t AND universe = 'sp500'
                     ORDER BY as_of DESC LIMIT 1
                 """), {"t": ticker}).fetchone()
@@ -73,13 +88,9 @@ class ValuationFactor(Factor):
                     if row[0] is not None and row[0] > 0:
                         fwd_pe[ticker] = row[0]
                     if row[1] is not None and row[1] > 0:
-                        pbr[ticker] = row[1]
+                        ev_ebitda[ticker] = row[1]
 
-        pe_s = pd.Series(fwd_pe)
-        pbr_s = pd.Series(pbr)
-        common = pe_s.index.intersection(pbr_s.index)
-        if common.empty:
-            return pd.Series({t: float("nan") for t in tickers})
-
-        combined = _combined_value_zscore(pe_s[common], pbr_s[common])
-        return combined.reindex(tickers)
+        return compute_valuation_zscore(
+            pd.Series(ev_ebitda),
+            pd.Series(fwd_pe),
+        ).reindex(tickers)
