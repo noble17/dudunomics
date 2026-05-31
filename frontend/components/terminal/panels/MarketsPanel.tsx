@@ -20,11 +20,11 @@ type TileConfig = {
 const TILES: TileConfig[] = [
   { label: "SPY",     quoteKey: "SPY",  decimals: 2 },
   { label: "QQQ",     quoteKey: "QQQ",  decimals: 2 },
-  { label: "DJI",     quoteKey: null,   decimals: 0 },
-  { label: "VIX",     quoteKey: null,   decimals: 2 },
-  { label: "US10Y",   quoteKey: null,   decimals: 2 },
-  { label: "WTI",     quoteKey: null,   decimals: 2 },
-  { label: "GOLD",    quoteKey: null,   decimals: 0 },
+  { label: "DJI",     quoteKey: "DJI"   as keyof QuotesOut, decimals: 0 },
+  { label: "VIX",     quoteKey: "VIX"   as keyof QuotesOut, decimals: 2 },
+  { label: "US10Y",   quoteKey: "US10Y" as keyof QuotesOut, decimals: 2 },
+  { label: "WTI",     quoteKey: "WTI"   as keyof QuotesOut, decimals: 2 },
+  { label: "GOLD",    quoteKey: "GOLD"  as keyof QuotesOut, decimals: 0 },
   { label: "BTC/USD", quoteKey: "BTC",  decimals: 0 },
 ];
 

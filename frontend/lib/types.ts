@@ -200,6 +200,11 @@ export interface QuotesOut {
   QQQ: QuoteItem | null
   USDKRW: QuoteItem | null
   BTC: QuoteItem | null
+  DJI: QuoteItem | null
+  VIX: QuoteItem | null
+  US10Y: QuoteItem | null
+  WTI: QuoteItem | null
+  GOLD: QuoteItem | null
 }
 
 // ── 지표 ──────────────────────────────────────────────────
