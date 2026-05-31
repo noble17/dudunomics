@@ -9,6 +9,9 @@ import { RadarChart } from "@/components/screener/radar-chart";
 import { FactorBars } from "@/components/screener/factor-bars";
 import { MetricGrid } from "@/components/screener/metric-grid";
 import { NoteForm } from "@/components/screener/note-form";
+import { GrowthChart } from "@/components/screener/growth-chart";
+import { PriceChart } from "@/components/screener/price-chart";
+import type { FinancialsData, PriceChartData } from "@/lib/types";
 
 export default function TickerDetailPage() {
   const { ticker } = useParams<{ ticker: string }>();
@@ -20,6 +23,18 @@ export default function TickerDetailPage() {
   const { data: score, isLoading } = useSWR(
     ticker ? `/api/screener/ticker/${ticker}?universe=${universe}` : null,
     () => screenerApi.ticker(ticker, universe)
+  );
+
+  const { data: financials } = useSWR<FinancialsData>(
+    ticker ? `/api/screener/ticker/${ticker}/financials` : null,
+    () => screenerApi.financials(ticker, universe),
+    { shouldRetryOnError: false }
+  );
+
+  const { data: priceChart } = useSWR<PriceChartData>(
+    ticker ? `/api/screener/ticker/${ticker}/price-chart` : null,
+    () => screenerApi.priceChart(ticker),
+    { shouldRetryOnError: false }
   );
 
   const handleSearch = (e: React.FormEvent) => {
@@ -110,6 +125,8 @@ export default function TickerDetailPage() {
           </div>
         </div>
       )}
+      {financials && <GrowthChart data={financials} />}
+      {priceChart && <PriceChart data={priceChart} />}
     </div>
   );
 }

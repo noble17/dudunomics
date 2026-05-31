@@ -9,6 +9,7 @@ import type {
   NewsOut, AISummaryOut, ChatMessage,
   AlertCondition, AlertEvent, AlertIn,
   TradeIn, TradeOut, PerformanceData, RebalancingRow,
+  FinancialsData, PriceChartData,
 } from "./types";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -83,6 +84,10 @@ export const screenerApi = {
       method: "PUT",
       body: JSON.stringify(body),
     }),
+  financials: (ticker: string, universe = "sp500") =>
+    request<FinancialsData>(`/api/screener/ticker/${ticker}/financials?universe=${universe}`),
+  priceChart: (ticker: string) =>
+    request<PriceChartData>(`/api/screener/ticker/${ticker}/price-chart`),
 };
 
 export const workspaceApi = {

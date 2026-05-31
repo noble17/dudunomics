@@ -347,3 +347,53 @@ export interface RebalancingRow {
   action: "BUY" | "SELL" | "HOLD" | "NO_TARGET";
   amount_krw: number;
 }
+
+export interface FinancialDataPoint {
+  year: string;
+  period_end: string;
+  value: number;
+  is_estimate: boolean;
+}
+
+export interface FinancialMetrics {
+  market_cap_m: number | null;
+  trailing_pe: number | null;
+  forward_pe: number | null;
+  peg: number | null;
+  price_to_sales: number | null;
+}
+
+export interface FinancialsData {
+  revenue: FinancialDataPoint[];
+  eps: FinancialDataPoint[];
+  roe: FinancialDataPoint[];
+  latest_report_date: string | null;
+  metrics: FinancialMetrics;
+}
+
+export interface OhlcvPoint {
+  date: string;
+  close: number;
+}
+
+export interface EmaPoint {
+  date: string;
+  value: number;
+}
+
+export interface QuarterlyEpsPoint {
+  period: string;
+  date: string;
+  eps: number;
+  is_estimate: boolean;
+}
+
+export interface PriceChartData {
+  ohlcv: OhlcvPoint[];
+  ema: {
+    e5: EmaPoint[];
+    e20: EmaPoint[];
+    e60: EmaPoint[];
+  };
+  quarterly_eps: QuarterlyEpsPoint[];
+}
