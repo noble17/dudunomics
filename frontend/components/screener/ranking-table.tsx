@@ -6,9 +6,12 @@ import type { QuantScore, FactorWeights } from "@/lib/types";
 interface Props {
   scores: QuantScore[];
   weights: FactorWeights;
-  hardFilters: { ma200: boolean; cfo: boolean };
+  hardFilters: { ma200: boolean };
+  sectorFilter: string;
+  industryFilter: string;
   topN?: number;
   universe?: string;
+  isBatchRunning?: boolean;
 }
 
 function normalizeWeights(w: FactorWeights): FactorWeights {
@@ -38,13 +41,14 @@ function pctCell(val: number | null) {
   return <td className={`px-2 py-1.5 text-right text-xs font-medium ${color}`}>{val.toFixed(2)}</td>;
 }
 
-export function RankingTable({ scores, weights, hardFilters, topN = 50, universe = "sp500" }: Props) {
+export function RankingTable({ scores, weights, hardFilters, sectorFilter, industryFilter, topN = 50, universe = "sp500", isBatchRunning = false }: Props) {
   const router = useRouter();
   const norm = normalizeWeights(weights);
 
   const filtered = scores.filter((s) => {
     if (hardFilters.ma200 && s.above_ma200 === false) return false;
-    if (hardFilters.cfo  && s.cfo_positive === false) return false;
+    if (sectorFilter && s.sector !== sectorFilter) return false;
+    if (industryFilter && s.industry !== industryFilter) return false;
     return true;
   });
 
@@ -54,7 +58,15 @@ export function RankingTable({ scores, weights, hardFilters, topN = 50, universe
     .slice(0, topN);
 
   if (ranked.length === 0) {
-    return <p className="text-muted-foreground text-sm py-8 text-center">데이터 없음. /api/screener/refresh 실행 필요.</p>;
+    if (isBatchRunning) {
+      return (
+        <div className="py-12 text-center space-y-2">
+          <div className="inline-block w-6 h-6 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+          <p className="text-muted-foreground text-sm">데이터 수집 중... 완료 후 자동으로 표시됩니다.</p>
+        </div>
+      );
+    }
+    return <p className="text-muted-foreground text-sm py-8 text-center">데이터 없음. 오른쪽 상단 &quot;데이터 갱신&quot; 버튼으로 배치를 실행하세요.</p>;
   }
 
   return (
@@ -64,6 +76,7 @@ export function RankingTable({ scores, weights, hardFilters, topN = 50, universe
           <tr className="border-b-2 border-border bg-muted/50">
             <th className="px-2 py-2 text-left text-xs text-muted-foreground w-8">#</th>
             <th className="px-2 py-2 text-left text-xs text-muted-foreground">티커</th>
+            <th className="px-2 py-2 text-left text-xs text-muted-foreground">종목명</th>
             <th className="px-2 py-2 text-right text-xs text-muted-foreground">종합</th>
             <th className="px-2 py-2 text-right text-xs text-muted-foreground">모멘텀</th>
             <th className="px-2 py-2 text-right text-xs text-muted-foreground">밸류</th>
@@ -81,6 +94,7 @@ export function RankingTable({ scores, weights, hardFilters, topN = 50, universe
             >
               <td className="px-2 py-1.5 text-xs text-muted-foreground">{i + 1}</td>
               <td className="px-2 py-1.5 font-bold text-blue-700">{s.ticker}</td>
+              <td className="px-2 py-1.5 text-xs text-muted-foreground max-w-[140px] truncate">{s.company_name ?? "—"}</td>
               <td className="px-2 py-1.5 text-right">
                 <span className="bg-blue-100 text-blue-800 rounded px-1.5 py-0.5 text-xs font-bold">
                   {s.composite.toFixed(2)}
