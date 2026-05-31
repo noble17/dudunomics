@@ -46,6 +46,7 @@ class ExtendedSnapshot:
 
 
 def _compute_fcf_yield(ocf: float | None, capex: float | None, market_cap_m: float | None) -> float | None:
+    # ocf, capex은 달러 단위 / market_cap_m은 백만 달러 단위
     if ocf is None or capex is None or not market_cap_m or market_cap_m <= 0:
         return None
     return (ocf - capex) / (market_cap_m * 1_000_000)

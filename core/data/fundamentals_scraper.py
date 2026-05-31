@@ -156,8 +156,16 @@ def _fetch_finviz(ticker: str) -> FundamentalsSnapshot:
         snap.ev_ebitda = _parse_num(kv.get("EV/EBITDA", ""))
         snap.peg = _parse_num(kv.get("PEG", ""))
         snap.market_cap_m = _parse_market_cap_m(kv.get("Market Cap", ""))
-        snap.sector = kv.get("Sector") or None
-        snap.industry = kv.get("Industry") or None
+        # sector/industry: snapshot-table2 kv 우선, 없으면 상단 div 탐색
+        if kv.get("Sector"):
+            snap.sector = kv.get("Sector") or None
+            snap.industry = kv.get("Industry") or None
+        else:
+            sector_div = tree.css_first('div[class*="space-x-0.5"][class*="overflow-hidden"]')
+            if sector_div:
+                tab_links = [a.text(strip=True) for a in sector_div.css("a.tab-link") if a.text(strip=True)]
+                snap.sector = tab_links[0] if len(tab_links) >= 1 else None
+                snap.industry = tab_links[1] if len(tab_links) >= 2 else None
         # short name from h2 heading (finviz page structure)
         title_el = tree.css_first("h2")
         if title_el:
