@@ -1228,18 +1228,18 @@ def get_quarterly_bulk(tickers: list[str], n: int = 8) -> dict[str, list[dict]]:
     if not tickers:
         return {}
     ticker_set = set(tickers)
+    result: dict[str, list[dict]] = {}
     with session() as s:
         rows = s.execute(text("""
             SELECT ticker, period, eps, roe, debt_ratio, revenue, op_income, source,
                    ROW_NUMBER() OVER (PARTITION BY ticker ORDER BY period DESC) AS rn
             FROM quarterly_financials
         """)).mappings().all()
-    result: dict[str, list[dict]] = {}
-    for row in rows:
-        if row["ticker"] not in ticker_set:
-            continue
-        if row["rn"] > n:
-            continue
-        d = {k: v for k, v in row.items() if k != "rn"}
-        result.setdefault(d["ticker"], []).append(d)
+        for row in rows:
+            if row["ticker"] not in ticker_set:
+                continue
+            if row["rn"] > n:
+                continue
+            d = {k: v for k, v in row.items() if k != "rn"}
+            result.setdefault(d["ticker"], []).append(d)
     return result
