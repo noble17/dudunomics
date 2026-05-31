@@ -7,8 +7,14 @@ interface Props {
   onUniverseChange: (u: string) => void;
   weights: FactorWeights;
   onWeightsChange: (w: FactorWeights) => void;
-  hardFilters: { ma200: boolean; cfo: boolean };
-  onHardFiltersChange: (f: { ma200: boolean; cfo: boolean }) => void;
+  hardFilters: { ma200: boolean };
+  onHardFiltersChange: (f: { ma200: boolean }) => void;
+  sectorFilter: string;
+  onSectorChange: (s: string) => void;
+  industryFilter: string;
+  onIndustryChange: (i: string) => void;
+  sectors: string[];
+  industries: string[];
   totalCount: number;
   filteredCount: number;
 }
@@ -33,6 +39,9 @@ export function FactorSidebar({
   universe, onUniverseChange,
   weights, onWeightsChange,
   hardFilters, onHardFiltersChange,
+  sectorFilter, onSectorChange,
+  industryFilter, onIndustryChange,
+  sectors, industries,
   totalCount, filteredCount,
 }: Props) {
   const norm = normalizeWeights(weights);
@@ -91,22 +100,40 @@ export function FactorSidebar({
       {/* 하드 필터 */}
       <div>
         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">하드 필터</p>
-        <label className="flex items-center gap-2 text-sm cursor-pointer mb-1">
-          <input
-            type="checkbox"
-            checked={hardFilters.ma200}
-            onChange={(e) => onHardFiltersChange({ ...hardFilters, ma200: e.target.checked })}
-          />
-          200일 MA 하회 제외
-        </label>
         <label className="flex items-center gap-2 text-sm cursor-pointer">
           <input
             type="checkbox"
-            checked={hardFilters.cfo}
-            onChange={(e) => onHardFiltersChange({ ...hardFilters, cfo: e.target.checked })}
+            checked={hardFilters.ma200}
+            onChange={(e) => onHardFiltersChange({ ma200: e.target.checked })}
           />
-          CFO 음수 제외
+          200일 MA 하회 제외
         </label>
+      </div>
+
+      {/* 섹터 / 인더스트리 */}
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1">섹터 / 인더스트리</p>
+        <select
+          value={sectorFilter}
+          onChange={(e) => onSectorChange(e.target.value)}
+          className="w-full rounded border border-border bg-muted px-2 py-1 text-sm mb-2"
+        >
+          <option value="">전체 섹터</option>
+          {sectors.map((s) => (
+            <option key={s} value={s}>{s}</option>
+          ))}
+        </select>
+        <select
+          value={industryFilter}
+          onChange={(e) => onIndustryChange(e.target.value)}
+          disabled={!sectorFilter}
+          className="w-full rounded border border-border bg-muted px-2 py-1 text-sm disabled:opacity-40"
+        >
+          <option value="">전체 인더스트리</option>
+          {industries.map((i) => (
+            <option key={i} value={i}>{i}</option>
+          ))}
+        </select>
       </div>
 
       {/* 결과 요약 */}
