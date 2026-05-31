@@ -239,6 +239,13 @@ def _init_schema(engine):
             "ALTER TABLE backtest_runs ADD COLUMN IF NOT EXISTS cagr DOUBLE",
             "ALTER TABLE backtest_runs ADD COLUMN IF NOT EXISTS risk_options_json JSON",
             "CREATE INDEX IF NOT EXISTS idx_quant_scores_uni_date ON quant_scores (universe, as_of)",
+            "ALTER TABLE quant_scores ADD COLUMN IF NOT EXISTS raw_ev_ebitda      DOUBLE",
+            "ALTER TABLE quant_scores ADD COLUMN IF NOT EXISTS raw_peg            DOUBLE",
+            "ALTER TABLE quant_scores ADD COLUMN IF NOT EXISTS raw_fcf_yield      DOUBLE",
+            "ALTER TABLE quant_scores ADD COLUMN IF NOT EXISTS raw_eps_momentum   DOUBLE",
+            "ALTER TABLE quant_scores ADD COLUMN IF NOT EXISTS negative_book_value BOOLEAN DEFAULT FALSE",
+            "ALTER TABLE quant_scores ADD COLUMN IF NOT EXISTS sector             TEXT",
+            "ALTER TABLE quant_scores ADD COLUMN IF NOT EXISTS industry           TEXT",
         ]:
             try:
                 conn.execute(text(migration))
@@ -736,13 +743,17 @@ def upsert_quant_scores(rows: list[dict]) -> None:
                      pct_momentum, pct_valuation, pct_eps_momentum, pct_quality, pct_technical,
                      raw_momentum, raw_fwd_pe, raw_pbr, raw_psr, raw_trailing_pe,
                      raw_eps_ttm, raw_fwd_eps, raw_roe, raw_debt_ratio, raw_rsi,
-                     above_ma200, cfo_positive, company_name)
+                     above_ma200, cfo_positive, company_name,
+                     raw_ev_ebitda, raw_peg, raw_fcf_yield, raw_eps_momentum,
+                     negative_book_value, sector, industry)
                 VALUES
                     (:ticker, :universe, :as_of,
                      :pct_momentum, :pct_valuation, :pct_eps_momentum, :pct_quality, :pct_technical,
                      :raw_momentum, :raw_fwd_pe, :raw_pbr, :raw_psr, :raw_trailing_pe,
                      :raw_eps_ttm, :raw_fwd_eps, :raw_roe, :raw_debt_ratio, :raw_rsi,
-                     :above_ma200, :cfo_positive, :company_name)
+                     :above_ma200, :cfo_positive, :company_name,
+                     :raw_ev_ebitda, :raw_peg, :raw_fcf_yield, :raw_eps_momentum,
+                     :negative_book_value, :sector, :industry)
                 ON CONFLICT (ticker, universe, as_of) DO UPDATE SET
                     pct_momentum = excluded.pct_momentum,
                     pct_valuation = excluded.pct_valuation,
@@ -761,7 +772,14 @@ def upsert_quant_scores(rows: list[dict]) -> None:
                     raw_rsi = excluded.raw_rsi,
                     above_ma200 = excluded.above_ma200,
                     cfo_positive = excluded.cfo_positive,
-                    company_name = excluded.company_name
+                    company_name = excluded.company_name,
+                    raw_ev_ebitda = excluded.raw_ev_ebitda,
+                    raw_peg = excluded.raw_peg,
+                    raw_fcf_yield = excluded.raw_fcf_yield,
+                    raw_eps_momentum = excluded.raw_eps_momentum,
+                    negative_book_value = excluded.negative_book_value,
+                    sector = excluded.sector,
+                    industry = excluded.industry
             """), r)
         s.commit()
 
