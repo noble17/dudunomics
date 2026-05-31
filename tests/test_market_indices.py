@@ -50,7 +50,8 @@ def clear_cache():
 
 
 class TestFetchFmpQuote:
-    def test_returns_price_and_change_pct(self):
+    def test_returns_price_and_change_pct(self, monkeypatch):
+        monkeypatch.setenv("FMP_API_KEY", "test_key")
         with patch("core.data.market_indices.requests.get",
                    return_value=_fmp_quote_resp("^DJI", 42000.0, 0.5)):
             from core.data.market_indices import _fetch_fmp_quote
@@ -59,7 +60,8 @@ class TestFetchFmpQuote:
         assert result["price"] == 42000.0
         assert result["change_pct"] == 0.5
 
-    def test_returns_none_on_empty_response(self):
+    def test_returns_none_on_empty_response(self, monkeypatch):
+        monkeypatch.setenv("FMP_API_KEY", "test_key")
         with patch("core.data.market_indices.requests.get",
                    return_value=_fmp_empty_resp()):
             from core.data.market_indices import _fetch_fmp_quote
@@ -72,7 +74,8 @@ class TestFetchFmpQuote:
         result = mod._fetch_fmp_quote("^DJI")
         assert result is None
 
-    def test_returns_none_on_exception(self):
+    def test_returns_none_on_exception(self, monkeypatch):
+        monkeypatch.setenv("FMP_API_KEY", "test_key")
         with patch("core.data.market_indices.requests.get",
                    side_effect=Exception("timeout")):
             from core.data.market_indices import _fetch_fmp_quote
@@ -81,7 +84,8 @@ class TestFetchFmpQuote:
 
 
 class TestFetchFmpTreasury10y:
-    def test_price_and_change_pct_computed(self):
+    def test_price_and_change_pct_computed(self, monkeypatch):
+        monkeypatch.setenv("FMP_API_KEY", "test_key")
         with patch("core.data.market_indices.requests.get",
                    return_value=_treasury_resp(4.50, 4.40)):
             from core.data.market_indices import _fetch_fmp_treasury_10y
@@ -91,14 +95,16 @@ class TestFetchFmpTreasury10y:
         expected_pct = round((4.50 - 4.40) / 4.40 * 100, 4)
         assert result["change_pct"] == pytest.approx(expected_pct)
 
-    def test_returns_none_on_empty_response(self):
+    def test_returns_none_on_empty_response(self, monkeypatch):
+        monkeypatch.setenv("FMP_API_KEY", "test_key")
         m = MagicMock(); m.json.return_value = []
         with patch("core.data.market_indices.requests.get", return_value=m):
             from core.data.market_indices import _fetch_fmp_treasury_10y
             result = _fetch_fmp_treasury_10y()
         assert result is None
 
-    def test_returns_none_on_exception(self):
+    def test_returns_none_on_exception(self, monkeypatch):
+        monkeypatch.setenv("FMP_API_KEY", "test_key")
         with patch("core.data.market_indices.requests.get",
                    side_effect=Exception("conn error")):
             from core.data.market_indices import _fetch_fmp_treasury_10y
