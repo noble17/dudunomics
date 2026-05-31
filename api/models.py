@@ -4,7 +4,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Literal
 
-from pydantic import BaseModel, field_validator, model_validator
+from pydantic import BaseModel, computed_field, field_validator, model_validator
 
 
 class HoldingIn(BaseModel):
@@ -182,6 +182,35 @@ class QuantScoreOut(BaseModel):
     raw_rsi: float | None = None
     above_ma200: bool | None = None
     cfo_positive: bool | None = None
+    # 신규 Raw 값
+    raw_ev_ebitda: float | None = None
+    raw_peg: float | None = None
+    raw_fcf_yield: float | None = None
+    raw_eps_momentum: float | None = None
+    # 섹터
+    sector: str | None = None
+    industry: str | None = None
+    # 자본잠식
+    negative_book_value: bool = False
+
+    @computed_field
+    @property
+    def pbr_flag(self) -> str | None:
+        if self.negative_book_value:
+            return "자본잠식형 우량주 가능성 (M&A·자사주매입 기업)"
+        return None
+
+    @computed_field
+    @property
+    def peg_undervalued(self) -> bool:
+        return self.raw_peg is not None and 0 < self.raw_peg < 1.0
+
+    @computed_field
+    @property
+    def eps_revision_up(self) -> bool:
+        return self.raw_eps_momentum is not None and self.raw_eps_momentum > 0
+
+    model_config = {"from_attributes": True}
 
 
 class TickerNoteIn(BaseModel):
