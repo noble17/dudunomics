@@ -152,6 +152,8 @@ export interface QuantScore {
   raw_rsi: number | null;
   above_ma200: boolean | null;
   cfo_positive: boolean | null;
+  sector: string | null;
+  industry: string | null;
 }
 
 export interface FactorWeights {
