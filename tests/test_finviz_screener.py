@@ -85,3 +85,82 @@ def test_fetch_finviz_bulk_paginates():
         result = finviz_screener.fetch_finviz_bulk("idx_sp500")
     assert call_count == 2
     assert "ZZZZ" in result
+
+
+def test_universe_scorer_uses_finviz_bulk(monkeypatch):
+    """run_batch가 _sync_quarterly(FMP) 대신 fetch_finviz_bulk를 호출하는지 확인."""
+    import pandas as pd
+    import math
+    from unittest.mock import MagicMock, patch
+
+    finviz_data = {"AAPL": {"eps_qq": 0.15}, "MSFT": {"eps_qq": -0.03}}
+
+    mock_snap = MagicMock()
+    mock_snap.ticker = "AAPL"
+    mock_snap.forward_pe = 28.0
+    mock_snap.trailing_pe = 30.0
+    mock_snap.pbr = 40.0
+    mock_snap.psr = 8.0
+    mock_snap.ev_ebitda = 25.0
+    mock_snap.peg = 2.5
+    mock_snap.market_cap_m = 3_000_000.0
+    mock_snap.operating_cashflow = 100.0
+    mock_snap.roe = 1.5
+    mock_snap.debt_to_equity = 1.8
+    mock_snap.negative_book_value = False
+    mock_snap.eps_ttm = 6.0
+    mock_snap.forward_eps = 7.0
+    mock_snap.company_name = "Apple Inc."
+    mock_snap.sector = "Technology"
+    mock_snap.industry = "Consumer Electronics"
+    mock_snap.fcf_yield = 0.03
+    mock_snap.negative_book_value = False
+
+    mock_snap_msft = MagicMock()
+    mock_snap_msft.ticker = "MSFT"
+    mock_snap_msft.forward_pe = 35.0
+    mock_snap_msft.trailing_pe = 38.0
+    mock_snap_msft.pbr = 12.0
+    mock_snap_msft.psr = 12.0
+    mock_snap_msft.ev_ebitda = 30.0
+    mock_snap_msft.peg = 2.0
+    mock_snap_msft.market_cap_m = 3_200_000.0
+    mock_snap_msft.operating_cashflow = 90.0
+    mock_snap_msft.roe = 0.4
+    mock_snap_msft.debt_to_equity = 0.5
+    mock_snap_msft.negative_book_value = False
+    mock_snap_msft.eps_ttm = 12.0
+    mock_snap_msft.forward_eps = 14.0
+    mock_snap_msft.company_name = "Microsoft Corp."
+    mock_snap_msft.sector = "Technology"
+    mock_snap_msft.industry = "Software"
+    mock_snap_msft.fcf_yield = 0.025
+    mock_snap_msft.negative_book_value = False
+
+    import core.batch_state as bs_module
+
+    # reload를 patch 블록 밖에서 먼저 실행해 최신 코드(fetch_finviz_bulk 포함)를 로딩
+    from core.scoring import universe_scorer
+    import importlib; importlib.reload(universe_scorer)
+
+    with patch("core.scoring.universe_scorer.get_tickers", return_value=["AAPL", "MSFT"]), \
+         patch("core.scoring.universe_scorer.fetch_ohlcv", return_value=(pd.DataFrame(), [])), \
+         patch("core.scoring.universe_scorer.fetch_extended", return_value=[mock_snap, mock_snap_msft]), \
+         patch("core.scoring.universe_scorer.fetch_finviz_bulk", return_value=finviz_data) as mock_bulk, \
+         patch("core.scoring.universe_scorer.repo.get_quarterly_bulk", return_value={}), \
+         patch("core.scoring.universe_scorer.repo.upsert_quant_scores"), \
+         patch("core.scoring.universe_scorer.PriceMomentumFactor") as MockPMF, \
+         patch("core.scoring.universe_scorer.ForwardEpsMomentumFactor") as MockFEMF, \
+         patch("core.scoring.universe_scorer.TechnicalFactor") as MockTF, \
+         patch("core.scoring.universe_scorer.compute_valuation_zscore",
+               return_value=pd.Series({"AAPL": 0.5, "MSFT": 0.5})), \
+         patch.object(bs_module, "start"), \
+         patch.object(bs_module, "update"), \
+         patch.object(bs_module, "finish"):
+        MockPMF.return_value.compute.return_value = pd.Series({"AAPL": 0.1, "MSFT": 0.2})
+        MockFEMF.return_value.compute.return_value = pd.Series({"AAPL": 0.1, "MSFT": 0.2})
+        MockTF.compute_raw = MagicMock(return_value={"rsi": 50.0, "above_ma200": True})
+
+        universe_scorer.run_batch("sp500")
+
+    mock_bulk.assert_called_once_with("idx_sp500")

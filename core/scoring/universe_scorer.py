@@ -24,22 +24,24 @@ from core.factors.price_momentum import PriceMomentumFactor
 from core.factors.forward_eps_momentum import ForwardEpsMomentumFactor
 from core.factors.quality import QualityFactor
 from core.factors.technical import TechnicalFactor
+from core.factors.valuation import compute_valuation_zscore
+from core.data.finviz_screener import fetch_finviz_bulk
 import core.repository as repo
 
 log = logging.getLogger(__name__)
 
 
-def _sync_quarterly(tickers: list[str], universe: str) -> None:
-    """DB 최신 period와 API 최신 period 비교 → 새 분기만 append."""
-    is_korean = universe in ("kospi200", "kosdaq150")
-    if is_korean:
-        from core.data.naver_quarterly import fetch_naver_quarterly as _fetch
-    else:
-        from core.data.fmp_quarterly import fetch_fmp_quarterly as _fetch
+def _sync_quarterly_korean(tickers: list[str], bs_universe: str | None = None) -> None:
+    """국내 종목 전용 분기 재무 sync (Naver). 해외는 Finviz bulk로 대체."""
+    import core.batch_state as _bs
+    from core.data.naver_quarterly import fetch_naver_quarterly as _fetch
 
+    total = len(tickers)
     latest_in_db = repo.get_latest_quarterly_period(tickers)
     rows_to_upsert: list[dict] = []
-    for ticker in tickers:
+    for i, ticker in enumerate(tickers, 1):
+        if bs_universe:
+            _bs.update(bs_universe, f"분기 재무 동기화 중 ({i}/{total})", i)
         fetched = _fetch(ticker)
         if not fetched:
             continue
@@ -50,7 +52,7 @@ def _sync_quarterly(tickers: list[str], universe: str) -> None:
         rows_to_upsert.extend(fetched)
     if rows_to_upsert:
         repo.upsert_quarterly_financials(rows_to_upsert)
-        log.info("[quarterly sync] %d행 upsert (%s)", len(rows_to_upsert), universe)
+        log.info("[quarterly sync] %d행 upsert (korean)", len(rows_to_upsert))
 
 
 def _compute_yoy_eps_momentum(q_rows: list[dict]) -> float:
@@ -106,10 +108,19 @@ def run_batch(universe: str = "sp500") -> dict:
         bs.update(universe, f"펀더멘탈 페치 중 ({done}/{total})", done)
     snaps: list[ExtendedSnapshot] = fetch_extended(tickers, max_workers=1, progress_callback=_progress)
     snap_map: dict[str, ExtendedSnapshot] = {s.ticker: s for s in snaps}
-    # 3b. 분기 재무 sync (append-only)
-    log.info("[Universe Scorer] 분기 재무 sync 중...")
-    bs.update(universe, "분기 재무 동기화 중", len(snaps))
-    _sync_quarterly(tickers, universe)
+    # 3b. 분기 재무 sync: 한국은 Naver, 해외는 Finviz bulk
+    is_korean = universe in ("kospi200", "kosdaq150")
+    if is_korean:
+        log.info("[Universe Scorer] 분기 재무 sync 중 (Naver)...")
+        _sync_quarterly_korean(tickers, bs_universe=universe)
+
+    # 3c. Finviz bulk — 해외 유니버스 EPS Q/Q 일괄 수집
+    _FINVIZ_INDEX_MAP = {"sp500": "idx_sp500", "nasdaq100": "idx_ndx100"}
+    finviz_bulk_data: dict[str, dict] = {}
+    if not is_korean and universe in _FINVIZ_INDEX_MAP:
+        log.info("[Universe Scorer] Finviz bulk 수집 중...")
+        bs.update(universe, "Finviz bulk 수집 중", 0)
+        finviz_bulk_data = fetch_finviz_bulk(_FINVIZ_INDEX_MAP[universe])
 
     bs.update(universe, "팩터 계산 중", len(snaps))
 
@@ -128,7 +139,6 @@ def run_batch(universe: str = "sp500") -> dict:
     })
     raw_ev_ebitda = pd.Series({t: snap_map[t].ev_ebitda for t in tickers if t in snap_map})
 
-    from core.factors.valuation import compute_valuation_zscore
     raw_valuation = compute_valuation_zscore(
         raw_ev_ebitda.dropna(),
         raw_fwd_pe.dropna(),
@@ -159,6 +169,12 @@ def run_batch(universe: str = "sp500") -> dict:
 
     yoy_scores: dict[str, float] = {}
     for ticker in tickers:
+        # 해외: Finviz bulk EPS Q/Q 우선
+        if not is_korean and ticker in finviz_bulk_data:
+            v = finviz_bulk_data[ticker].get("eps_qq")
+            yoy_scores[ticker] = float(v) if v is not None else 0.0
+            continue
+        # 국내: quarterly_financials YoY 우선
         q_rows = quarterly_bulk.get(ticker, [])
         if len(q_rows) >= 5:
             yoy_scores[ticker] = _compute_yoy_eps_momentum(q_rows)
