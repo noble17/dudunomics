@@ -86,3 +86,47 @@ def test_quotes_requires_auth(fresh_db, monkeypatch):
     c = TestClient(app)
     res = c.get("/api/quotes")
     assert res.status_code == 401
+
+
+def _mock_market_indices():
+    return {
+        "DJI":   {"price": 42000.0, "change_pct": 0.71},
+        "VIX":   {"price": 15.32,   "change_pct": -2.67},
+        "US10Y": {"price": 4.45,    "change_pct": 0.23},
+        "WTI":   {"price": 87.36,   "change_pct": 1.40},
+        "GOLD":  {"price": 4593.0,  "change_pct": 1.34},
+    }
+
+
+def test_quotes_includes_market_indices(quotes_client):
+    with (
+        patch("api.routers.quotes._kis.get_current_prices", side_effect=_mock_kis_prices),
+        patch("api.routers.quotes._fx.get_rate", side_effect=_mock_fx_rate),
+        patch("api.routers.quotes._upbit.get_btc_krw", side_effect=_mock_btc),
+        patch("api.routers.quotes.get_market_indices", side_effect=_mock_market_indices),
+    ):
+        res = quotes_client.get("/api/quotes")
+    assert res.status_code == 200
+    data = res.json()
+    for key in ("DJI", "VIX", "US10Y", "WTI", "GOLD"):
+        assert key in data
+        assert data[key] is not None
+        assert data[key]["price"] > 0
+
+
+def test_quotes_market_indices_none_on_failure(quotes_client):
+    """market_indices 실패 시 해당 필드 None, 나머지 정상."""
+    with (
+        patch("api.routers.quotes._kis.get_current_prices", side_effect=_mock_kis_prices),
+        patch("api.routers.quotes._fx.get_rate", side_effect=_mock_fx_rate),
+        patch("api.routers.quotes._upbit.get_btc_krw", side_effect=_mock_btc),
+        patch("api.routers.quotes.get_market_indices",
+              return_value={"DJI": None, "VIX": None, "US10Y": None, "WTI": None, "GOLD": None}),
+    ):
+        res = quotes_client.get("/api/quotes")
+    assert res.status_code == 200
+    data = res.json()
+    for key in ("DJI", "VIX", "US10Y", "WTI", "GOLD"):
+        assert data[key] is None
+    # 기존 필드는 정상
+    assert data["SPY"] is not None

@@ -236,6 +236,11 @@ class QuotesOut(BaseModel):
     QQQ: QuoteItem | None = None
     USDKRW: QuoteItem | None = None
     BTC: QuoteItem | None = None
+    DJI: QuoteItem | None = None
+    VIX: QuoteItem | None = None
+    US10Y: QuoteItem | None = None
+    WTI: QuoteItem | None = None
+    GOLD: QuoteItem | None = None
 
 
 class CandleItem(BaseModel):
