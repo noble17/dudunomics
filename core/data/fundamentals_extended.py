@@ -55,6 +55,16 @@ def _compute_fcf_yield(ocf: float | None, capex: float | None, market_cap_m: flo
 def _fetch_one(ticker: str, as_of: date) -> ExtendedSnapshot:
     t_upper = ticker.upper()
     if t_upper.endswith(".KS") or t_upper.endswith(".KQ"):
+        from core.data.naver_fundamentals import fetch_naver_summary
+        nav = fetch_naver_summary(ticker)
+        if nav:
+            return ExtendedSnapshot(
+                ticker=ticker,
+                as_of=as_of,
+                trailing_pe=nav["per"],
+                pbr=nav["pbr"],
+                eps_ttm=nav["eps"],
+            )
         return ExtendedSnapshot(ticker=ticker, as_of=as_of)
 
     scraped = _scrape(ticker)
