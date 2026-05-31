@@ -30,6 +30,8 @@ import core.repository as repo
 
 log = logging.getLogger(__name__)
 
+_FINVIZ_INDEX_MAP = {"sp500": "idx_sp500", "nasdaq100": "idx_ndx100"}
+
 
 def _sync_quarterly_korean(tickers: list[str], bs_universe: str | None = None) -> None:
     """국내 종목 전용 분기 재무 sync (Naver). 해외는 Finviz bulk로 대체."""
@@ -115,7 +117,6 @@ def run_batch(universe: str = "sp500") -> dict:
         _sync_quarterly_korean(tickers, bs_universe=universe)
 
     # 3c. Finviz bulk — 해외 유니버스 EPS Q/Q 일괄 수집
-    _FINVIZ_INDEX_MAP = {"sp500": "idx_sp500", "nasdaq100": "idx_ndx100"}
     finviz_bulk_data: dict[str, dict] = {}
     if not is_korean and universe in _FINVIZ_INDEX_MAP:
         log.info("[Universe Scorer] Finviz bulk 수집 중...")
