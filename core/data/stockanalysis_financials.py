@@ -7,6 +7,7 @@ URL: https://stockanalysis.com/stocks/{ticker}/forecast/
 """
 from __future__ import annotations
 
+import datetime
 import json
 import logging
 import sqlite3
@@ -116,7 +117,6 @@ def _parse_table(tree: HTMLParser, feature: str) -> list[dict]:
 
 def _parse_latest_report_date(tree: HTMLParser) -> Optional[str]:
     """'Last Earnings: May 26, 2026' → '2026.05.26'"""
-    import datetime
     for el in tree.css("div, p, span"):
         text = el.text(strip=True)
         if "Last Earnings" in text or "Last earnings" in text:
