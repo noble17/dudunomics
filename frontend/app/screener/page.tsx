@@ -28,14 +28,15 @@ export default function ScreenerPage() {
   const DOMESTIC = ["kospi200", "kosdaq150"];
   const handleUniverseChange = (u: string) => {
     setUniverse(u);
-    // 국내 유니버스는 yfinance 데이터 없어 하드 필터 무의미 → 자동 해제
-    if (DOMESTIC.includes(u)) setHardFilters({ ma200: false, cfo: false });
-    else setHardFilters({ ma200: true, cfo: true });
+    if (DOMESTIC.includes(u)) setHardFilters({ ma200: false });
+    else setHardFilters({ ma200: true });
   };
   const [universe, setUniverse] = useState("sp500");
   const [weights, setWeights]   = useState<FactorWeights>(DEFAULT_WEIGHTS);
   const [helpOpen, setHelpOpen] = useState(false);
-  const [hardFilters, setHardFilters] = useState({ ma200: true, cfo: true });
+  const [hardFilters, setHardFilters] = useState({ ma200: true });
+  const [sectorFilter, setSectorFilter] = useState("");
+  const [industryFilter, setIndustryFilter] = useState("");
   const [refreshing, setRefreshing]   = useState(false);
   const [refreshMsg, setRefreshMsg]   = useState<string | null>(null);
   const [batchStatus, setBatchStatus] = useState<{
@@ -85,11 +86,35 @@ export default function ScreenerPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [universe]);
 
+  const sectors = useMemo(
+    () => [...new Set(scores.map((s) => s.sector).filter((s): s is string => !!s))].sort(),
+    [scores]
+  );
+
+  const industries = useMemo(
+    () =>
+      sectorFilter
+        ? [...new Set(
+            scores
+              .filter((s) => s.sector === sectorFilter)
+              .map((s) => s.industry)
+              .filter((i): i is string => !!i)
+          )].sort()
+        : [],
+    [scores, sectorFilter]
+  );
+
+  const handleSectorChange = (s: string) => {
+    setSectorFilter(s);
+    setIndustryFilter("");
+  };
+
   const filteredCount = useMemo(() => scores.filter((s) => {
     if (hardFilters.ma200 && s.above_ma200 === false) return false;
-    if (hardFilters.cfo  && s.cfo_positive === false) return false;
+    if (sectorFilter && s.sector !== sectorFilter) return false;
+    if (industryFilter && s.industry !== industryFilter) return false;
     return true;
-  }).length, [scores, hardFilters]);
+  }).length, [scores, hardFilters, sectorFilter, industryFilter]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -143,7 +168,7 @@ export default function ScreenerPage() {
             ))}
             <div className="rounded border border-border bg-background px-3 py-2">
               <p className="font-medium text-foreground text-xs mb-0.5">하드 필터</p>
-              <p className="text-muted-foreground text-xs">200일 MA 하회 · CFO 음수 종목을 랭킹에서 완전 제외. 체크 해제 시 포함.</p>
+              <p className="text-muted-foreground text-xs">200일 MA 하회 종목을 랭킹에서 완전 제외. 체크 해제 시 포함.</p>
             </div>
             <div className="rounded border border-border bg-background px-3 py-2">
               <p className="font-medium text-foreground text-xs mb-0.5">데이터 갱신</p>
@@ -191,6 +216,12 @@ export default function ScreenerPage() {
           onWeightsChange={setWeights}
           hardFilters={hardFilters}
           onHardFiltersChange={setHardFilters}
+          sectorFilter={sectorFilter}
+          onSectorChange={handleSectorChange}
+          industryFilter={industryFilter}
+          onIndustryChange={setIndustryFilter}
+          sectors={sectors}
+          industries={industries}
           totalCount={scores.length}
           filteredCount={filteredCount}
         />
@@ -205,8 +236,11 @@ export default function ScreenerPage() {
             scores={scores}
             weights={weights}
             hardFilters={hardFilters}
+            sectorFilter={sectorFilter}
+            industryFilter={industryFilter}
             topN={50}
             universe={universe}
+            isBatchRunning={refreshing}
           />
         </div>
       </div>
