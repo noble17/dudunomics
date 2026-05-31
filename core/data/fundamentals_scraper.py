@@ -42,6 +42,14 @@ class FundamentalsSnapshot:
     debt_to_equity: Optional[float] = None
     operating_cashflow: Optional[float] = None
     short_name: Optional[str] = None
+    # 신규
+    ev_ebitda: Optional[float] = None
+    peg: Optional[float] = None
+    market_cap_m: Optional[float] = None   # 단위: 백만 USD
+    capex: Optional[float] = None          # 절댓값 (양수 저장), 단위: USD
+    sector: Optional[str] = None
+    industry: Optional[str] = None
+    negative_book_value: bool = False
 
 
 def _get_db() -> sqlite3.Connection:
@@ -90,6 +98,23 @@ def _parse_num(s: str) -> Optional[float]:
         return None
 
 
+def _parse_market_cap_m(s: str) -> Optional[float]:
+    """Market Cap 문자열 → 백만 USD 단위 float. 예: '45.2B' → 45200.0"""
+    if not s:
+        return None
+    s = s.strip().replace(",", "")
+    for suffix, mult in [("T", 1_000_000), ("B", 1_000), ("M", 1), ("K", 0.001)]:
+        if s.endswith(suffix):
+            try:
+                return float(s[:-1]) * mult
+            except ValueError:
+                return None
+    try:
+        return float(s) / 1_000_000
+    except ValueError:
+        return None
+
+
 _CLIENT = httpx.Client(
     http2=True,
     headers=_HEADERS,
@@ -114,14 +139,27 @@ def _fetch_finviz(ticker: str) -> FundamentalsSnapshot:
             kv[k] = v
         snap.forward_pe = _parse_num(kv.get("Forward P/E", ""))
         snap.trailing_pe = _parse_num(kv.get("P/E", ""))
-        snap.price_to_book = _parse_num(kv.get("P/B", ""))
+        # P/B: "-"이면 자본잠식 플래그
+        raw_pb = kv.get("P/B", "").strip()
+        if raw_pb == "-":
+            snap.negative_book_value = True
+            snap.price_to_book = None
+        else:
+            snap.price_to_book = _parse_num(raw_pb)
+            snap.negative_book_value = False
         snap.price_to_sales = _parse_num(kv.get("P/S", ""))
         snap.forward_eps = _parse_num(kv.get("EPS next Y", ""))
         snap.trailing_eps = _parse_num(kv.get("EPS", ""))
         snap.return_on_equity = _parse_num(kv.get("ROE", ""))
         snap.debt_to_equity = _parse_num(kv.get("Debt/Eq", ""))
-        # short name from page title link
-        title_el = tree.css_first("a.tab-link[href*='/quote/']")
+        # 신규
+        snap.ev_ebitda = _parse_num(kv.get("EV/EBITDA", ""))
+        snap.peg = _parse_num(kv.get("PEG", ""))
+        snap.market_cap_m = _parse_market_cap_m(kv.get("Market Cap", ""))
+        snap.sector = kv.get("Sector") or None
+        snap.industry = kv.get("Industry") or None
+        # short name from h2 heading (finviz page structure)
+        title_el = tree.css_first("h2")
         if title_el:
             snap.short_name = title_el.text(strip=True)
     except Exception as e:
@@ -130,27 +168,44 @@ def _fetch_finviz(ticker: str) -> FundamentalsSnapshot:
 
 
 def _supplement_stockanalysis(snap: FundamentalsSnapshot) -> None:
-    """Fill in missing operating_cashflow from stockanalysis.com."""
-    if snap.operating_cashflow is not None:
+    """Fill in missing operating_cashflow and capex from stockanalysis.com."""
+    if snap.operating_cashflow is not None and snap.capex is not None:
         return
     try:
         url = f"https://stockanalysis.com/stocks/{snap.ticker.lower()}/financials/cash-flow-statement/"
         r = _CLIENT.get(url)
         r.raise_for_status()
         tree = HTMLParser(r.text)
+
+        def _parse_cf_value(raw: str) -> Optional[float]:
+            raw = raw.strip()
+            if raw.startswith("(") and raw.endswith(")"):
+                raw = "-" + raw[1:-1]
+            for suffix, exp in (("T", "e12"), ("B", "e9"), ("M", "e6"), ("K", "e3")):
+                if raw.endswith(suffix):
+                    raw = raw[:-1] + exp
+                    break
+            return _parse_num(raw)
+
         for row in tree.css("tr"):
             cells = row.css("td")
             if not cells:
                 continue
             label = cells[0].text(strip=True).lower()
-            if "operating" in label and "cash" in label and len(cells) > 1:
-                raw = cells[1].text(strip=True)
-                # Handle B/M/T suffixes
-                for suffix, exp in (("T", "e12"), ("B", "e9"), ("M", "e6"), ("K", "e3")):
-                    if raw.endswith(suffix):
-                        raw = raw[:-1] + exp
-                        break
-                snap.operating_cashflow = _parse_num(raw)
+            value = cells[1].text(strip=True) if len(cells) > 1 else ""
+
+            if snap.operating_cashflow is None and "operating" in label and "cash" in label:
+                snap.operating_cashflow = _parse_cf_value(value)
+
+            if snap.capex is None and (
+                "capital expenditure" in label
+                or "capex" in label
+                or ("purchase" in label and "property" in label)
+            ):
+                v = _parse_cf_value(value)
+                snap.capex = abs(v) if v is not None else None
+
+            if snap.operating_cashflow is not None and snap.capex is not None:
                 break
     except Exception as e:
         log.debug("stockanalysis supplement failed for %s: %s", snap.ticker, e)
