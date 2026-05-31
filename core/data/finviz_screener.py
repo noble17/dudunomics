@@ -2,7 +2,7 @@
 
 Finviz 커스텀 뷰(v=152, c=1,2,3,4,5,6,22)에서 EPS Q/Q를 일괄 수집.
 컬럼 번호 22 = EPS Q/Q (Qtr over Qtr).
-20종목씩 페이지네이션. ~26 requests로 S&P 500 전체 커버.
+페이지당 행 수는 서버 응답에 따라 동적 결정. S&P 500 기준 ~27 requests.
 """
 from __future__ import annotations
 
@@ -19,12 +19,7 @@ _BASE = "https://finviz.com/screener"
 # v=152: 커스텀 뷰, c=1,2,3,4,5,6,22: ticker + 기본 컬럼 + EPS Q/Q(22번)
 _COLUMNS = "1,2,3,4,5,6,22"
 _HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/120.0.0.0 Safari/537.36"
-    ),
-    "Accept": "text/html,application/xhtml+xml",
+    "User-Agent": "Mozilla/5.0 (compatible; dudunomics/1.0; research use)",
     "Accept-Language": "en-US,en;q=0.9",
 }
 _CLIENT = httpx.Client(http2=True, headers=_HEADERS, timeout=15, follow_redirects=True)
