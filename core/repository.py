@@ -222,6 +222,18 @@ def _init_schema(engine):
         note        TEXT,
         created_at  TIMESTAMP DEFAULT current_timestamp
     );
+
+    CREATE TABLE IF NOT EXISTS quarterly_financials (
+        ticker      TEXT    NOT NULL,
+        period      TEXT    NOT NULL,
+        eps         DOUBLE,
+        roe         DOUBLE,
+        debt_ratio  DOUBLE,
+        revenue     DOUBLE,
+        op_income   DOUBLE,
+        source      TEXT,
+        PRIMARY KEY (ticker, period)
+    );
     """
     with engine.connect() as conn:
         for stmt in ddl.strip().split(";"):
@@ -246,6 +258,7 @@ def _init_schema(engine):
             "ALTER TABLE quant_scores ADD COLUMN IF NOT EXISTS negative_book_value BOOLEAN DEFAULT FALSE",
             "ALTER TABLE quant_scores ADD COLUMN IF NOT EXISTS sector             TEXT",
             "ALTER TABLE quant_scores ADD COLUMN IF NOT EXISTS industry           TEXT",
+            "CREATE TABLE IF NOT EXISTS quarterly_financials (ticker TEXT NOT NULL, period TEXT NOT NULL, eps DOUBLE, roe DOUBLE, debt_ratio DOUBLE, revenue DOUBLE, op_income DOUBLE, source TEXT, PRIMARY KEY (ticker, period))",
         ]:
             try:
                 conn.execute(text(migration))
@@ -1160,3 +1173,73 @@ def set_holding_target_weight(user_id: int, ticker: str, target_weight: float | 
             WHERE user_id = :uid AND ticker = :ticker
         """), {"tw": target_weight, "uid": user_id, "ticker": ticker})
         s.commit()
+
+
+# ── Quarterly Financials ──────────────────────────────────────────────────────
+
+def upsert_quarterly_financials(rows: list[dict]) -> None:
+    """분기 재무 데이터 upsert. rows: [{"ticker", "period", "eps", "roe", "debt_ratio", "revenue", "op_income", "source"}]"""
+    if not rows:
+        return
+    with session() as s:
+        s.execute(text("""
+            INSERT INTO quarterly_financials (ticker, period, eps, roe, debt_ratio, revenue, op_income, source)
+            VALUES (:ticker, :period, :eps, :roe, :debt_ratio, :revenue, :op_income, :source)
+            ON CONFLICT (ticker, period) DO UPDATE SET
+                eps        = excluded.eps,
+                roe        = excluded.roe,
+                debt_ratio = excluded.debt_ratio,
+                revenue    = excluded.revenue,
+                op_income  = excluded.op_income,
+                source     = excluded.source
+        """), rows)
+        s.commit()
+
+
+def get_quarterly_financials(ticker: str, n: int = 8) -> list[dict]:
+    """최신 n분기 데이터를 period 내림차순으로 반환."""
+    with session() as s:
+        rows = s.execute(text("""
+            SELECT ticker, period, eps, roe, debt_ratio, revenue, op_income, source
+            FROM quarterly_financials
+            WHERE ticker = :ticker
+            ORDER BY period DESC
+            LIMIT :n
+        """), {"ticker": ticker, "n": n}).mappings().all()
+        return [dict(r) for r in rows]
+
+
+def get_latest_quarterly_period(tickers: list[str]) -> dict[str, str]:
+    """티커별 DB에 저장된 최신 period. 없는 티커는 결과에서 제외."""
+    if not tickers:
+        return {}
+    ticker_set = set(tickers)
+    with session() as s:
+        rows = s.execute(text("""
+            SELECT ticker, MAX(period) AS latest_period
+            FROM quarterly_financials
+            GROUP BY ticker
+        """)).mappings().all()
+        return {r["ticker"]: r["latest_period"] for r in rows if r["ticker"] in ticker_set}
+
+
+def get_quarterly_bulk(tickers: list[str], n: int = 8) -> dict[str, list[dict]]:
+    """복수 티커의 분기 데이터를 한 번의 쿼리로 일괄 반환. {ticker: [rows desc]}"""
+    if not tickers:
+        return {}
+    ticker_set = set(tickers)
+    with session() as s:
+        rows = s.execute(text("""
+            SELECT ticker, period, eps, roe, debt_ratio, revenue, op_income, source,
+                   ROW_NUMBER() OVER (PARTITION BY ticker ORDER BY period DESC) AS rn
+            FROM quarterly_financials
+        """)).mappings().all()
+    result: dict[str, list[dict]] = {}
+    for row in rows:
+        if row["ticker"] not in ticker_set:
+            continue
+        if row["rn"] > n:
+            continue
+        d = {k: v for k, v in row.items() if k != "rn"}
+        result.setdefault(d["ticker"], []).append(d)
+    return result
