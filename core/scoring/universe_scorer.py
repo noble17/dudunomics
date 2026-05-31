@@ -29,6 +29,47 @@ import core.repository as repo
 log = logging.getLogger(__name__)
 
 
+def _sync_quarterly(tickers: list[str], universe: str) -> None:
+    """DB 최신 period와 API 최신 period 비교 → 새 분기만 append."""
+    is_korean = universe in ("kospi200", "kosdaq150")
+    if is_korean:
+        from core.data.naver_quarterly import fetch_naver_quarterly as _fetch
+    else:
+        from core.data.fmp_quarterly import fetch_fmp_quarterly as _fetch
+
+    latest_in_db = repo.get_latest_quarterly_period(tickers)
+    rows_to_upsert: list[dict] = []
+    for ticker in tickers:
+        fetched = _fetch(ticker)
+        if not fetched:
+            continue
+        api_latest = fetched[0]["period"]
+        db_latest = latest_in_db.get(ticker)
+        if db_latest and db_latest >= api_latest:
+            continue
+        rows_to_upsert.extend(fetched)
+    if rows_to_upsert:
+        repo.upsert_quarterly_financials(rows_to_upsert)
+        log.info("[quarterly sync] %d행 upsert (%s)", len(rows_to_upsert), universe)
+
+
+def _compute_yoy_eps_momentum(q_rows: list[dict]) -> float:
+    """최근 확정 분기 EPS vs 전년 동기 EPS → YoY 성장률. q_rows는 period 내림차순."""
+    if len(q_rows) < 5:
+        return 0.0
+    by_period = {r["period"]: r for r in q_rows}
+    recent_period = q_rows[0]["period"]
+    year = int(recent_period[:4])
+    q    = recent_period[4:]
+    yoy_period = f"{year - 1}{q}"
+    recent_eps = q_rows[0].get("eps")
+    yoy_row    = by_period.get(yoy_period)
+    yoy_eps    = yoy_row.get("eps") if yoy_row else None
+    if recent_eps is None or yoy_eps is None or yoy_eps == 0:
+        return 0.0
+    return (recent_eps - yoy_eps) / abs(yoy_eps)
+
+
 def _percentile_rank(series: pd.Series, ascending: bool = True) -> pd.Series:
     """유니버스 내 백분위 순위(0~1). ascending=False이면 낮을수록 높은 점수."""
     clean = series.dropna()
@@ -65,6 +106,11 @@ def run_batch(universe: str = "sp500") -> dict:
         bs.update(universe, f"펀더멘탈 페치 중 ({done}/{total})", done)
     snaps: list[ExtendedSnapshot] = fetch_extended(tickers, max_workers=1, progress_callback=_progress)
     snap_map: dict[str, ExtendedSnapshot] = {s.ticker: s for s in snaps}
+    # 3b. 분기 재무 sync (append-only)
+    log.info("[Universe Scorer] 분기 재무 sync 중...")
+    bs.update(universe, "분기 재무 동기화 중", len(snaps))
+    _sync_quarterly(tickers, universe)
+
     bs.update(universe, "팩터 계산 중", len(snaps))
 
     # 4. 팩터별 raw 값 계산
@@ -74,13 +120,13 @@ def run_batch(universe: str = "sp500") -> dict:
     momentum_factor = PriceMomentumFactor()
     raw_momentum: pd.Series = momentum_factor.compute(tickers, today)
 
-    # 4b. EPS Momentum
-    eps_factor = ForwardEpsMomentumFactor()
-    raw_eps: pd.Series = eps_factor.compute(tickers, today)
-
     # 4c. Valuation raw (EV/EBITDA + PER — Winsorize + Z-score)
-    raw_fwd_pe    = pd.Series({t: snap_map[t].forward_pe for t in tickers if t in snap_map})
-    raw_ev_ebitda = pd.Series({t: snap_map[t].ev_ebitda  for t in tickers if t in snap_map})
+    # forward_pe 없는 국내 종목은 trailing_pe 폴백 (Naver는 forward PE 미제공)
+    raw_fwd_pe = pd.Series({
+        t: (snap_map[t].forward_pe if snap_map[t].forward_pe is not None else snap_map[t].trailing_pe)
+        for t in tickers if t in snap_map
+    })
+    raw_ev_ebitda = pd.Series({t: snap_map[t].ev_ebitda for t in tickers if t in snap_map})
 
     from core.factors.valuation import compute_valuation_zscore
     raw_valuation = compute_valuation_zscore(
@@ -88,15 +134,37 @@ def run_batch(universe: str = "sp500") -> dict:
         raw_fwd_pe.dropna(),
     ).reindex(tickers)
 
-    # 4d. Quality
+    # 4d. Quality — quarterly_financials 일괄 조회 후 최신 분기 ROE/부채비율 사용
+    quarterly_bulk = repo.get_quarterly_bulk(tickers, n=8)
+    quarterly_map: dict[str, dict] = {
+        t: rows[0] for t, rows in quarterly_bulk.items() if rows
+    }
+
     raw_quality_vals: dict[str, float] = {}
     for ticker in tickers:
-        snap = snap_map.get(ticker)
-        if snap:
-            raw_quality_vals[ticker] = QualityFactor.score(snap.roe, snap.debt_to_equity)
+        q = quarterly_map.get(ticker)
+        if q and (q.get("roe") is not None or q.get("debt_ratio") is not None):
+            raw_quality_vals[ticker] = QualityFactor.score(q.get("roe"), q.get("debt_ratio"))
         else:
-            raw_quality_vals[ticker] = math.nan
+            snap = snap_map.get(ticker)
+            if snap:
+                raw_quality_vals[ticker] = QualityFactor.score(snap.roe, snap.debt_to_equity)
+            else:
+                raw_quality_vals[ticker] = math.nan
     raw_quality = pd.Series(raw_quality_vals)
+
+    # 4b. EPS Momentum — quarterly YoY 성장률 (quarterly 없으면 forward_eps 리비전 fallback)
+    eps_factor = ForwardEpsMomentumFactor()
+    fwd_eps_momentum: pd.Series = eps_factor.compute(tickers, today)
+
+    yoy_scores: dict[str, float] = {}
+    for ticker in tickers:
+        q_rows = quarterly_bulk.get(ticker, [])
+        if len(q_rows) >= 5:
+            yoy_scores[ticker] = _compute_yoy_eps_momentum(q_rows)
+        else:
+            yoy_scores[ticker] = float(fwd_eps_momentum.get(ticker, 0.0) or 0.0)
+    raw_eps = pd.Series(yoy_scores)
 
     # 4e. Technical (RSI + MA200) — ThreadPool으로 병렬 계산
     log.info("[Universe Scorer] 기술적 지표 계산 중 (병렬)...")
@@ -146,8 +214,10 @@ def run_batch(universe: str = "sp500") -> dict:
             "raw_trailing_pe":  snap.trailing_pe if snap else None,
             "raw_eps_ttm":      snap.eps_ttm if snap else None,
             "raw_fwd_eps":      snap.forward_eps if snap else None,
-            "raw_roe":          snap.roe if snap else None,
-            "raw_debt_ratio":   (snap.debt_to_equity / 100.0) if (snap and snap.debt_to_equity) else None,
+            "raw_roe":          (quarterly_map[ticker]["roe"] if ticker in quarterly_map and quarterly_map[ticker].get("roe") is not None
+                                 else snap.roe if snap else None),
+            "raw_debt_ratio":   (quarterly_map[ticker]["debt_ratio"] / 100.0 if ticker in quarterly_map and quarterly_map[ticker].get("debt_ratio") is not None
+                                 else (snap.debt_to_equity / 100.0) if (snap and snap.debt_to_equity) else None),
             "raw_rsi":          _safe_float(raw_rsi.get(ticker)),
             "above_ma200":      bool(above_ma200.get(ticker, False)),
             "cfo_positive":     bool(snap.operating_cashflow and snap.operating_cashflow > 0) if snap else False,
