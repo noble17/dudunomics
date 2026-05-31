@@ -61,9 +61,11 @@ def _fetch_one(ticker: str, as_of: date) -> ExtendedSnapshot:
             return ExtendedSnapshot(
                 ticker=ticker,
                 as_of=as_of,
+                company_name=nav.get("name"),
                 trailing_pe=nav["per"],
                 pbr=nav["pbr"],
                 eps_ttm=nav["eps"],
+                sector=nav.get("sector"),
             )
         return ExtendedSnapshot(ticker=ticker, as_of=as_of)
 

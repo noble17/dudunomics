@@ -92,8 +92,8 @@ class TestFetchNaverSummary:
                    return_value=_naver_resp(18.5, 2.1, 5000.0)) as mock_get:
             from core.data.naver_fundamentals import fetch_naver_summary
             fetch_naver_summary("035720.KQ")
-        call_kwargs = mock_get.call_args
-        assert call_kwargs[1]["params"]["itemcode"] == "035720"
+        first_call = mock_get.call_args_list[0]
+        assert first_call[1]["params"]["itemcode"] == "035720"
 
 
 class TestExtendedSnapshotIntegration:
