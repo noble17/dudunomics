@@ -238,14 +238,14 @@ export function PriceChart({ data, annualEps }: Props) {
               />
               <Legend
                 wrapperStyle={{ fontSize: 11 }}
-                formatter={(v: string) => v === "price" ? "● 주가" : v === "eps" ? "● 주당순이익" : "⋯ 예상 EPS"}
+                formatter={(v: string) => v === "price" ? "● 주가" : v === "eps" ? "● 주당순이익" : "⋯ 예상 EPS (추정)"}
               />
               <Line yAxisId="price" type="monotone" dataKey="price" stroke="#3b82f6" dot={false} strokeWidth={1.5} name="price" connectNulls />
               {hasEpsData && (
                 <Line yAxisId="eps" type="stepAfter" dataKey="eps" stroke="#22c55e" dot={false} strokeWidth={2} name="eps" connectNulls />
               )}
               {hasEpsEst && (
-                <Line yAxisId="eps" type="stepAfter" dataKey="eps_est" stroke="#6b7280" dot={false} strokeWidth={2} strokeDasharray="5 4" name="eps_est" connectNulls />
+                <Line yAxisId="eps" type="stepAfter" dataKey="eps_est" stroke="#fbbf24" dot={false} strokeWidth={2} strokeDasharray="5 4" name="eps_est" connectNulls />
               )}
             </LineChart>
           </ResponsiveContainer>
