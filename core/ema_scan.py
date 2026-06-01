@@ -76,8 +76,14 @@ def _detect_golden_cross(close: pd.Series) -> dict | None:
     }
 
 
+def _ticker_label(ticker: str, names: dict[str, str]) -> str:
+    name = names.get(ticker)
+    return f"{name} ({ticker})" if name else ticker
+
+
 def _build_message(market: str, today: date,
-                   new_entries: list[dict], maintained_entries: list[dict]) -> str:
+                   new_entries: list[dict], maintained_entries: list[dict],
+                   names: dict[str, str]) -> str:
     label = _MARKET_LABELS.get(market, market)
     lines = [f"📈 EMA 골든크로스 ({label} · {today})"]
 
@@ -85,7 +91,7 @@ def _build_message(market: str, today: date,
         lines.append("\n🆕 신규")
         for e in new_entries:
             lines.append(
-                f"• {e['ticker']} — 1일차\n"
+                f"• {_ticker_label(e['ticker'], names)} — 1일차\n"
                 f"  현재가 {e['close']} | EMA5 {e['ema5']} | EMA20 {e['ema20']} | EMA60 {e['ema60']}"
             )
 
@@ -93,7 +99,7 @@ def _build_message(market: str, today: date,
         lines.append("\n🔄 유지 중")
         for e in maintained_entries:
             lines.append(
-                f"• {e['ticker']} — {e['day_count']}일차\n"
+                f"• {_ticker_label(e['ticker'], names)} — {e['day_count']}일차\n"
                 f"  현재가 {e['close']} | EMA5 {e['ema5']} | EMA20 {e['ema20']} | EMA60 {e['ema60']}"
             )
 
@@ -120,6 +126,7 @@ def run_ema_scan(market: str) -> dict:
 
     new_entries: list[dict] = []
     maintained_entries: list[dict] = []
+    names: dict[str, str] = repo.get_company_names(tickers)
 
     # 배치 단위로 OHLCV 조회
     for batch_start in range(0, len(tickers), _BATCH_SIZE):
@@ -150,7 +157,7 @@ def run_ema_scan(market: str) -> dict:
 
                 if ticker not in active_in_db:
                     if result["is_new_cross"]:
-                        repo.insert_golden_cross(ticker, market, None, today)
+                        repo.insert_golden_cross(ticker, market, names.get(ticker), today)
                         new_entries.append({**result, "ticker": ticker})
                 else:
                     old = active_in_db[ticker]
@@ -165,7 +172,7 @@ def run_ema_scan(market: str) -> dict:
                 log.warning("ema_scan 티커 처리 오류 (%s): %s", ticker, e)
 
     if new_entries or maintained_entries:
-        msg = _build_message(market, today, new_entries, maintained_entries)
+        msg = _build_message(market, today, new_entries, maintained_entries, names)
         send_telegram(msg)
 
     log.info("ema_scan 완료: market=%s new=%d maintained=%d",

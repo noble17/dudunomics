@@ -1301,3 +1301,23 @@ def delete_golden_cross(ticker: str) -> None:
     with session() as s:
         s.execute(text("DELETE FROM golden_cross_events WHERE ticker = :t"), {"t": ticker})
         s.commit()
+
+
+def get_company_names(tickers: list[str]) -> dict[str, str]:
+    """티커 리스트 → {ticker: company_name} 매핑. screener_scores 최신 데이터 기준."""
+    if not tickers:
+        return {}
+    placeholders = ",".join(f":t{i}" for i in range(len(tickers)))
+    params = {f"t{i}": t for i, t in enumerate(tickers)}
+    try:
+        with session() as s:
+            rows = s.execute(text(f"""
+                SELECT ticker, company_name
+                FROM screener_scores
+                WHERE ticker IN ({placeholders})
+                  AND company_name IS NOT NULL
+                QUALIFY ROW_NUMBER() OVER (PARTITION BY ticker ORDER BY as_of DESC) = 1
+            """), params).fetchall()
+            return {r[0]: r[1] for r in rows}
+    except Exception:
+        return {}
