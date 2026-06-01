@@ -123,9 +123,14 @@ def test_run_ema_scan_maintained(fresh_db, monkeypatch, tmp_path):
     nasdaq_file.write_text(json.dumps([]))
     monkeypatch.setenv("NASDAQ100_PATH", str(nasdaq_file))
 
-    # 사전에 DB에 등록 (day_count=3)
+    # 사전에 DB에 등록 (day_count=3, last_sent_at=어제 → 오늘 increment 허용)
     repo.insert_golden_cross("AAPL", "US", "Apple", date.today() - timedelta(days=3))
     repo.update_golden_cross("AAPL", 3)
+    from sqlalchemy import text as _text
+    from core.repository import session as _session
+    with _session() as s:
+        s.execute(_text("UPDATE golden_cross_events SET last_sent_at = current_timestamp - INTERVAL '1 day' WHERE ticker = 'AAPL'"))
+        s.commit()
 
     with patch("core.ema_scan.fetch_ohlcv", side_effect=_mock_maintained_ohlcv), \
          patch("core.ema_scan.send_telegram", return_value=True) as mock_tg:
@@ -150,6 +155,11 @@ def test_run_ema_scan_expires_after_7_days(fresh_db, monkeypatch, tmp_path):
 
     repo.insert_golden_cross("AAPL", "US", "Apple", date.today() - timedelta(days=7))
     repo.update_golden_cross("AAPL", 7)
+    from sqlalchemy import text as _text
+    from core.repository import session as _session
+    with _session() as s:
+        s.execute(_text("UPDATE golden_cross_events SET last_sent_at = current_timestamp - INTERVAL '1 day' WHERE ticker = 'AAPL'"))
+        s.commit()
 
     with patch("core.ema_scan.fetch_ohlcv", side_effect=_mock_maintained_ohlcv), \
          patch("core.ema_scan.send_telegram", return_value=True):

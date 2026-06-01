@@ -164,12 +164,21 @@ def run_ema_scan(market: str) -> dict:
                         new_entries.append({**result, "ticker": ticker})
                 else:
                     old = active_in_db[ticker]
-                    new_count = old["day_count"] + 1
-                    if new_count > 7:
-                        repo.delete_golden_cross(ticker)
+                    # last_sent_at이 오늘이면 이미 카운트됨 — 증가 없이 현재 day_count 유지
+                    last_sent = old["last_sent_at"]
+                    already_counted_today = (
+                        last_sent is not None and
+                        getattr(last_sent, "date", lambda: None)() == today
+                    )
+                    if already_counted_today:
+                        maintained_entries.append({**result, "ticker": ticker, "day_count": old["day_count"]})
                     else:
-                        repo.update_golden_cross(ticker, new_count)
-                        maintained_entries.append({**result, "ticker": ticker, "day_count": new_count})
+                        new_count = old["day_count"] + 1
+                        if new_count > 7:
+                            repo.delete_golden_cross(ticker)
+                        else:
+                            repo.update_golden_cross(ticker, new_count)
+                            maintained_entries.append({**result, "ticker": ticker, "day_count": new_count})
 
             except Exception as e:
                 log.warning("ema_scan 티커 처리 오류 (%s): %s", ticker, e)
