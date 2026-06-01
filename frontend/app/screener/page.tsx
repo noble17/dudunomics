@@ -155,7 +155,7 @@ export default function ScreenerPage() {
         <div className="rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm space-y-3">
           <p className="text-muted-foreground leading-relaxed">
             S&amp;P 500 전 종목을 <strong>5가지 팩터</strong>로 점수화해 랭킹합니다.
-            모든 점수는 <strong>0 ~ 1 (유니버스 내 백분위)</strong>이며 높을수록 우수합니다.
+            모든 점수는 <strong>100점 만점의 유니버스 내 백분위</strong>이며 높을수록 우수합니다.
             왼쪽 슬라이더로 팩터 가중치를 실시간 조정하면 랭킹이 즉시 바뀝니다.
             종목을 클릭하면 레이더 차트 · 재무지표 상세 페이지로 이동합니다.
           </p>

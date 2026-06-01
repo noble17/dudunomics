@@ -1,6 +1,10 @@
 // frontend/components/screener/factor-bars.tsx
 interface FactorBar { label: string; sublabel: string; value: number | null }
 
+function scoreText(value: number): string {
+  return `${Math.round(value * 100)}점`;
+}
+
 export function FactorBars({ bars }: { bars: FactorBar[] }) {
   return (
     <div className="flex flex-col gap-2">
@@ -15,7 +19,7 @@ export function FactorBars({ bars }: { bars: FactorBar[] }) {
                 {label} <span className="text-muted-foreground">{sublabel}</span>
               </span>
               <span className={`font-bold ${textColor}`}>
-                {value !== null ? value.toFixed(2) : "—"}
+                {value !== null ? scoreText(value) : "—"}
               </span>
             </div>
             <div className="bg-muted rounded h-1.5">

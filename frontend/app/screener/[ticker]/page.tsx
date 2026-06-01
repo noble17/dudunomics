@@ -66,6 +66,7 @@ export default function TickerDetailPage() {
     ? [score.pct_momentum, score.pct_valuation, score.pct_eps_momentum, score.pct_quality, score.pct_technical].filter((v): v is number => v !== null)
     : [];
   const composite = validPcts.length > 0 ? validPcts.reduce((a, b) => a + b, 0) / validPcts.length : null;
+  const compositeScoreText = composite !== null ? `${Math.round(composite * 100)}점` : "—";
 
   return (
     <div className="space-y-4">
@@ -83,7 +84,7 @@ export default function TickerDetailPage() {
             <span className="text-xl font-black text-foreground ml-2">{score.ticker}</span>
             <span className="text-sm text-muted-foreground">{score.company_name}</span>
             <div className="ml-auto bg-blue-100 text-blue-800 rounded-md px-3 py-1 text-sm font-bold">
-              종합 {composite?.toFixed(2) ?? "—"}
+              종합 {compositeScoreText}
               {composite !== null && (
                 <span className="text-xs text-muted-foreground ml-1">
                   / 상위 {Math.round((1 - composite) * 100)}%
@@ -126,7 +127,7 @@ export default function TickerDetailPage() {
         </div>
       )}
       {financials && <GrowthChart data={financials} />}
-      {priceChart && <PriceChart data={priceChart} />}
+      {priceChart && <PriceChart data={priceChart} annualEps={financials?.eps} />}
     </div>
   );
 }

@@ -35,10 +35,14 @@ function compositeScore(s: QuantScore, w: FactorWeights): number {
   return totalW > 0 ? sum / totalW : 0;
 }
 
+function scoreText(val: number): string {
+  return `${Math.round(val * 100)}점`;
+}
+
 function pctCell(val: number | null) {
   if (val === null) return <td className="px-2 py-1.5 text-right text-muted-foreground text-xs">—</td>;
   const color = val >= 0.7 ? "text-green-600" : val <= 0.3 ? "text-red-500" : "text-amber-500";
-  return <td className={`px-2 py-1.5 text-right text-xs font-medium ${color}`}>{val.toFixed(2)}</td>;
+  return <td className={`px-2 py-1.5 text-right text-xs font-medium ${color}`}>{scoreText(val)}</td>;
 }
 
 export function RankingTable({ scores, weights, hardFilters, sectorFilter, industryFilter, topN = 50, universe = "sp500", isBatchRunning = false }: Props) {
@@ -97,7 +101,7 @@ export function RankingTable({ scores, weights, hardFilters, sectorFilter, indus
               <td className="px-2 py-1.5 text-xs text-muted-foreground max-w-[140px] truncate">{s.company_name ?? "—"}</td>
               <td className="px-2 py-1.5 text-right">
                 <span className="bg-blue-100 text-blue-800 rounded px-1.5 py-0.5 text-xs font-bold">
-                  {s.composite.toFixed(2)}
+                  {scoreText(s.composite)}
                 </span>
               </td>
               {pctCell(s.pct_momentum)}

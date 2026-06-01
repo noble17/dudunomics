@@ -349,8 +349,15 @@ export interface RebalancingRow {
 }
 
 export interface FinancialDataPoint {
-  year: string;
-  period_end: string;
+  year?: string;
+  period?: string;
+  period_end?: string;
+  value: number;
+  is_estimate: boolean;
+}
+
+export interface QuarterlyFinancialDataPoint {
+  period: string;
   value: number;
   is_estimate: boolean;
 }
@@ -369,6 +376,11 @@ export interface FinancialsData {
   roe: FinancialDataPoint[];
   latest_report_date: string | null;
   metrics: FinancialMetrics;
+  quarterly: {
+    revenue: QuarterlyFinancialDataPoint[];
+    eps: QuarterlyFinancialDataPoint[];
+    roe: QuarterlyFinancialDataPoint[];
+  };
 }
 
 export interface OhlcvPoint {

@@ -5,13 +5,14 @@ import {
   Bar, BarChart, CartesianGrid, Cell, LabelList,
   ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
-import type { FinancialsData, FinancialDataPoint } from "@/lib/types";
+import type { FinancialsData } from "@/lib/types";
 
 interface Props {
   data: FinancialsData;
 }
 
 type Tab = "revenue" | "eps" | "roe";
+type Period = "annual" | "quarterly";
 
 const TABS: { key: Tab; label: string; unit: string }[] = [
   { key: "revenue", label: "매출액", unit: "백만달러" },
@@ -29,14 +30,26 @@ function fmtValue(value: number, tab: Tab): string {
 
 export function GrowthChart({ data }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>("revenue");
+  const [period, setPeriod] = useState<Period>("annual");
   const tabCfg = TABS.find((t) => t.key === activeTab)!;
-  const points: FinancialDataPoint[] = data[activeTab] ?? [];
 
-  const chartData = points.map((p) => ({
-    name: p.period_end || p.year,
-    value: p.value,
-    is_estimate: p.is_estimate,
-  }));
+  const annualPoints = data[activeTab] ?? [];
+  const quarterlyPoints = data.quarterly?.[activeTab] ?? [];
+  const isQuarterly = period === "quarterly";
+
+  const chartData = isQuarterly
+    ? quarterlyPoints.map((p) => ({
+        name: p.period,
+        value: p.value,
+        is_estimate: p.is_estimate,
+      }))
+    : annualPoints.map((p) => ({
+        name: p.period_end || p.year || "",
+        value: p.value,
+        is_estimate: p.is_estimate,
+      }));
+
+  const hasQuarterly = quarterlyPoints.length > 0;
 
   return (
     <div className="rounded-lg border border-border bg-background p-4">
@@ -44,24 +57,41 @@ export function GrowthChart({ data }: Props) {
         성장성과 수익성 흐름은?
       </p>
 
-      <div className="flex gap-1 mb-3">
-        {TABS.map((t) => (
-          <button
-            key={t.key}
-            onClick={() => setActiveTab(t.key)}
-            className={`px-3 py-1 text-xs rounded-md transition-colors ${
-              activeTab === t.key
-                ? "bg-primary text-primary-foreground"
-                : "bg-muted text-muted-foreground hover:bg-muted/80"
-            }`}
-          >
-            {t.label}
-          </button>
-        ))}
+      <div className="flex items-center gap-2 mb-3 flex-wrap">
+        <div className="flex gap-1">
+          {TABS.map((t) => (
+            <button
+              key={t.key}
+              onClick={() => setActiveTab(t.key)}
+              className={`px-3 py-1 text-xs rounded-md transition-colors ${
+                activeTab === t.key
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-muted text-muted-foreground hover:bg-muted/80"
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
       </div>
 
-      <div className="flex justify-between text-xs text-muted-foreground mb-2">
-        <span className="bg-blue-100 text-blue-700 rounded px-2 py-0.5 text-[10px]">연간</span>
+      <div className="flex justify-between items-center text-xs text-muted-foreground mb-2">
+        <div className="flex gap-1">
+          {(["annual", "quarterly"] as Period[]).map((p) => (
+            <button
+              key={p}
+              onClick={() => setPeriod(p)}
+              disabled={p === "quarterly" && !hasQuarterly}
+              className={`px-2 py-0.5 text-[10px] rounded transition-colors ${
+                period === p
+                  ? "bg-muted-foreground text-background"
+                  : "text-muted-foreground hover:bg-muted/60 disabled:opacity-30 disabled:cursor-not-allowed"
+              }`}
+            >
+              {p === "annual" ? "연간" : "분기"}
+            </button>
+          ))}
+        </div>
         {data.latest_report_date && (
           <span>최근실적발표 {data.latest_report_date} · 단위: {tabCfg.unit}</span>
         )}
@@ -83,8 +113,19 @@ export function GrowthChart({ data }: Props) {
             />
             <YAxis hide />
             <Tooltip
-              formatter={(v) => typeof v === "number" ? fmtValue(v, activeTab) : String(v)}
-              contentStyle={{ fontSize: 11, borderRadius: 6 }}
+              cursor={{ fill: "rgba(255,255,255,0.04)" }}
+              formatter={(v, name) => [
+                typeof v === "number" ? fmtValue(v, activeTab) : String(v),
+                tabCfg.label,
+              ]}
+              contentStyle={{
+                backgroundColor: "#202025",
+                border: "1px solid rgba(214,224,239,0.09)",
+                borderRadius: 6,
+                fontSize: 11,
+                color: "rgba(242,246,255,0.9)",
+              }}
+              itemStyle={{ color: "rgba(242,246,255,0.9)" }}
             />
             <Bar dataKey="value" radius={[3, 3, 0, 0]} maxBarSize={40}>
               <LabelList

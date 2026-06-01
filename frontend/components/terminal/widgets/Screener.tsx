@@ -2,6 +2,10 @@
 import useSWR from "swr";
 import { screenerApi } from "@/lib/api";
 
+function scoreText(value: number): string {
+  return `${Math.round(value * 100)}점`;
+}
+
 export function ScreenerWidget() {
   const { data: scores, isLoading } = useSWR("/api/screener/scores?universe=sp500", () => screenerApi.scores(), { refreshInterval: 300_000 });
 
@@ -27,8 +31,8 @@ export function ScreenerWidget() {
         {top.map(s => (
           <tr key={s.ticker} className="border-b border-[var(--color-border)]/50">
             <td className="py-1 pr-2 font-data font-medium text-[var(--color-text-primary)]">{s.ticker}</td>
-            <td className="py-1 pr-2 text-right">{s.pct_momentum != null ? `${(s.pct_momentum * 100).toFixed(0)}%` : "—"}</td>
-            <td className="py-1 text-right">{s.pct_valuation != null ? `${(s.pct_valuation * 100).toFixed(0)}%` : "—"}</td>
+            <td className="py-1 pr-2 text-right">{s.pct_momentum != null ? scoreText(s.pct_momentum) : "—"}</td>
+            <td className="py-1 text-right">{s.pct_valuation != null ? scoreText(s.pct_valuation) : "—"}</td>
           </tr>
         ))}
       </tbody>
