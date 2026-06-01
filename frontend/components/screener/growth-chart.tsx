@@ -166,8 +166,8 @@ export function GrowthChart({ data }: Props) {
                   const value = props.value as number;
                   const label = typeof value === "number" ? fmtValue(value, activeTab) : String(value ?? "");
                   const cx = x + width / 2;
-                  // 음수 막대: 막대 안쪽 상단(zero-line 바로 아래)에 배치해 x축 레이블과 겹침 방지
-                  const cy = value < 0 ? y + 12 : y - 4;
+                  // 음수 막대: props.y=막대하단, height=막대높이 → y-height/2가 중간
+                  const cy = value < 0 ? y - Math.abs(height) / 2 : y - 4;
                   return (
                     <text x={cx} y={cy} textAnchor="middle" fontSize={9} fill="var(--muted-foreground)">
                       {label}
