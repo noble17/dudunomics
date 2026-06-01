@@ -60,8 +60,8 @@ def _fetch_industry_name(industry_code: int) -> str | None:
     return None
 
 
-def _fetch_stock_info(code: str) -> tuple[str | None, str | None]:
-    """네이버 integration API → (종목명, 업종명). 실패 시 (None, None)."""
+def _fetch_stock_info(code: str) -> tuple[str | None, str | None, float | None, float | None]:
+    """네이버 integration API → (종목명, 업종명, 추정PER, 추정EPS). 실패 시 모두 None."""
     try:
         r = requests.get(
             f"https://m.stock.naver.com/api/stock/{code}/integration",
@@ -69,15 +69,31 @@ def _fetch_stock_info(code: str) -> tuple[str | None, str | None]:
             timeout=8,
         )
         if r.status_code != 200:
-            return None, None
+            return None, None, None, None
         d = r.json()
         stock_name: str | None = d.get("stockName")
         industry_code = d.get("industryCode")
         sector = _fetch_industry_name(int(industry_code)) if industry_code else None
-        return stock_name, sector
+
+        cns_per: float | None = None
+        cns_eps: float | None = None
+        for item in d.get("totalInfos", []):
+            code_key = item.get("code")
+            raw_val = item.get("value", "")
+            try:
+                cleaned = raw_val.replace(",", "").replace("배", "").replace("원", "").strip()
+                val = float(cleaned) if cleaned else None
+            except (ValueError, TypeError):
+                val = None
+            if code_key == "cnsPer":
+                cns_per = val if val and val > 0 else None
+            elif code_key == "cnsEps":
+                cns_eps = val if val and val > 0 else None
+
+        return stock_name, sector, cns_per, cns_eps
     except Exception as e:
         log.debug("naver stock info 실패 (%s): %s", code, e)
-        return None, None
+        return None, None, None, None
 
 
 def fetch_naver_summary(ticker: str) -> dict | None:
@@ -121,11 +137,13 @@ def fetch_naver_summary(ticker: str) -> dict | None:
             except (TypeError, ValueError):
                 return None
 
-        stock_name, sector = _fetch_stock_info(code)
+        stock_name, sector, cns_per, cns_eps = _fetch_stock_info(code)
         result: dict = {
             "per": _safe(raw.get("per")),
             "pbr": _safe(raw.get("pbr")),
             "eps": _safe(raw.get("eps")),
+            "fwd_per": cns_per,
+            "fwd_eps": cns_eps,
             "name": stock_name,
             "sector": sector,
         }

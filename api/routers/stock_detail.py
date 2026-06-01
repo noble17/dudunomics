@@ -35,12 +35,32 @@ def get_financials(
         "price_to_sales": snap.price_to_sales if snap else None,
     }
 
+    # 분기 데이터 (quarterly_financials 테이블)
+    q_rows = repo.get_quarterly_financials(upper, n=16)
+    quarterly_revenue = [
+        {"period": r["period"], "value": r["revenue"], "is_estimate": False}
+        for r in reversed(q_rows) if r.get("revenue") is not None
+    ]
+    quarterly_eps = [
+        {"period": r["period"], "value": r["eps"], "is_estimate": False}
+        for r in reversed(q_rows) if r.get("eps") is not None
+    ]
+    quarterly_roe = [
+        {"period": r["period"], "value": r["roe"], "is_estimate": False}
+        for r in reversed(q_rows) if r.get("roe") is not None
+    ]
+
     return {
         "revenue": data["revenue"],
         "eps": data["eps"],
         "roe": data["roe"],
         "latest_report_date": data.get("latest_report_date"),
         "metrics": metrics,
+        "quarterly": {
+            "revenue": quarterly_revenue,
+            "eps": quarterly_eps,
+            "roe": quarterly_roe,
+        },
     }
 
 

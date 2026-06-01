@@ -29,9 +29,9 @@ class QualityFactor(Factor):
         """단일 종목 퀄리티 점수 계산.
 
         debt_to_equity: yfinance 기준 % 단위 (예: 150 = 부채/자본 1.5배)
+        ROE=None: 자본잠식 가능성 → 매우 낮은 ROE(-9.99)로 대입해 낮은 점수 부여.
         """
-        if roe is None:
-            return math.nan
+        effective_roe = roe if roe is not None else -9.99
         de_ratio = (debt_to_equity / 100.0) if debt_to_equity is not None else 1.0
         de_ratio = max(de_ratio, 0.01)  # 0 나눗셈 방지
-        return 0.6 * roe + 0.4 * (1.0 / de_ratio)
+        return 0.6 * effective_roe + 0.4 * (1.0 / de_ratio)

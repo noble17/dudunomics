@@ -1234,6 +1234,7 @@ def get_quarterly_bulk(tickers: list[str], n: int = 8) -> dict[str, list[dict]]:
             SELECT ticker, period, eps, roe, debt_ratio, revenue, op_income, source,
                    ROW_NUMBER() OVER (PARTITION BY ticker ORDER BY period DESC) AS rn
             FROM quarterly_financials
+            ORDER BY ticker, period DESC
         """)).mappings().all()
         for row in rows:
             if row["ticker"] not in ticker_set:
