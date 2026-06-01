@@ -50,6 +50,12 @@ class FundamentalsSnapshot:
     sector: Optional[str] = None
     industry: Optional[str] = None
     negative_book_value: bool = False
+    # 성장주 스크리닝용 신규 필드
+    roic: Optional[float] = None
+    gross_margin: Optional[float] = None
+    operating_margin: Optional[float] = None
+    current_ratio: Optional[float] = None
+    sales_qq: Optional[float] = None
 
 
 def _get_db() -> sqlite3.Connection:
@@ -156,6 +162,12 @@ def _fetch_finviz(ticker: str) -> FundamentalsSnapshot:
         snap.ev_ebitda = _parse_num(kv.get("EV/EBITDA", ""))
         snap.peg = _parse_num(kv.get("PEG", ""))
         snap.market_cap_m = _parse_market_cap_m(kv.get("Market Cap", ""))
+        # 성장주 스크리닝 신규 필드
+        snap.roic             = _parse_num(kv.get("ROI", ""))
+        snap.gross_margin     = _parse_num(kv.get("Gross Margin", "") or kv.get("Gross M.", ""))
+        snap.operating_margin = _parse_num(kv.get("Oper. Margin", ""))
+        snap.current_ratio    = _parse_num(kv.get("Curr R.", "") or kv.get("Current Ratio", ""))
+        snap.sales_qq         = _parse_num(kv.get("Sales Q/Q", ""))
         # sector/industry: snapshot-table2 kv 우선, 없으면 상단 div 탐색
         if kv.get("Sector"):
             snap.sector = kv.get("Sector") or None

@@ -42,6 +42,15 @@ class ExtendedSnapshot:
     # 섹터
     sector: str | None = None
     industry: str | None = None
+    # 성장주 스크리닝용 신규 필드
+    roic: float | None = None
+    gross_margin: float | None = None
+    operating_margin: float | None = None
+    current_ratio: float | None = None
+    sales_growth: float | None = None       # Sales Q/Q (%)
+    fwd_revenue_growth: float | None = None  # 컨센서스 매출 CAGR
+    fwd_eps_growth: float | None = None      # 컨센서스 EPS CAGR
+    market_cap_krw_b: float | None = None    # 국내 시총 (억원)
     error: str | None = field(default=None, hash=False, compare=False)
 
 
@@ -68,12 +77,19 @@ def _fetch_one(ticker: str, as_of: date) -> ExtendedSnapshot:
                 forward_eps=nav.get("fwd_eps"),
                 eps_ttm=nav["eps"],
                 sector=nav.get("sector"),
+                market_cap_krw_b=nav.get("market_cap_krw_b"),
             )
         return ExtendedSnapshot(ticker=ticker, as_of=as_of)
 
     scraped = _scrape(ticker)
     if scraped is None:
         return ExtendedSnapshot(ticker=ticker, as_of=as_of, error="scrape_failed")
+
+    try:
+        from core.data.stockanalysis_financials import compute_consensus_growth
+        growth = compute_consensus_growth(ticker)
+    except Exception:
+        growth = {"rev_fwd_cagr": None, "eps_fwd_cagr": None}
 
     return ExtendedSnapshot(
         ticker=ticker,
@@ -96,6 +112,13 @@ def _fetch_one(ticker: str, as_of: date) -> ExtendedSnapshot:
         negative_book_value=scraped.negative_book_value,
         sector=scraped.sector,
         industry=scraped.industry,
+        roic=scraped.roic,
+        gross_margin=scraped.gross_margin,
+        operating_margin=scraped.operating_margin,
+        current_ratio=scraped.current_ratio,
+        sales_growth=scraped.sales_qq,
+        fwd_revenue_growth=growth.get("rev_fwd_cagr"),
+        fwd_eps_growth=growth.get("eps_fwd_cagr"),
     )
 
 

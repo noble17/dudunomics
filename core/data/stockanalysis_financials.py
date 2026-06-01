@@ -266,3 +266,47 @@ def fetch_annual_financials(ticker: str) -> Optional[dict]:
     if revenue or eps:
         _to_cache(ticker, data)
     return data
+
+
+def compute_consensus_growth(ticker: str) -> dict:
+    """향후 2~3년 컨센서스 CAGR 계산.
+
+    fetch_annual_financials의 예상치(is_estimate=True) 행에서
+    가장 최근 확정 연도 대비 마지막 예상 연도까지 CAGR을 계산한다.
+
+    Returns: {
+        "rev_fwd_cagr": float|None,  # 매출 forward CAGR (예: 0.15 = 15%)
+        "eps_fwd_cagr": float|None,  # EPS forward CAGR
+        "fwd_years": int,            # 예상 기간 (년), 0이면 계산 불가
+    }
+    """
+    result: dict = {"rev_fwd_cagr": None, "eps_fwd_cagr": None, "fwd_years": 0}
+
+    try:
+        data = fetch_annual_financials(ticker)
+        if not data:
+            return result
+
+        def _cagr(rows: list[dict]) -> Optional[float]:
+            actuals = [r for r in rows if not r["is_estimate"]]
+            estimates = [r for r in rows if r["is_estimate"]]
+            if not actuals or not estimates:
+                return None
+            base_row = max(actuals, key=lambda r: r["year"])
+            target_row = max(estimates, key=lambda r: r["year"])
+            base_val = base_row["value"]
+            target_val = target_row["value"]
+            years = int(target_row["year"]) - int(base_row["year"])
+            if years <= 0 or base_val is None or target_val is None:
+                return None
+            if base_val <= 0 or target_val <= 0:
+                return None
+            result["fwd_years"] = years
+            return (target_val / base_val) ** (1.0 / years) - 1.0
+
+        result["rev_fwd_cagr"] = _cagr(data.get("revenue", []))
+        result["eps_fwd_cagr"] = _cagr(data.get("eps", []))
+    except Exception as e:
+        log.debug("compute_consensus_growth 실패 (%s): %s", ticker, e)
+
+    return result
