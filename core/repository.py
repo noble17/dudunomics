@@ -234,6 +234,18 @@ def _init_schema(engine):
         source      TEXT,
         PRIMARY KEY (ticker, period)
     );
+
+    CREATE SEQUENCE IF NOT EXISTS golden_cross_events_id_seq START 1;
+    CREATE TABLE IF NOT EXISTS golden_cross_events (
+        id                 INTEGER DEFAULT nextval('golden_cross_events_id_seq') PRIMARY KEY,
+        ticker             VARCHAR NOT NULL,
+        market             VARCHAR NOT NULL,
+        name               VARCHAR,
+        first_detected_at  DATE NOT NULL,
+        last_sent_at       TIMESTAMP,
+        day_count          INTEGER DEFAULT 1,
+        UNIQUE(ticker)
+    );
     """
     with engine.connect() as conn:
         for stmt in ddl.strip().split(";"):
@@ -1244,3 +1256,48 @@ def get_quarterly_bulk(tickers: list[str], n: int = 8) -> dict[str, list[dict]]:
             d = {k: v for k, v in row.items() if k != "rn"}
             result.setdefault(d["ticker"], []).append(d)
     return result
+
+
+# ── Golden Cross Events ───────────────────────────────────────────────────────
+
+def insert_golden_cross(ticker: str, market: str, name: str | None, first_date: date) -> None:
+    """신규 골든크로스 등록. 이미 있으면 무시 (INSERT OR IGNORE)."""
+    with session() as s:
+        s.execute(text("""
+            INSERT OR IGNORE INTO golden_cross_events
+              (ticker, market, name, first_detected_at, last_sent_at, day_count)
+            VALUES (:t, :m, :n, :fd, current_timestamp, 1)
+        """), {"t": ticker, "m": market, "n": name, "fd": str(first_date)})
+        s.commit()
+
+
+def get_active_golden_crosses(market: str) -> list[dict]:
+    """시장별 활성 골든크로스 전체 조회."""
+    with session() as s:
+        rows = s.execute(text("""
+            SELECT ticker, market, name, first_detected_at, last_sent_at, day_count
+            FROM golden_cross_events WHERE market = :m
+        """), {"m": market}).fetchall()
+        return [
+            {"ticker": r[0], "market": r[1], "name": r[2],
+             "first_detected_at": r[3], "last_sent_at": r[4], "day_count": r[5]}
+            for r in rows
+        ]
+
+
+def update_golden_cross(ticker: str, day_count: int) -> None:
+    """day_count 업데이트 + last_sent_at 갱신."""
+    with session() as s:
+        s.execute(text("""
+            UPDATE golden_cross_events
+            SET day_count = :dc, last_sent_at = current_timestamp
+            WHERE ticker = :t
+        """), {"dc": day_count, "t": ticker})
+        s.commit()
+
+
+def delete_golden_cross(ticker: str) -> None:
+    """골든크로스 종료 — 행 삭제."""
+    with session() as s:
+        s.execute(text("DELETE FROM golden_cross_events WHERE ticker = :t"), {"t": ticker})
+        s.commit()
