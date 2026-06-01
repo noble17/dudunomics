@@ -56,6 +56,30 @@ def refresh(universe: str = "sp500", background_tasks: BackgroundTasks = None,
         return result
 
 
+@router.post("/ticker/{ticker}/refresh-fields")
+def refresh_ticker_fields(ticker: str, universe: str = "sp500",
+                          user: CurrentUser = Depends(current_user)):
+    """단일 종목의 펀더멘탈 필드만 즉시 재페치하여 DB 갱신 (캐시 무효화 후)."""
+    from core.data.fundamentals_extended import _fetch_one
+    from datetime import date
+
+    t = ticker.upper()
+    current = repo.get_quant_ticker(t, universe)
+    if not current:
+        raise HTTPException(status_code=404, detail=f"{t} 데이터 없음")
+
+    snap = _fetch_one(t, date.today())
+    row = dict(current)
+    row["raw_eps_ttm"] = snap.eps_ttm
+    row["raw_roe"] = snap.roe if snap.roe is not None else row.get("raw_roe")
+    row["raw_fwd_eps"] = snap.forward_eps if snap.forward_eps is not None else row.get("raw_fwd_eps")
+    row["raw_fwd_pe"] = snap.forward_pe if snap.forward_pe is not None else row.get("raw_fwd_pe")
+    row["raw_trailing_pe"] = snap.trailing_pe if snap.trailing_pe is not None else row.get("raw_trailing_pe")
+    repo.upsert_quant_scores([row])
+    return {"ticker": t, "raw_eps_ttm": snap.eps_ttm, "raw_roe": row["raw_roe"],
+            "raw_fwd_eps": row["raw_fwd_eps"]}
+
+
 @router.get("/notes/{ticker}", response_model=TickerNoteOut | None)
 def get_note(ticker: str, user: CurrentUser = Depends(current_user)):
     return repo.get_ticker_note(user.id, ticker.upper())

@@ -62,6 +62,9 @@ def _from_cache(ticker: str) -> Optional[dict]:
         if row and time.time() - row[1] < _TTL:
             cached = json.loads(row[0])
             if cached.get("_v") == _CACHE_VER:
+                # ROE가 빈 배열인데 revenue/eps 데이터가 있으면 부분 실패 → 재페치
+                if not cached.get("roe") and (cached.get("revenue") or cached.get("eps")):
+                    return None
                 return cached
     except Exception:
         pass

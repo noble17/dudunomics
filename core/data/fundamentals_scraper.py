@@ -149,7 +149,7 @@ def _fetch_finviz(ticker: str) -> FundamentalsSnapshot:
             snap.negative_book_value = False
         snap.price_to_sales = _parse_num(kv.get("P/S", ""))
         snap.forward_eps = _parse_num(kv.get("EPS next Y", ""))
-        snap.trailing_eps = _parse_num(kv.get("EPS", ""))
+        snap.trailing_eps = _parse_num(kv.get("EPS (ttm)") or kv.get("EPS") or "")
         snap.return_on_equity = _parse_num(kv.get("ROE", ""))
         snap.debt_to_equity = _parse_num(kv.get("Debt/Eq", ""))
         # 신규
