@@ -178,7 +178,7 @@ export function GrowthChart({ data }: Props) {
               {chartData.map((entry, idx) => (
                 <Cell
                   key={idx}
-                  fill={entry.is_estimate ? "var(--muted)" : "var(--color-chart-1, #3b82f6)"}
+                  fill={entry.is_estimate ? "rgba(59, 130, 246, 0.45)" : "var(--color-chart-1, #3b82f6)"}
                 />
               ))}
             </Bar>
