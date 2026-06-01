@@ -6,6 +6,7 @@ import pandas as pd
 from apscheduler.schedulers.background import BackgroundScheduler
 
 import core.repository as repo
+from core.ema_scan import run_ema_scan
 from core.fx import get_fx_provider
 from core.indicators import compute_indicators
 from core.data.prices_provider import fetch_ohlcv
@@ -87,6 +88,24 @@ def _snapshot_for_user(user_id: int, usdkrw: float, ts: datetime):
         )
     except Exception as e:
         log.error("_snapshot_for_user(user_id=%d) 오류: %s", user_id, e)
+
+
+def ema_scan_kr_job():
+    """국장 EMA 골든크로스 스캔 — 매일 16:00 KST."""
+    try:
+        result = run_ema_scan("KR")
+        log.info("ema_scan_kr 완료: %s", result)
+    except Exception as e:
+        log.error("ema_scan_kr_job 오류: %s", e)
+
+
+def ema_scan_us_job():
+    """미장 EMA 골든크로스 스캔 — 매일 07:00 KST."""
+    try:
+        result = run_ema_scan("US")
+        log.info("ema_scan_us 완료: %s", result)
+    except Exception as e:
+        log.error("ema_scan_us_job 오류: %s", e)
 
 
 def _check_condition(alert: dict, current_price: float, ohlcv_df: pd.DataFrame | None) -> bool:
@@ -195,4 +214,8 @@ def create_scheduler() -> BackgroundScheduler:
     scheduler.add_job(snapshot_job, "interval", minutes=5, id="snapshot",
                       next_run_time=datetime.now())
     scheduler.add_job(alert_check_job, "interval", minutes=1, id="alert_check")
+    scheduler.add_job(ema_scan_kr_job, "cron", hour=16, minute=0,
+                      id="ema_scan_kr", timezone="Asia/Seoul")
+    scheduler.add_job(ema_scan_us_job, "cron", hour=7, minute=0,
+                      id="ema_scan_us", timezone="Asia/Seoul")
     return scheduler
