@@ -23,6 +23,7 @@ from api.routers.ai import router as ai_router
 from api.routers.alerts import router as alerts_router
 from api.routers.trades import router as trades_router
 from api.routers.stock_detail import router as stock_detail_router
+from api.routers.ema_scan import router as ema_scan_router
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
@@ -63,6 +64,7 @@ app.include_router(ai_router)
 app.include_router(alerts_router)
 app.include_router(trades_router)
 app.include_router(stock_detail_router)
+app.include_router(ema_scan_router)
 
 @app.get("/health")
 def health():
