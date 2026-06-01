@@ -59,7 +59,7 @@ function CustomTooltip({
       lineHeight: 1.6,
     }}>
       <p>{label}{isEst ? " (예상)" : ""}</p>
-      <p>{TABS.find(t => t.key === tab)?.label}: {fmtValue(entry.payload.value, tab)} {unit}</p>
+      <p>{TABS.find(t => t.key === tab)?.label}: {fmtValue(entry.payload.value, tab)}{tab !== "roe" ? ` ${unit}` : ""}</p>
       {yoy !== undefined && (
         <p style={{ color: yoy >= 0 ? "#ef4444" : "#60a5fa" }}>전년대비 {fmtYoy(yoy)}</p>
       )}
@@ -158,9 +158,22 @@ export function GrowthChart({ data }: Props) {
             <Bar dataKey="value" radius={[3, 3, 0, 0]} maxBarSize={40}>
               <LabelList
                 dataKey="value"
-                position="top"
-                formatter={(v: unknown) => typeof v === "number" ? fmtValue(v, activeTab) : String(v ?? "")}
-                style={{ fontSize: 9, fill: "var(--muted-foreground)" }}
+                content={(props: Record<string, unknown>) => {
+                  const x = props.x as number;
+                  const y = props.y as number;
+                  const width = props.width as number;
+                  const height = props.height as number;
+                  const value = props.value as number;
+                  const label = typeof value === "number" ? fmtValue(value, activeTab) : String(value ?? "");
+                  const cx = x + width / 2;
+                  // 음수 막대: 막대 안쪽 상단(zero-line 바로 아래)에 배치해 x축 레이블과 겹침 방지
+                  const cy = value < 0 ? y + 12 : y - 4;
+                  return (
+                    <text x={cx} y={cy} textAnchor="middle" fontSize={9} fill="var(--muted-foreground)">
+                      {label}
+                    </text>
+                  );
+                }}
               />
               {chartData.map((entry, idx) => (
                 <Cell
