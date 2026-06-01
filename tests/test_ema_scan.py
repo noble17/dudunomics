@@ -158,10 +158,9 @@ def test_run_ema_scan_expires_after_7_days(fresh_db, monkeypatch, tmp_path):
     assert repo.get_active_golden_crosses("US") == []
 
 
-def test_run_ema_scan_no_telegram_when_nothing(fresh_db, monkeypatch, tmp_path):
-    """골든크로스 없으면 Telegram 미발송."""
+def test_run_ema_scan_no_cross_sends_empty_message(fresh_db, monkeypatch, tmp_path):
+    """골든크로스 없어도 Telegram 발송 — '해당 없음' 메시지."""
     ticker_file = tmp_path / "sp500_tickers.json"
-    # 하락 추세 티커 — EMA5 < EMA20
     ticker_file.write_text(json.dumps(["AAPL"]))
     monkeypatch.setenv("SP500_PATH", str(ticker_file))
     nasdaq_file = tmp_path / "nasdaq100_tickers.json"
@@ -178,4 +177,5 @@ def test_run_ema_scan_no_telegram_when_nothing(fresh_db, monkeypatch, tmp_path):
          patch("core.ema_scan.send_telegram") as mock_tg:
         run_ema_scan("US")
 
-    mock_tg.assert_not_called()
+    mock_tg.assert_called_once()
+    assert "해당 없음" in mock_tg.call_args[0][0]

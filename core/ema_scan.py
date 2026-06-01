@@ -103,6 +103,9 @@ def _build_message(market: str, today: date,
                 f"  현재가 {e['close']} | EMA5 {e['ema5']} | EMA20 {e['ema20']} | EMA60 {e['ema60']}"
             )
 
+    if not new_entries and not maintained_entries:
+        lines.append("\n해당 없음 — 현재 골든크로스 종목 없음")
+
     return "\n".join(lines)
 
 
@@ -171,9 +174,8 @@ def run_ema_scan(market: str) -> dict:
             except Exception as e:
                 log.warning("ema_scan 티커 처리 오류 (%s): %s", ticker, e)
 
-    if new_entries or maintained_entries:
-        msg = _build_message(market, today, new_entries, maintained_entries, names)
-        send_telegram(msg)
+    msg = _build_message(market, today, new_entries, maintained_entries, names)
+    send_telegram(msg)
 
     log.info("ema_scan 완료: market=%s new=%d maintained=%d",
              market, len(new_entries), len(maintained_entries))
