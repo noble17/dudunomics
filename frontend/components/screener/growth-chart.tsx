@@ -21,11 +21,50 @@ const TABS: { key: Tab; label: string; unit: string }[] = [
 ];
 
 function fmtValue(value: number, tab: Tab): string {
-  if (tab === "revenue") {
-    return value >= 1_000 ? `${(value / 1_000).toFixed(0)}B` : `${value.toFixed(0)}M`;
-  }
-  if (tab === "eps") return `$${value.toFixed(2)}`;
+  if (tab === "revenue") return value.toLocaleString();
+  if (tab === "eps") return `${value.toFixed(2)}`;
   return `${value.toFixed(1)}%`;
+}
+
+function fmtYoy(yoy: number): string {
+  return `${yoy >= 0 ? "+" : ""}${yoy.toFixed(2)}%`;
+}
+
+interface TooltipPayload {
+  value: number;
+  payload: { name: string; value: number; is_estimate: boolean; yoy?: number };
+}
+
+function CustomTooltip({
+  active, payload, label, tab, unit,
+}: {
+  active?: boolean;
+  payload?: TooltipPayload[];
+  label?: string;
+  tab: Tab;
+  unit: string;
+}) {
+  if (!active || !payload?.length) return null;
+  const entry = payload[0];
+  const yoy = entry.payload.yoy;
+  const isEst = entry.payload.is_estimate;
+  return (
+    <div style={{
+      backgroundColor: "#202025",
+      border: "1px solid rgba(214,224,239,0.09)",
+      borderRadius: 6,
+      fontSize: 11,
+      color: "rgba(242,246,255,0.9)",
+      padding: "6px 10px",
+      lineHeight: 1.6,
+    }}>
+      <p>{label}{isEst ? " (예상)" : ""}</p>
+      <p>{TABS.find(t => t.key === tab)?.label}: {fmtValue(entry.payload.value, tab)} {unit}</p>
+      {yoy !== undefined && (
+        <p style={{ color: yoy >= 0 ? "#ef4444" : "#60a5fa" }}>전년대비 {fmtYoy(yoy)}</p>
+      )}
+    </div>
+  );
 }
 
 export function GrowthChart({ data }: Props) {
@@ -37,17 +76,17 @@ export function GrowthChart({ data }: Props) {
   const quarterlyPoints = data.quarterly?.[activeTab] ?? [];
   const isQuarterly = period === "quarterly";
 
-  const chartData = isQuarterly
-    ? quarterlyPoints.map((p) => ({
-        name: p.period,
-        value: p.value,
-        is_estimate: p.is_estimate,
-      }))
-    : annualPoints.map((p) => ({
-        name: p.period_end || p.year || "",
-        value: p.value,
-        is_estimate: p.is_estimate,
-      }));
+  const rawPoints = isQuarterly
+    ? quarterlyPoints.map((p) => ({ name: p.period, value: p.value, is_estimate: p.is_estimate }))
+    : annualPoints.map((p) => ({ name: p.period_end || p.year || "", value: p.value, is_estimate: p.is_estimate }));
+
+  const chartData = rawPoints.map((p, i) => {
+    const prev = rawPoints[i - 1];
+    const yoy = prev && prev.value !== 0
+      ? ((p.value - prev.value) / Math.abs(prev.value)) * 100
+      : undefined;
+    return { ...p, yoy };
+  });
 
   const hasQuarterly = quarterlyPoints.length > 0;
 
@@ -114,25 +153,14 @@ export function GrowthChart({ data }: Props) {
             <YAxis hide />
             <Tooltip
               cursor={{ fill: "rgba(255,255,255,0.04)" }}
-              formatter={(v, name) => [
-                typeof v === "number" ? fmtValue(v, activeTab) : String(v),
-                tabCfg.label,
-              ]}
-              contentStyle={{
-                backgroundColor: "#202025",
-                border: "1px solid rgba(214,224,239,0.09)",
-                borderRadius: 6,
-                fontSize: 11,
-                color: "rgba(242,246,255,0.9)",
-              }}
-              itemStyle={{ color: "rgba(242,246,255,0.9)" }}
+              content={<CustomTooltip tab={activeTab} unit={tabCfg.unit} />}
             />
             <Bar dataKey="value" radius={[3, 3, 0, 0]} maxBarSize={40}>
               <LabelList
                 dataKey="value"
                 position="top"
                 formatter={(v: unknown) => typeof v === "number" ? fmtValue(v, activeTab) : String(v ?? "")}
-                style={{ fontSize: 10, fill: "var(--foreground)" }}
+                style={{ fontSize: 9, fill: "var(--muted-foreground)" }}
               />
               {chartData.map((entry, idx) => (
                 <Cell

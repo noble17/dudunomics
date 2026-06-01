@@ -68,25 +68,45 @@ export function PriceChart({ data, annualEps }: Props) {
   const sortedQuarterlyEps = [...data.quarterly_eps].sort((a, b) => a.date.localeCompare(b.date));
   const hasQuarterlyEps = sortedQuarterlyEps.length > 0;
 
-  const annualEpsSteps = (annualEps ?? [])
+  const annualEpsActual = (annualEps ?? [])
     .filter((e) => !e.is_estimate)
     .map((e) => ({ date: `${e.year ?? e.period_end ?? ""}-12-31`, eps: e.value }))
     .sort((a, b) => a.date.localeCompare(b.date));
 
-  const hasAnnualEps = annualEpsSteps.length > 0;
-  const hasEpsData = hasQuarterlyEps || hasAnnualEps;
+  const annualEpsEst = (annualEps ?? [])
+    .filter((e) => e.is_estimate)
+    .map((e) => ({ date: `${e.year ?? e.period_end ?? ""}-12-31`, eps: e.value }))
+    .sort((a, b) => a.date.localeCompare(b.date));
 
-  const priceEpsChartData = data.ohlcv.map((p) => {
-    let eps: number | null = null;
-    if (hasQuarterlyEps) {
-      const match = sortedQuarterlyEps.filter((e) => e.date <= p.date).at(-1);
-      eps = match?.eps ?? null;
-    } else if (hasAnnualEps) {
-      const match = annualEpsSteps.filter((e) => e.date <= p.date).at(-1);
-      eps = match?.eps ?? null;
-    }
-    return { date: p.date, price: p.close, eps };
-  });
+  const hasAnnualEps = annualEpsActual.length > 0;
+  const hasEpsData = hasQuarterlyEps || hasAnnualEps;
+  const hasEpsEst = annualEpsEst.length > 0;
+
+  // 실제 주가 기간 + 미래 예상 EPS 기간을 합산
+  const lastActualDate = data.ohlcv.at(-1)?.date ?? "";
+  const futureEpsDates: string[] = hasEpsEst
+    ? annualEpsEst
+        .filter((e) => e.date > lastActualDate)
+        .map((e) => e.date)
+    : [];
+
+  const priceEpsChartData = [
+    ...data.ohlcv.map((p) => {
+      let eps: number | null = null;
+      if (hasQuarterlyEps) {
+        const match = sortedQuarterlyEps.filter((e) => e.date <= p.date).at(-1);
+        eps = match?.eps ?? null;
+      } else if (hasAnnualEps) {
+        const match = annualEpsActual.filter((e) => e.date <= p.date).at(-1);
+        eps = match?.eps ?? null;
+      }
+      return { date: p.date, price: p.close, eps, eps_est: null as number | null };
+    }),
+    ...futureEpsDates.map((date) => {
+      const match = annualEpsEst.filter((e) => e.date <= date).at(-1);
+      return { date, price: null as number | null, eps: null as number | null, eps_est: match?.eps ?? null };
+    }),
+  ];
 
   return (
     <div className="rounded-lg border border-border bg-background p-4">
@@ -218,11 +238,14 @@ export function PriceChart({ data, annualEps }: Props) {
               />
               <Legend
                 wrapperStyle={{ fontSize: 11 }}
-                formatter={(v: string) => (v === "price" ? "● 주가" : "● 주당순이익")}
+                formatter={(v: string) => v === "price" ? "● 주가" : v === "eps" ? "● 주당순이익" : "⋯ 예상 EPS"}
               />
-              <Line yAxisId="price" type="monotone" dataKey="price" stroke="#3b82f6" dot={false} strokeWidth={1.5} name="price" />
+              <Line yAxisId="price" type="monotone" dataKey="price" stroke="#3b82f6" dot={false} strokeWidth={1.5} name="price" connectNulls />
               {hasEpsData && (
                 <Line yAxisId="eps" type="stepAfter" dataKey="eps" stroke="#22c55e" dot={false} strokeWidth={2} name="eps" connectNulls />
+              )}
+              {hasEpsEst && (
+                <Line yAxisId="eps" type="stepAfter" dataKey="eps_est" stroke="#6b7280" dot={false} strokeWidth={2} strokeDasharray="5 4" name="eps_est" connectNulls />
               )}
             </LineChart>
           </ResponsiveContainer>
