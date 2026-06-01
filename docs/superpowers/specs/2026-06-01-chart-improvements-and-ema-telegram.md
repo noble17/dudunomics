@@ -94,6 +94,19 @@ CREATE TABLE IF NOT EXISTS golden_cross_events (
 - 신규/유지 모두 없으면 Telegram 미발송 (무음)
 - 한 메시지 최대 4096자 제한 초과 시 자동 분할 발송
 
+### 즉시 실행 API 엔드포인트
+스케줄을 기다리지 않고 즉시 스캔 + Telegram 발송 (테스트 및 수동 트리거용).
+
+```
+POST /api/ema-scan/run?market=KR
+POST /api/ema-scan/run?market=US
+```
+
+- `market` 파라미터: `KR` (KOSPI200+KOSDAQ150) | `US` (S&P500+NASDAQ100)
+- 인증 필요 (기존 `current_user` 의존성 사용)
+- 응답: `{"status": "ok", "new": 3, "maintained": 5}` (신규/유지 감지 수)
+- 스캔 소요시간이 길어 타임아웃 가능성 있으므로 백그라운드 태스크(`BackgroundTasks`)로 실행
+
 ### 새 파일
 | 파일 | 역할 |
 |------|------|
@@ -105,6 +118,8 @@ CREATE TABLE IF NOT EXISTS golden_cross_events (
 |------|----------|
 | `core/scheduler.py` | `ema_scan_kr_job` (16:00 cron), `ema_scan_us_job` (07:00 cron) 추가 |
 | `core/repository.py` | `golden_cross_events` 테이블 생성 + CRUD 함수 |
+| `api/routers/` | `ema_scan.py` 라우터 신규 추가 |
+| `api/main.py` (또는 app entry) | `ema_scan` 라우터 등록 |
 
 ### 환경변수
 ```
