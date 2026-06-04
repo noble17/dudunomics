@@ -1,6 +1,14 @@
 .env
-data/dudunomics.duckdb
-data/holdings.json
+data/*.duckdb
+data/*.sqlite
+data/*.db
+data/*.json
+!data/*.json.example
+!data/kis_names.json
+!data/kosdaq150_tickers.json
+!data/kospi200_tickers.json
+!data/nasdaq100_tickers.json
+!data/sp500_tickers.json
 __pycache__/
 *.pyc
 *.pyo
@@ -10,3 +18,5 @@ venv/
 .DS_Store
 .gstack/
 .superpowers/
+*.cache
+yfinance.cache
