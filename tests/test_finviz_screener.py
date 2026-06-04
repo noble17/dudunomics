@@ -148,7 +148,7 @@ def test_universe_scorer_uses_finviz_bulk(monkeypatch):
          patch("core.scoring.universe_scorer.fetch_extended", return_value=[mock_snap, mock_snap_msft]), \
          patch("core.scoring.universe_scorer.fetch_finviz_bulk", return_value=finviz_data) as mock_bulk, \
          patch("core.scoring.universe_scorer.repo.get_quarterly_bulk", return_value={}), \
-         patch("core.scoring.universe_scorer.repo.upsert_quant_scores"), \
+         patch("core.scoring.universe_scorer.repo.upsert_quant_scores") as mock_upsert, \
          patch("core.scoring.universe_scorer.PriceMomentumFactor") as MockPMF, \
          patch("core.scoring.universe_scorer.ForwardEpsMomentumFactor") as MockFEMF, \
          patch("core.scoring.universe_scorer.TechnicalFactor") as MockTF, \
@@ -164,3 +164,6 @@ def test_universe_scorer_uses_finviz_bulk(monkeypatch):
         universe_scorer.run_batch("sp500")
 
     mock_bulk.assert_called_once_with("idx_sp500")
+    saved_rows = mock_upsert.call_args.args[0]
+    apple = next(row for row in saved_rows if row["ticker"] == "AAPL")
+    assert apple["raw_debt_ratio"] == 1.8

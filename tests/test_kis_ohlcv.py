@@ -57,6 +57,7 @@ class TestFetchOhlcvOverseas:
         responses = [
             _resp(page1_rows, keyb="NEXTPAGE"),
             _resp(page2_rows, keyb=""),
+            _resp([_row("20241231")], keyb=""),
         ]
         with patch("core.prices.kis._get_token", return_value="fake"), \
              patch("core.prices.kis.requests.get", side_effect=responses):
@@ -65,6 +66,25 @@ class TestFetchOhlcvOverseas:
 
         assert len(df) == 16
         assert df.index.is_monotonic_increasing
+
+    def test_pagination_without_keyb_steps_back_by_date(self):
+        """keyb가 없어도 요청 시작일까지 BYMD를 뒤로 넘겨 추가 조회한다."""
+        page1_rows = [_row("20260331"), _row("20260330")]
+        page2_rows = [_row("20250605"), _row("20250604")]
+        responses = [
+            _resp(page1_rows, keyb=""),
+            _resp(page2_rows, keyb=""),
+            _resp([_row("20250530")], keyb=""),
+        ]
+
+        with patch("core.prices.kis._get_token", return_value="fake"), \
+             patch("core.prices.kis.requests.get", side_effect=responses) as mock_get:
+            from core.prices.kis import fetch_ohlcv_overseas
+            df = fetch_ohlcv_overseas("BE", date(2025, 6, 1), date(2026, 3, 31), market="NASDAQ")
+
+        assert len(df) == 4
+        assert mock_get.call_args_list[0].kwargs["params"]["BYMD"] == "20260331"
+        assert mock_get.call_args_list[1].kwargs["params"]["BYMD"] == "20260329"
 
     def test_empty_output2_returns_empty_df(self):
         """output2=[] → 빈 DataFrame 반환."""
@@ -101,19 +121,20 @@ class TestOhlcvCacheKisIntegration:
     def test_uses_kis_for_overseas(self, fresh_db):
         """해외 ticker → KIS fetch 호출, yfinance bulk 미호출."""
         with patch("core.prices.kis.fetch_ohlcv_overseas", return_value=self._fake_df()) as mock_kis, \
-             patch("core.data.ohlcv_cache._fetch_yfinance_bulk") as mock_yf:
+             patch("yfinance.download") as mock_yf:
             from core.data.ohlcv_cache import _fetch_and_store
             _fetch_and_store(["AAPL"], self.START, self.END)
 
         mock_kis.assert_called_once_with("AAPL", self.START, self.END)
         mock_yf.assert_not_called()
 
-    def test_fallback_to_yfinance_when_kis_empty(self, fresh_db):
-        """KIS → 빈 DataFrame → yfinance bulk 호출 확인."""
+    def test_no_yfinance_when_kis_empty(self, fresh_db):
+        """KIS가 비어도 해외 OHLCV는 yfinance fallback을 호출하지 않는다."""
         with patch("core.prices.kis.fetch_ohlcv_overseas", return_value=pd.DataFrame()), \
-             patch("core.data.ohlcv_cache._fetch_yfinance_bulk", return_value={"AAPL": self._fake_df()}) as mock_yf, \
+             patch("yfinance.download") as mock_yf, \
              patch("core.data.ohlcv_cache._store_df"):
             from core.data.ohlcv_cache import _fetch_and_store
-            _fetch_and_store(["AAPL"], self.START, self.END)
+            warns = _fetch_and_store(["AAPL"], self.START, self.END)
 
-        mock_yf.assert_called_once_with(["AAPL"], self.START, self.END)
+        mock_yf.assert_not_called()
+        assert "AAPL: KIS 해외 OHLCV 데이터 없음" in warns

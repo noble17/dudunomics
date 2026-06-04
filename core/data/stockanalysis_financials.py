@@ -62,9 +62,6 @@ def _from_cache(ticker: str) -> Optional[dict]:
         if row and time.time() - row[1] < _TTL:
             cached = json.loads(row[0])
             if cached.get("_v") == _CACHE_VER:
-                # ROE가 빈 배열인데 revenue/eps 데이터가 있으면 부분 실패 → 재페치
-                if not cached.get("roe") and (cached.get("revenue") or cached.get("eps")):
-                    return None
                 return cached
     except Exception:
         pass
@@ -186,18 +183,28 @@ def _fetch_roe_annual(ticker: str) -> list[dict]:
         log.debug("ROE HTTP 실패 (%s): %s", ticker, e)
         return []
 
-    def _extract_with_fiscal_year(html: str, key: str) -> dict[str, float]:
-        """fiscalYear:[...] + key:[...] 패턴으로 연도별 값 추출."""
+    def _extract_with_years(html: str, key: str) -> dict[str, float]:
+        """dates 또는 fiscalYear + key 배열에서 확정 연도별 값 추출."""
         scripts = re.findall(r"<script[^>]*>(.*?)</script>", html, re.DOTALL)
         for s in scripts:
-            m_years = re.search(r'fiscalYear:\[([^\]]*)\]', s)
+            raw_dates = _extract_js_array(s, "dates")
+            if raw_dates:
+                years = [x.strip().strip('"\'')[:4] for x in raw_dates]
+            else:
+                m_years = re.search(r'fiscalYear:\[([^\]]*)\]', s)
+                if not m_years:
+                    continue
+                years = [x.strip().strip('"\'') for x in m_years.group(1).split(",") if x.strip()]
             raw_vals = _extract_js_array(s, key)
-            if not m_years or not raw_vals:
+            raw_analysts = _extract_js_array(s, "analysts")
+            if not years or not raw_vals:
                 continue
-            years = [x.strip().strip('"\'') for x in m_years.group(1).split(",") if x.strip()]
             result = {}
             for i, year in enumerate(years):
                 if not year.isdigit() or i >= len(raw_vals):
+                    continue
+                analyst_val = raw_analysts[i] if raw_analysts and i < len(raw_analysts) else "null"
+                if analyst_val.strip() != "null":
                     continue
                 v = _parse_num(raw_vals[i])
                 if v is not None:
@@ -206,8 +213,8 @@ def _fetch_roe_annual(ticker: str) -> list[dict]:
                 return result
         return {}
 
-    net_income = _extract_with_fiscal_year(resp_is.text, "netIncome")
-    equity = _extract_with_fiscal_year(resp_bs.text, "equity")
+    net_income = _extract_with_years(resp_is.text, "netIncome")
+    equity = _extract_with_years(resp_bs.text, "equity") or _extract_with_years(resp_bs.text, "totalEquity")
 
     if not net_income or not equity:
         return []

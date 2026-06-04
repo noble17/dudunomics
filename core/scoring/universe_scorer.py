@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import logging
 import math
+import numbers
 from datetime import date, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -26,6 +27,7 @@ from core.factors.quality import QualityFactor
 from core.factors.technical import TechnicalFactor
 from core.factors.valuation import compute_valuation_zscore
 from core.data.finviz_screener import fetch_finviz_bulk
+from core.scoring.growth_scorer import compute_growth_scores
 import core.repository as repo
 
 log = logging.getLogger(__name__)
@@ -74,6 +76,20 @@ def _compute_yoy_eps_momentum(q_rows: list[dict]) -> float:
     return (recent_eps - yoy_eps) / abs(yoy_eps)
 
 
+def _compute_yoy_revenue_growth(q_rows: list[dict]) -> float | None:
+    """최근 확정 분기 매출 vs 전년 동기 매출 성장률."""
+    if len(q_rows) < 5:
+        return None
+    by_period = {r["period"]: r for r in q_rows}
+    recent_period = q_rows[0]["period"]
+    yoy_row = by_period.get(f"{int(recent_period[:4]) - 1}{recent_period[4:]}")
+    recent_revenue = q_rows[0].get("revenue")
+    yoy_revenue = yoy_row.get("revenue") if yoy_row else None
+    if recent_revenue is None or yoy_revenue in (None, 0):
+        return None
+    return (recent_revenue - yoy_revenue) / abs(yoy_revenue)
+
+
 def _percentile_rank(series: pd.Series, ascending: bool = True) -> pd.Series:
     """유니버스 내 백분위 순위(0~1). ascending=False이면 낮을수록 높은 점수."""
     clean = series.dropna()
@@ -108,7 +124,7 @@ def run_batch(universe: str = "sp500") -> dict:
     bs.update(universe, "펀더멘탈 페치 중 (가장 오래 걸림)", 0)
     def _progress(done: int, total: int) -> None:
         bs.update(universe, f"펀더멘탈 페치 중 ({done}/{total})", done)
-    snaps: list[ExtendedSnapshot] = fetch_extended(tickers, max_workers=1, progress_callback=_progress)
+    snaps: list[ExtendedSnapshot] = fetch_extended(tickers, max_workers=4, progress_callback=_progress)
     snap_map: dict[str, ExtendedSnapshot] = {s.ticker: s for s in snaps}
     # 3b. 분기 재무 sync: 한국은 Naver, 해외는 Finviz bulk
     is_korean = universe in ("kospi200", "kosdaq150")
@@ -159,7 +175,8 @@ def run_batch(universe: str = "sp500") -> dict:
         else:
             snap = snap_map.get(ticker)
             if snap:
-                raw_quality_vals[ticker] = QualityFactor.score(snap.roe, snap.debt_to_equity)
+                debt_pct = snap.debt_to_equity * 100.0 if snap.debt_to_equity is not None else None
+                raw_quality_vals[ticker] = QualityFactor.score(snap.roe, debt_pct)
             else:
                 raw_quality_vals[ticker] = math.nan
     raw_quality = pd.Series(raw_quality_vals)
@@ -211,10 +228,41 @@ def run_batch(universe: str = "sp500") -> dict:
     pct_quality      = _percentile_rank(raw_quality,   ascending=True)
     pct_technical    = _percentile_rank(raw_technical, ascending=True)
 
-    # 6. DB upsert
+    # 6. 성장주 4팩터: 기존 수집 결과를 재사용
+    growth_raw_rows: list[dict] = []
+    for ticker in tickers:
+        snap = snap_map.get(ticker)
+        q = quarterly_map.get(ticker)
+        q_rows = quarterly_bulk.get(ticker, [])
+        snap_roe = _snap_num(snap, "roe")
+        roe = q.get("roe") / 100.0 if q and q.get("roe") is not None else (snap_roe / 100.0 if snap_roe is not None else None)
+        debt_to_equity = (
+            q.get("debt_ratio") / 100.0 if q and q.get("debt_ratio") is not None
+            else _snap_num(snap, "debt_to_equity")
+        )
+        growth_raw_rows.append({
+            "ticker": ticker,
+            "sector": snap.sector if snap else None,
+            "sales_growth": _compute_yoy_revenue_growth(q_rows) if is_korean else _snap_num(snap, "sales_growth"),
+            "eps_growth": _safe_float(raw_eps.get(ticker)),
+            "roe": roe,
+            "roic": _snap_num(snap, "roic"),
+            "operating_margin": _snap_num(snap, "operating_margin"),
+            "fcf_yield": _snap_num(snap, "fcf_yield"),
+            "cfo_positive": bool(snap and snap.operating_cashflow and snap.operating_cashflow > 0),
+            "debt_to_equity": debt_to_equity,
+            "current_ratio": _snap_num(snap, "current_ratio"),
+            "operating_cashflow": _snap_num(snap, "operating_cashflow"),
+            "market_cap_usd_m": _snap_num(snap, "market_cap_usd_m") or _snap_num(snap, "market_cap_m"),
+            "market_cap_krw": _snap_num(snap, "market_cap_krw"),
+        })
+    growth_scores = compute_growth_scores(pd.DataFrame(growth_raw_rows).set_index("ticker"))
+
+    # 7. DB upsert
     rows: list[dict] = []
     for ticker in tickers:
         snap = snap_map.get(ticker)
+        growth = growth_scores.loc[ticker]
         rows.append({
             "ticker": ticker,
             "universe": universe,
@@ -234,7 +282,7 @@ def run_batch(universe: str = "sp500") -> dict:
             "raw_roe":          (quarterly_map[ticker]["roe"] if ticker in quarterly_map and quarterly_map[ticker].get("roe") is not None
                                  else snap.roe if snap else None),
             "raw_debt_ratio":   (quarterly_map[ticker]["debt_ratio"] / 100.0 if ticker in quarterly_map and quarterly_map[ticker].get("debt_ratio") is not None
-                                 else (snap.debt_to_equity / 100.0) if (snap and snap.debt_to_equity) else None),
+                                 else _snap_num(snap, "debt_to_equity")),
             "raw_rsi":          _safe_float(raw_rsi.get(ticker)),
             "above_ma200":      bool(above_ma200.get(ticker, False)),
             "cfo_positive":     bool(snap.operating_cashflow and snap.operating_cashflow > 0) if snap else False,
@@ -246,10 +294,39 @@ def run_batch(universe: str = "sp500") -> dict:
             "negative_book_value": bool(snap.negative_book_value) if snap else False,
             "sector":           snap.sector if snap else None,
             "industry":         snap.industry if snap else None,
+            "pct_growth":       _safe_float(growth["pct_growth"]),
+            "pct_profitability": _safe_float(growth["pct_profitability"]),
+            "pct_cashflow":     _safe_float(growth["pct_cashflow"]),
+            "pct_stability":    _safe_float(growth["pct_stability"]),
+            "growth_composite": _safe_float(growth["growth_composite"]),
+            "raw_roic":         _snap_num(snap, "roic"),
+            "raw_gross_margin": _snap_num(snap, "gross_margin"),
+            "raw_oper_margin":  _snap_num(snap, "operating_margin"),
+            "raw_current_ratio": _snap_num(snap, "current_ratio"),
+            "raw_sales_growth": growth["sales_growth"],
+            "raw_rev_yoy":      growth["sales_growth"],
+            "raw_market_cap_usd_m": _snap_num(snap, "market_cap_usd_m") or _snap_num(snap, "market_cap_m"),
+            "raw_market_cap_krw": _snap_num(snap, "market_cap_krw"),
+            "raw_fwd_rev_growth": _snap_num(snap, "fwd_revenue_growth"),
+            "raw_fwd_eps_growth": _snap_num(snap, "fwd_eps_growth"),
+            "raw_operating_cashflow": _snap_num(snap, "operating_cashflow"),
+            "data_coverage": growth["data_coverage"],
+            "sector_percentile_fallback": False,
         })
 
     bs.update(universe, "DB 저장 중", len(tickers))
     repo.upsert_quant_scores(rows)
+    history = growth_scores["growth_composite"].dropna().rank(method="min", ascending=False).astype(int)
+    repo.upsert_rank_history([
+        {
+            "universe": universe,
+            "as_of": today,
+            "ticker": ticker,
+            "growth_composite": float(growth_scores.at[ticker, "growth_composite"]),
+            "rank": int(rank),
+        }
+        for ticker, rank in history.items()
+    ])
     bs.finish(universe, len(rows))
     log.info("[Universe Scorer] 완료: %d행 upsert", len(rows))
     return {"universe": universe, "as_of": str(today), "count": len(rows)}
@@ -263,3 +340,10 @@ def _safe_float(val) -> float | None:
         return None if math.isnan(f) else f
     except (ValueError, TypeError):
         return None
+
+
+def _snap_num(snap: ExtendedSnapshot | None, attr: str) -> float | None:
+    if snap is None:
+        return None
+    val = getattr(snap, attr, None)
+    return float(val) if isinstance(val, numbers.Real) and not isinstance(val, bool) else None

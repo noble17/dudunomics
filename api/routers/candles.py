@@ -1,7 +1,9 @@
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from core.auth.deps import current_user, CurrentUser
+from core.ids import is_domestic
 from core.data.prices_provider import fetch_ohlcv
 from core.indicators import compute_indicators
 from api.models import CandleItem, CandlesOut
@@ -13,6 +15,7 @@ _PERIOD_DAYS: dict[str, int] = {
     "1M":  35,
     "3M":  95,
     "6M":  185,
+    "YTD": 370,
     "1Y":  370,
 }
 
@@ -29,13 +32,15 @@ def get_candles(
         raise HTTPException(status_code=422, detail=f"지원하지 않는 period: {period}. 5D|1M|3M|6M|1Y 중 선택.")
 
     end = date.today()
-    start = end - timedelta(days=days)
+    start = date(end.year, 1, 1) if period.upper() == "YTD" else end - timedelta(days=days)
 
-    prices, _ = fetch_ohlcv([ticker.upper()], start, end)
+    prices, _ = fetch_ohlcv([ticker.upper()], start, end, cache_only=True)
     if prices.empty:
         return CandlesOut(ticker=ticker.upper(), period=period.upper(), candles=[])
 
-    df = prices[ticker.upper()][["Open", "High", "Low", "Close", "Volume"]].dropna()
+    symbol = ticker.upper()
+    df = prices[symbol][["Open", "High", "Low", "Close", "Volume"]].dropna()
+    df = _drop_incomplete_daily_rows(df, symbol)
 
     candles = [
         CandleItem(
@@ -62,3 +67,22 @@ def get_candles(
         )
 
     return CandlesOut(ticker=ticker.upper(), period=period.upper(), candles=candles, indicators=ind_data)
+
+
+def _drop_incomplete_daily_rows(df, ticker: str):
+    if df.empty:
+        return df
+    cutoff = _latest_completed_trading_date(ticker)
+    return df[df.index.date <= cutoff]
+
+
+def _latest_completed_trading_date(ticker: str) -> date:
+    if is_domestic(ticker):
+        now = datetime.now(ZoneInfo("Asia/Seoul"))
+        today = now.date()
+        return today if now.hour >= 16 else today - timedelta(days=1)
+
+    now = datetime.now(ZoneInfo("America/New_York"))
+    today = now.date()
+    close_ready = now.hour > 16 or (now.hour == 16 and now.minute >= 30)
+    return today if close_ready else today - timedelta(days=1)

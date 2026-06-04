@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from "react";
 import useSWR from "swr";
 import { performanceApi } from "@/lib/api";
-import { createChart, ColorType, LineStyle } from "lightweight-charts";
+import { createChart, ColorType, LineSeries, LineStyle, type Time } from "lightweight-charts";
 import { chartTheme } from "@/lib/design-tokens";
 
 type Period = "1m" | "3m" | "6m" | "1y" | "all";
@@ -21,13 +21,13 @@ function PerformanceChart({ data }: { data: { date: string; portfolio: number; k
       rightPriceScale: { borderColor: chartTheme.axisLine },
       timeScale: { borderColor: chartTheme.axisLine },
     });
-    const portSeries = chart.addLineSeries({ color: chartTheme.brand, lineWidth: 2 });
-    const kospiSeries = chart.addLineSeries({ color: chartTheme.palette[4], lineWidth: 1, lineStyle: LineStyle.Dashed });
-    const sp500Series = chart.addLineSeries({ color: "#ff9500", lineWidth: 1, lineStyle: LineStyle.Dashed });
+    const portSeries = chart.addSeries(LineSeries, { color: chartTheme.brand, lineWidth: 2 });
+    const kospiSeries = chart.addSeries(LineSeries, { color: chartTheme.palette[4], lineWidth: 1, lineStyle: LineStyle.Dashed });
+    const sp500Series = chart.addSeries(LineSeries, { color: "#ff9500", lineWidth: 1, lineStyle: LineStyle.Dashed });
 
-    portSeries.setData(data.map(d => ({ time: d.date as any, value: d.portfolio })));
-    kospiSeries.setData(data.map(d => ({ time: d.date as any, value: d.kospi })));
-    sp500Series.setData(data.map(d => ({ time: d.date as any, value: d.sp500 })));
+    portSeries.setData(data.map(d => ({ time: d.date as Time, value: d.portfolio })));
+    kospiSeries.setData(data.map(d => ({ time: d.date as Time, value: d.kospi })));
+    sp500Series.setData(data.map(d => ({ time: d.date as Time, value: d.sp500 })));
     chart.timeScale().fitContent();
 
     return () => chart.remove();

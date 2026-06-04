@@ -1,7 +1,7 @@
 """OHLCV DuckDB 캐시 레이어.
 
 fetch_ohlcv / fetch_index 는 DB 우선 조회 → 캐시 미스 시 fetch 후 저장.
-우선순위: KIS API → FDR (국내 fallback) / yfinance (해외 fallback)
+우선순위: KIS API → FDR (국내 fallback). 해외 OHLCV는 KIS만 사용한다.
 """
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ from core.ids import is_domestic
 
 log = logging.getLogger(__name__)
 
-# yfinance exclusive-end + 비영업일 허용 오차 (일수)
+# 비영업일 허용 오차 (일수)
 _TOLERANCE = timedelta(days=5)
 
 
@@ -24,19 +24,23 @@ def fetch_ohlcv(
     tickers: list[str],
     start: date,
     end: date,
+    *,
+    cache_only: bool = False,
+    force: bool = False,
 ) -> tuple[pd.DataFrame, list[str]]:
     """tickers OHLCV MultiIndex DataFrame + warnings 반환.
 
-    columns: MultiIndex (ticker, field), field ∈ {Open, High, Low, Close, Volume}
-    index: DatetimeIndex tz-naive
+    cache_only=True: DB 캐시만 조회, 네트워크 fetch 하지 않음.
+    force=True: 캐시 상태 무관하게 강제 재페치 (데이터 갱신용).
     """
     warns: list[str] = []
     if not tickers:
         return pd.DataFrame(), warns
 
-    to_fetch = [t for t in tickers if not _is_cached(t, start, end)]
-    if to_fetch:
-        warns.extend(_fetch_and_store(to_fetch, start, end))
+    if not cache_only:
+        to_fetch = tickers if force else [t for t in tickers if not _is_cached(t, start, end)]
+        if to_fetch:
+            warns.extend(_fetch_and_store(to_fetch, start, end))
 
     return _read_ohlcv(tickers, start, end, warns)
 
@@ -57,8 +61,8 @@ def fetch_index(
 def _is_cached(ticker: str, start: date, end: date) -> bool:
     """prices_cache에 [start, end] 구간이 커버되어 있으면 True.
 
-    yfinance exclusive-end 및 비영업일로 인해 실제 저장 날짜가
-    요청 날짜와 최대 5일 차이날 수 있으므로 _TOLERANCE 허용.
+    비영업일로 인해 실제 저장 날짜가 요청 날짜와 최대 5일 차이날 수
+    있으므로 _TOLERANCE 허용.
     """
     cached = repo.get_ohlcv_range(ticker)
     if not cached:
@@ -79,6 +83,15 @@ def _store_df(ticker: str, df: pd.DataFrame) -> None:
     repo.upsert_ohlcv_rows(rows)
 
 
+def _covers_requested_start(df: pd.DataFrame, start: date) -> bool:
+    """반환 데이터가 요청 시작일을 충분히 커버하는지 확인."""
+    if df.empty:
+        return False
+    min_idx = df.index.min()
+    min_date = min_idx.date() if hasattr(min_idx, "date") else min_idx
+    return min_date <= start + _TOLERANCE
+
+
 def _fetch_fdr(ticker: str, start: date, end: date) -> pd.DataFrame:
     """FDR fallback — KRX 종목 전용."""
     import FinanceDataReader as fdr
@@ -91,81 +104,13 @@ def _fetch_fdr(ticker: str, start: date, end: date) -> pd.DataFrame:
     return df[[c for c in ["Open", "High", "Low", "Close", "Volume"] if c in df.columns]]
 
 
-def _fetch_yfinance(ticker: str, start: date, end: date) -> pd.DataFrame:
-    """yfinance fallback — 해외 종목 단건. bulk 경로가 없을 때 사용."""
-    import yfinance as yf
-    from core.data.yf_session import get_session
-    t = yf.Ticker(ticker, session=get_session())
-    df = t.history(start=str(start), end=str(end), auto_adjust=True)
-    if df.empty:
-        return df
-    df.index = df.index.tz_localize(None) if df.index.tz else df.index
-    return df[[c for c in ["Open", "High", "Low", "Close", "Volume"] if c in df.columns]]
-
-
-def _fetch_yfinance_bulk(tickers: list[str], start: date, end: date) -> dict[str, pd.DataFrame]:
-    """여러 해외 종목을 yf.download() 단일 호출로 페치.
-
-    HTTP 커넥션 1개로 수백 종목 처리 → IP 차단 방지.
-    threads=False로 yfinance 내부 병렬 요청 비활성화.
-    """
-    if not tickers:
-        return {}
-
-    log.warning("yf bulk fallback activated for %d tickers: %s...", len(tickers), tickers[:3])
-
-    import yfinance as yf
-    from core.data.yf_session import get_session
-    # yf.download는 직접 session 파라미터를 지원하지 않으므로 shared session에 주입
-    yf.shared._requests_session = get_session()
-
-    log.info("[ohlcv] bulk download %d개 종목 (%s ~ %s)", len(tickers), start, end)
-    raw = yf.download(
-        tickers,
-        start=str(start),
-        end=str(end),
-        auto_adjust=True,
-        group_by="ticker",
-        threads=False,
-        progress=False,
-    )
-
-    if raw.empty:
-        return {}
-
-    result: dict[str, pd.DataFrame] = {}
-    cols = ["Open", "High", "Low", "Close", "Volume"]
-
-    if len(tickers) == 1:
-        # 단일 종목이면 MultiIndex 없이 반환됨
-        df = raw.copy()
-        df.index = df.index.tz_localize(None) if df.index.tz else df.index
-        available = [c for c in cols if c in df.columns]
-        if available:
-            result[tickers[0]] = df[available].dropna(how="all")
-    else:
-        for ticker in tickers:
-            if ticker not in raw.columns.get_level_values(0):
-                continue
-            df = raw[ticker].copy()
-            df.index = df.index.tz_localize(None) if df.index.tz else df.index
-            available = [c for c in cols if c in df.columns]
-            if available:
-                df = df[available].dropna(how="all")
-                if not df.empty:
-                    result[ticker] = df
-
-    return result
-
-
 def _fetch_and_store(tickers: list[str], start: date, end: date) -> list[str]:
     """OHLCV 다운로드 후 prices_cache에 저장.
 
     - 국내 종목: KIS API → FDR fallback (개별)
-    - 해외 종목: KIS API (개별) → 실패 종목만 yfinance bulk fallback
+    - 해외 종목: KIS API only
     """
     from core.prices.kis import fetch_ohlcv_domestic, fetch_ohlcv_overseas
-    from yfinance.exceptions import YFRateLimitError
 
     warns: list[str] = []
     domestic_tickers = [t for t in tickers if is_domestic(t)]
@@ -194,53 +139,21 @@ def _fetch_and_store(tickers: list[str], start: date, end: date) -> list[str]:
         except Exception as e:
             warns.append(f"{ticker}: 저장 실패 — {e}")
 
-    # ── 해외 종목: KIS 우선 → yfinance fallback ──────────────────────────────
+    # ── 해외 종목: KIS only ─────────────────────────────────────────────────
     if not overseas_tickers:
         return warns
 
-    kis_failed: list[str] = []
     for ticker in overseas_tickers:
         df = fetch_ohlcv_overseas(ticker, start, end)
         if df.empty:
-            kis_failed.append(ticker)
+            warns.append(f"{ticker}: KIS 해외 OHLCV 데이터 없음")
             continue
         try:
             _store_df(ticker, df)
         except Exception as e:
             warns.append(f"{ticker}: 저장 실패 — {e}")
-
-    if not kis_failed:
-        return warns
-
-    # yfinance fallback — KIS 실패 종목만
-    try:
-        bulk = _fetch_yfinance_bulk(kis_failed, start, end)
-    except YFRateLimitError:
-        warns.append("해외 bulk: Yahoo Finance 요청 한도 초과. 잠시 후 다시 시도하세요.")
-        return warns
-    except Exception as e:
-        log.warning("bulk download 실패: %s — 개별 재시도", e)
-        bulk = {}
-
-    failed = [t for t in kis_failed if t not in bulk]
-
-    for ticker, df in bulk.items():
-        try:
-            _store_df(ticker, df)
-        except Exception as e:
-            warns.append(f"{ticker}: 저장 실패 — {e}")
-
-    for ticker in failed:
-        try:
-            df = _fetch_yfinance(ticker, start, end)
-            if df.empty:
-                warns.append(f"{ticker}: 데이터 없음")
-                continue
-            _store_df(ticker, df)
-        except YFRateLimitError:
-            warns.append(f"{ticker}: Yahoo Finance 요청 한도 초과.")
-        except Exception as e:
-            warns.append(f"{ticker}: fetch 실패 — {e}")
+        if not _covers_requested_start(df, start):
+            warns.append(f"{ticker}: KIS 데이터가 요청 구간보다 짧습니다.")
 
     return warns
 

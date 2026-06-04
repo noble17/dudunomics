@@ -4,7 +4,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Literal
 
-from pydantic import BaseModel, computed_field, field_validator, model_validator
+from pydantic import BaseModel, Field, computed_field, field_validator, model_validator
 
 
 class HoldingIn(BaseModel):
@@ -71,6 +71,38 @@ class PortfolioSnapshot(BaseModel):
     cash_usd: float
     usdkrw: float
     updated_at: datetime
+
+
+class TickerPerformanceOut(BaseModel):
+    ticker: str
+    name: str
+    price: float | None = None
+    change_pct: float | None = None
+    volume: float | None = None
+    avg_volume20: float | None = None
+    perf_1w: float | None = None
+    perf_1m: float | None = None
+    perf_6m: float | None = None
+    perf_ytd: float | None = None
+    ma20: float | None = None
+    ma50: float | None = None
+    ma200: float | None = None
+    price_vs_ma20: float | None = None
+    price_vs_ma50: float | None = None
+    price_vs_ma200: float | None = None
+    day_low: float | None = None
+    day_high: float | None = None
+    range_52w_low: float | None = None
+    range_52w_high: float | None = None
+
+
+class PortfolioAnalyticsRow(TickerPerformanceOut):
+    quantity: float
+    avg_price: float
+    currency: str
+    market_value_krw: float | None = None
+    return_pct: float | None = None
+    weight_pct: float | None = None
 
 
 class SnapshotHistory(BaseModel):
@@ -211,6 +243,194 @@ class QuantScoreOut(BaseModel):
         return self.raw_eps_momentum is not None and self.raw_eps_momentum > 0
 
     model_config = {"from_attributes": True}
+
+
+class GrowthScoreOut(BaseModel):
+    ticker: str
+    universe: str
+    as_of: date
+    company_name: str | None = None
+    sector: str | None = None
+    industry: str | None = None
+    pct_growth: float | None = None
+    pct_profitability: float | None = None
+    pct_cashflow: float | None = None
+    pct_stability: float | None = None
+    growth_composite: float | None = None
+    rank: int | None = None
+    rank_1w_ago: int | None = None
+    rank_1m_ago: int | None = None
+    delta_1w: int | None = None
+    delta_1m: int | None = None
+    raw_roic: float | None = None
+    raw_oper_margin: float | None = None
+    raw_current_ratio: float | None = None
+    raw_sales_growth: float | None = None
+    raw_market_cap_usd_m: float | None = None
+    raw_market_cap_krw: float | None = None
+    raw_fwd_rev_growth: float | None = None
+    raw_fwd_eps_growth: float | None = None
+    raw_peg: float | None = None
+    raw_fwd_pe: float | None = None
+    raw_psr: float | None = None
+    data_coverage: dict | None = None
+    timing_status: str | None = None
+    timing_aligned: bool | None = None
+    timing_pullback: bool | None = None
+    timing_pullback_stage: str | None = None
+    timing_volume_explosion: bool | None = None
+    timing_volume_level: str | None = None
+    timing_volume_direction: str | None = None
+    timing_rsi_level: str | None = None
+    timing_downgrade_reasons: list[dict] = Field(default_factory=list)
+
+
+class GrowthWatchlistStatusOut(BaseModel):
+    ticker: str
+    universe: str
+    in_watchlist: bool
+
+
+class WatchlistIn(BaseModel):
+    name: str
+    description: str | None = None
+
+
+class WatchlistOut(BaseModel):
+    id: int
+    name: str
+    description: str | None = None
+    item_count: int = 0
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+class WatchlistItemIn(BaseModel):
+    name: str | None = None
+    universe: str = "sp500"
+    memo: str | None = None
+
+
+class WatchlistMembershipOut(WatchlistOut):
+    universe: str
+    memo: str | None = None
+
+
+class WatchlistItemOut(TickerPerformanceOut):
+    watchlist_id: int
+    universe: str
+    memo: str | None = None
+    growth_composite: float | None = None
+    timing_status: str | None = None
+    timing_aligned: bool | None = None
+    timing_pullback_stage: str | None = None
+    timing_volume_level: str | None = None
+    timing_rsi_level: str | None = None
+
+
+class ConsensusAttemptOut(BaseModel):
+    source: str
+    status: str
+
+
+class GrowthValuationOut(BaseModel):
+    ticker: str
+    score_status: str | None = None
+    score_message: str | None = None
+    valuation_source: str | None = None
+    missing_reasons: list[str] = Field(default_factory=list)
+    peg: float | None = None
+    forward_pe: float | None = None
+    psr: float | None = None
+    forward_eps: float | None = None
+    forward_revenue_growth: float | None = None
+    forward_eps_growth: float | None = None
+    consensus_status: str | None = None
+    consensus_message: str | None = None
+    consensus_source: str | None = None
+    retry_after: str | None = None
+    current_price: float | None = None
+    target_mean: float | None = None
+    target_median: float | None = None
+    target_low: float | None = None
+    target_high: float | None = None
+    upside_pct: float | None = None
+    analyst_count: int | None = None
+    consensus_as_of: str | None = None
+    fallback_used: bool = False
+    consensus_attempts: list[ConsensusAttemptOut] = Field(default_factory=list)
+
+
+class TimingReasonOut(BaseModel):
+    code: str
+    message: str
+    severity: str
+
+
+class GrowthTimingOut(BaseModel):
+    status: str
+    reason: str | None = None
+    rows: int | None = None
+    aligned: bool | None = None
+    pullback: bool | None = None
+    pullback_stage: str | None = None
+    volume_explosion: bool | None = None
+    volume_ratio: float | None = None
+    volume_level: str | None = None
+    volume_direction: str | None = None
+    recent_bearish_volume_spike: bool | None = None
+    rsi14: float | None = None
+    rsi_level: str | None = None
+    positive_reasons: list[TimingReasonOut] = Field(default_factory=list)
+    warning_reasons: list[TimingReasonOut] = Field(default_factory=list)
+    downgrade_reasons: list[TimingReasonOut] = Field(default_factory=list)
+    close: float | None = None
+    ema20: float | None = None
+    ema50: float | None = None
+    ema200: float | None = None
+    volume: float | None = None
+    avg_volume20: float | None = None
+
+
+class GrowthHydrateOut(BaseModel):
+    ticker: str
+    universe: str
+    warnings: list[str] = Field(default_factory=list)
+    timing_status: str | None = None
+    timing_rows: int | None = None
+    volume_level: str | None = None
+    volume_direction: str | None = None
+    rsi14: float | None = None
+    rsi_level: str | None = None
+    positive_reasons: list[TimingReasonOut] = Field(default_factory=list)
+    warning_reasons: list[TimingReasonOut] = Field(default_factory=list)
+    downgrade_reasons: list[TimingReasonOut] = Field(default_factory=list)
+
+
+class TickerDataStatusOut(BaseModel):
+    ticker: str
+    data_type: str
+    source: str
+    min_date: date | None = None
+    max_date: date | None = None
+    last_fetched_at: datetime | None = None
+    last_success_at: datetime | None = None
+    last_error: str | None = None
+    coverage_json: dict = Field(default_factory=dict)
+
+
+class TickerOverviewOut(BaseModel):
+    ticker: str
+    profile: dict | None = None
+    fundamentals: dict | None = None
+    status: list[TickerDataStatusOut] = Field(default_factory=list)
+
+
+class TickerHydrateOut(BaseModel):
+    ticker: str
+    scopes: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    status: list[TickerDataStatusOut] = Field(default_factory=list)
 
 
 class TickerNoteIn(BaseModel):

@@ -22,6 +22,32 @@ export interface TickerSearchHit {
   type: string;
 }
 
+export interface TickerDataStatus {
+  ticker: string;
+  data_type: string;
+  source: string;
+  min_date: string | null;
+  max_date: string | null;
+  last_fetched_at: string | null;
+  last_success_at: string | null;
+  last_error: string | null;
+  coverage_json: Record<string, unknown>;
+}
+
+export interface TickerOverview {
+  ticker: string;
+  profile: Record<string, unknown> | null;
+  fundamentals: Record<string, unknown> | null;
+  status: TickerDataStatus[];
+}
+
+export interface TickerHydrate {
+  ticker: string;
+  scopes: string[];
+  warnings: string[];
+  status: TickerDataStatus[];
+}
+
 export interface HoldingOut extends HoldingIn {
   ticker: string;
   updated_at: string;
@@ -51,6 +77,64 @@ export interface PortfolioRow {
   return_pct: number;
   weight_pct: number;
   sector?: string;
+}
+
+export interface TickerPerformance {
+  ticker: string;
+  name: string;
+  price: number | null;
+  change_pct: number | null;
+  volume: number | null;
+  avg_volume20: number | null;
+  perf_1w: number | null;
+  perf_1m: number | null;
+  perf_6m: number | null;
+  perf_ytd: number | null;
+  ma20: number | null;
+  ma50: number | null;
+  ma200: number | null;
+  price_vs_ma20: number | null;
+  price_vs_ma50: number | null;
+  price_vs_ma200: number | null;
+  day_low: number | null;
+  day_high: number | null;
+  range_52w_low: number | null;
+  range_52w_high: number | null;
+}
+
+export interface PortfolioAnalyticsRow extends TickerPerformance {
+  quantity: number;
+  avg_price: number;
+  currency: string;
+  market_value_krw: number | null;
+  return_pct: number | null;
+  weight_pct: number | null;
+}
+
+export interface Watchlist {
+  id: number;
+  name: string;
+  description: string | null;
+  item_count: number;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface WatchlistItem extends TickerPerformance {
+  watchlist_id: number;
+  universe: string;
+  memo: string | null;
+  growth_composite: number | null;
+  timing_status: GrowthTiming["status"] | null;
+  timing_aligned: boolean | null;
+  timing_pullback_stage: GrowthTiming["pullback_stage"] | null;
+  timing_volume_level: GrowthTiming["volume_level"] | null;
+  timing_rsi_level: GrowthTiming["rsi_level"] | null;
+}
+
+export interface WatchlistMembership extends Watchlist {
+  universe: string;
+  memo: string | null;
 }
 
 export interface PortfolioSnapshot {
@@ -154,6 +238,139 @@ export interface QuantScore {
   cfo_positive: boolean | null;
   sector: string | null;
   industry: string | null;
+}
+
+export interface GrowthScore {
+  ticker: string;
+  universe: string;
+  as_of: string;
+  company_name: string | null;
+  sector: string | null;
+  industry: string | null;
+  pct_growth: number | null;
+  pct_profitability: number | null;
+  pct_cashflow: number | null;
+  pct_stability: number | null;
+  growth_composite: number | null;
+  rank: number | null;
+  rank_1w_ago: number | null;
+  rank_1m_ago: number | null;
+  delta_1w: number | null;
+  delta_1m: number | null;
+  raw_roic: number | null;
+  raw_oper_margin: number | null;
+  raw_current_ratio: number | null;
+  raw_sales_growth: number | null;
+  raw_market_cap_usd_m: number | null;
+  raw_market_cap_krw: number | null;
+  raw_fwd_rev_growth: number | null;
+  raw_fwd_eps_growth: number | null;
+  raw_peg: number | null;
+  raw_fwd_pe: number | null;
+  raw_psr: number | null;
+  data_coverage: { factor_count?: number; missing_factors?: string[] } | null;
+  timing_status: GrowthTiming["status"] | null;
+  timing_aligned: boolean | null;
+  timing_pullback: boolean | null;
+  timing_pullback_stage: GrowthTiming["pullback_stage"] | null;
+  timing_volume_explosion: boolean | null;
+  timing_volume_level: GrowthTiming["volume_level"] | null;
+  timing_volume_direction: GrowthTiming["volume_direction"] | null;
+  timing_rsi_level: GrowthTiming["rsi_level"] | null;
+  timing_downgrade_reasons: TimingReason[];
+}
+
+export interface GrowthWatchlistStatus {
+  ticker: string;
+  universe: string;
+  in_watchlist: boolean;
+}
+
+export interface ConsensusAttempt {
+  source: "FMP" | "FINVIZ" | "STOCKANALYSIS" | "KIS";
+  status: string;
+}
+
+export interface GrowthValuation {
+  ticker: string;
+  score_status: "ok" | "missing" | string | null;
+  score_message: string | null;
+  valuation_source: "BATCH" | "FINVIZ" | string | null;
+  missing_reasons: string[];
+  peg: number | null;
+  forward_pe: number | null;
+  psr: number | null;
+  forward_eps: number | null;
+  forward_revenue_growth: number | null;
+  forward_eps_growth: number | null;
+  consensus_status: "ok" | "no_data" | "rate_limited" | "subscription_limited" | "temporary_error" | "missing_key";
+  consensus_message: string | null;
+  consensus_source: "FMP" | "FINVIZ" | "STOCKANALYSIS" | "KIS" | null;
+  retry_after: string | null;
+  current_price: number | null;
+  target_mean: number | null;
+  target_median: number | null;
+  target_low: number | null;
+  target_high: number | null;
+  upside_pct: number | null;
+  analyst_count: number | null;
+  consensus_as_of: string | null;
+  fallback_used: boolean;
+  consensus_attempts: ConsensusAttempt[];
+}
+
+export interface GrowthHydrate {
+  ticker: string;
+  universe: string;
+  warnings: string[];
+  timing_status: GrowthTiming["status"] | null;
+  timing_rows: number | null;
+  volume_level: GrowthTiming["volume_level"] | null;
+  volume_direction: GrowthTiming["volume_direction"] | null;
+  rsi14: number | null;
+  rsi_level: GrowthTiming["rsi_level"] | null;
+  positive_reasons: TimingReason[];
+  warning_reasons: TimingReason[];
+  downgrade_reasons: TimingReason[];
+}
+
+export interface TimingReason {
+  code: string;
+  message: string;
+  severity: "positive" | "warning" | "downgrade" | string;
+}
+
+export interface GrowthTiming {
+  status: "suitable" | "watch" | "unsuitable" | "unknown";
+  reason?: string | null;
+  rows?: number | null;
+  aligned?: boolean | null;
+  pullback?: boolean | null;
+  pullback_stage?: "approach" | "lower" | "breakdown" | "none" | null;
+  volume_explosion?: boolean | null;
+  volume_ratio?: number | null;
+  volume_level?: "quiet" | "normal" | "increased" | "strong" | "explosive" | null;
+  volume_direction?: "bullish" | "bearish" | "flat" | null;
+  recent_bearish_volume_spike?: boolean | null;
+  rsi14?: number | null;
+  rsi_level?: "oversold" | "neutral" | "overheated" | "extreme_overheated" | null;
+  positive_reasons?: TimingReason[];
+  warning_reasons?: TimingReason[];
+  downgrade_reasons?: TimingReason[];
+  close?: number | null;
+  ema20?: number | null;
+  ema50?: number | null;
+  ema200?: number | null;
+  volume?: number | null;
+  avg_volume20?: number | null;
+  data_sufficiency?: {
+    price?: boolean;
+    ema20?: boolean;
+    ema50?: boolean;
+    ema200?: boolean;
+    rsi?: boolean;
+    volume?: boolean;
+  } | null;
 }
 
 export interface FactorWeights {

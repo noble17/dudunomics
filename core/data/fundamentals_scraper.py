@@ -21,6 +21,8 @@ log = logging.getLogger(__name__)
 
 _DB_PATH = Path(__file__).parent.parent.parent / "data" / "fundamentals_cache.sqlite"
 _TTL = 86400  # 24h
+_CACHE_VER = 2
+_GROWTH_FIELDS = ("roic", "gross_margin", "operating_margin", "current_ratio", "sales_qq")
 _HEADERS = {
     "User-Agent": "Mozilla/5.0 (compatible; dudunomics/1.0; research use)",
     "Accept-Language": "en-US,en;q=0.9",
@@ -75,7 +77,12 @@ def _from_cache(ticker: str) -> Optional[FundamentalsSnapshot]:
         conn.close()
         if row and time.time() - row[1] < _TTL:
             d = json.loads(row[0])
-            return FundamentalsSnapshot(**d)
+            if d.get("_v") != _CACHE_VER:
+                return None
+            if any(field not in d for field in _GROWTH_FIELDS):
+                return None
+            valid = {f.name for f in dataclasses.fields(FundamentalsSnapshot)}
+            return FundamentalsSnapshot(**{k: v for k, v in d.items() if k in valid})
     except Exception:
         pass
     return None
@@ -83,10 +90,11 @@ def _from_cache(ticker: str) -> Optional[FundamentalsSnapshot]:
 
 def _to_cache(snap: FundamentalsSnapshot) -> None:
     try:
+        payload = {**dataclasses.asdict(snap), "_v": _CACHE_VER}
         conn = _get_db()
         conn.execute(
             "INSERT OR REPLACE INTO cache VALUES (?, ?, ?)",
-            (snap.ticker, json.dumps(dataclasses.asdict(snap)), time.time()),
+            (snap.ticker, json.dumps(payload), time.time()),
         )
         conn.commit()
         conn.close()
@@ -102,6 +110,11 @@ def _parse_num(s: str) -> Optional[float]:
         return float(s)
     except ValueError:
         return None
+
+
+def _parse_pct_decimal(s: str) -> Optional[float]:
+    val = _parse_num(s)
+    return val / 100.0 if val is not None else None
 
 
 def _parse_market_cap_m(s: str) -> Optional[float]:
@@ -132,7 +145,7 @@ _CLIENT = httpx.Client(
 def _fetch_finviz(ticker: str) -> FundamentalsSnapshot:
     snap = FundamentalsSnapshot(ticker=ticker)
     try:
-        url = f"https://finviz.com/quote.ashx?t={ticker}&p=d"
+        url = f"https://finviz.com/stock?t={ticker}&p=d"
         r = _CLIENT.get(url)
         r.raise_for_status()
         tree = HTMLParser(r.text)
@@ -163,11 +176,11 @@ def _fetch_finviz(ticker: str) -> FundamentalsSnapshot:
         snap.peg = _parse_num(kv.get("PEG", ""))
         snap.market_cap_m = _parse_market_cap_m(kv.get("Market Cap", ""))
         # 성장주 스크리닝 신규 필드
-        snap.roic             = _parse_num(kv.get("ROI", ""))
-        snap.gross_margin     = _parse_num(kv.get("Gross Margin", "") or kv.get("Gross M.", ""))
-        snap.operating_margin = _parse_num(kv.get("Oper. Margin", ""))
+        snap.roic             = _parse_pct_decimal(kv.get("ROIC", "") or kv.get("ROI", ""))
+        snap.gross_margin     = _parse_pct_decimal(kv.get("Gross Margin", "") or kv.get("Gross M.", ""))
+        snap.operating_margin = _parse_pct_decimal(kv.get("Oper. Margin", ""))
         snap.current_ratio    = _parse_num(kv.get("Curr R.", "") or kv.get("Current Ratio", ""))
-        snap.sales_qq         = _parse_num(kv.get("Sales Q/Q", ""))
+        snap.sales_qq         = _parse_pct_decimal(kv.get("Sales Q/Q", ""))
         # sector/industry: snapshot-table2 kv 우선, 없으면 상단 div 탐색
         if kv.get("Sector"):
             snap.sector = kv.get("Sector") or None

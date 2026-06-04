@@ -62,6 +62,17 @@ def test_candles_invalid_period(candles_client):
     assert res.status_code == 422
 
 
+def test_candles_supports_ytd_period(candles_client):
+    fake = _make_fake_ohlcv("SPY", 120)
+    with patch("api.routers.candles.fetch_ohlcv", return_value=(fake, [])) as fetch:
+        res = candles_client.get("/api/candles?ticker=SPY&period=YTD")
+
+    assert res.status_code == 200
+    assert res.json()["period"] == "YTD"
+    fetch.assert_called_once()
+    assert fetch.call_args.kwargs == {"cache_only": True}
+
+
 def test_candles_requires_auth(fresh_db, monkeypatch):
     """인증 없이 접근 시 401."""
     monkeypatch.setenv("JWT_SECRET", "test-secret-key-32bytes-for-tests")
@@ -87,6 +98,26 @@ def test_candles_with_indicators(candles_client):
     assert len(ind["ma"]["5"]) > 0
     pt = ind["ma"]["5"][0]
     assert "time" in pt and "value" in pt
+
+
+def test_candles_excludes_incomplete_daily_row(candles_client):
+    idx = pd.to_datetime(["2026-06-01", "2026-06-02", "2026-06-03"])
+    ticker_df = pd.DataFrame({
+        "Open": [10.0, 11.0, 12.0],
+        "High": [11.0, 12.0, 13.0],
+        "Low": [9.0, 10.0, 11.0],
+        "Close": [10.5, 11.5, 12.5],
+        "Volume": [1000.0, 1100.0, 1200.0],
+    }, index=idx)
+    fake = pd.concat({"SPY": ticker_df}, axis=1)
+    with (
+        patch("api.routers.candles.fetch_ohlcv", return_value=(fake, [])),
+        patch("api.routers.candles._latest_completed_trading_date", return_value=idx[1].date()),
+    ):
+        res = candles_client.get("/api/candles?ticker=SPY&period=5D")
+
+    assert res.status_code == 200
+    assert [row["time"] for row in res.json()["candles"]] == ["2026-06-01", "2026-06-02"]
 
 
 def test_candles_without_indicators_returns_null(candles_client):

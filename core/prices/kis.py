@@ -584,11 +584,12 @@ def _fetch_ohlcv_overseas_single(
     end: date,
     token: str,
 ) -> pd.DataFrame:
-    """단일 EXCD로 KIS 해외 일봉 조회. 페이지네이션 최대 5회."""
+    """단일 EXCD로 KIS 해외 일봉 조회."""
     all_rows: list[dict] = []
     keyb = ""
+    page_end = end
 
-    for _ in range(5):
+    for _ in range(12):
         try:
             res = requests.get(
                 f"{KIS_BASE}/uapi/overseas-price/v1/quotations/dailyprice",
@@ -597,7 +598,7 @@ def _fetch_ohlcv_overseas_single(
                     "EXCD": excd,
                     "SYMB": ticker,
                     "GUBN": "0",
-                    "BYMD": end.strftime("%Y%m%d"),
+                    "BYMD": page_end.strftime("%Y%m%d"),
                     "MODP": "1",
                     "KEYB": keyb,
                 },
@@ -615,6 +616,7 @@ def _fetch_ohlcv_overseas_single(
 
         rows = data.get("output2") or []
         reached_start = False
+        dates_seen: list[date] = []
         for row in rows:
             dt_str = row.get("xymd", "")
             if not dt_str:
@@ -626,6 +628,7 @@ def _fetch_ohlcv_overseas_single(
             if dt < start:
                 reached_start = True
                 continue
+            dates_seen.append(dt)
             all_rows.append({
                 "date": dt,
                 "Open":   float(row.get("open") or 0),
@@ -638,9 +641,17 @@ def _fetch_ohlcv_overseas_single(
         if reached_start or not rows:
             break
 
-        keyb = (data.get("output1") or {}).get("keyb", "")
-        if not keyb:
-            break
+        next_keyb = (data.get("output1") or {}).get("keyb", "")
+        if next_keyb:
+            keyb = next_keyb
+            continue
+
+        if dates_seen and min(dates_seen) > start:
+            page_end = min(dates_seen) - timedelta(days=1)
+            keyb = ""
+            continue
+
+        break
 
     if not all_rows:
         return pd.DataFrame()

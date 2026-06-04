@@ -30,30 +30,25 @@ def get_ticker(ticker: str, universe: str = "sp500",
 
 @router.get("/status")
 def batch_status(universe: str = "sp500", user: CurrentUser = Depends(current_user)):
-    import core.batch_state as bs
-    return bs.get(universe)
+    from core.batch_refresh import get_status
+    return get_status(universe)
 
 
 @router.post("/refresh")
-def refresh(universe: str = "sp500", background_tasks: BackgroundTasks = None,
+def refresh(universe: str = "sp500", force: bool = False, background_tasks: BackgroundTasks = None,
             user: CurrentUser = Depends(current_user)):
-    from core.scoring.universe_scorer import run_batch
-    import core.batch_state as bs
+    from core.batch_refresh import (
+        BatchAlreadyRunningError,
+        DartApiKeyRequiredError,
+        refresh as refresh_batch,
+    )
 
-    def _run():
-        try:
-            run_batch(universe)
-        except Exception as e:
-            import logging
-            logging.getLogger(__name__).error("배치 실패: %s", e)
-            bs.fail(universe, str(e))
-
-    if background_tasks:
-        background_tasks.add_task(_run)
-        return {"status": "started", "universe": universe}
-    else:
-        result = run_batch(universe)
-        return result
+    try:
+        return refresh_batch(universe, background_tasks=background_tasks, force=force)
+    except BatchAlreadyRunningError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except DartApiKeyRequiredError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 @router.post("/ticker/{ticker}/refresh-fields")

@@ -39,12 +39,14 @@ def test_negative_book_value_detection(monkeypatch):
         text = html
         def raise_for_status(self): pass
 
+    urls = []
     monkeypatch.setattr(
         "core.data.fundamentals_scraper._CLIENT",
-        type("C", (), {"get": lambda self, u: FakeResponse()})()
+        type("C", (), {"get": lambda self, u: urls.append(u) or FakeResponse()})()
     )
 
     snap = _fetch_finviz("DELL")
+    assert urls == ["https://finviz.com/stock?t=DELL&p=d"]
     assert snap.negative_book_value is True
     assert snap.price_to_book is None
     assert snap.ev_ebitda == pytest.approx(8.5)

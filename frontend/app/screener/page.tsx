@@ -41,6 +41,7 @@ export default function ScreenerPage() {
   const [refreshMsg, setRefreshMsg]   = useState<string | null>(null);
   const [batchStatus, setBatchStatus] = useState<{
     status: string; step: string; done: number; total: number;
+    finished_at: string; latest_as_of: string; is_fresh: boolean;
   } | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -76,11 +77,11 @@ export default function ScreenerPage() {
   // 페이지 복귀 시 배치가 이미 실행 중이면 폴링 재개
   useEffect(() => {
     screenerApi.status(universe).then((st) => {
-      if (st.status === "running") {
-        setRefreshing(true);
         setBatchStatus(st);
-        startPolling(universe);
-      }
+        if (st.status === "running") {
+          setRefreshing(true);
+          startPolling(universe);
+        }
     }).catch(() => {});
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -116,12 +117,16 @@ export default function ScreenerPage() {
     return true;
   }).length, [scores, hardFilters, sectorFilter, industryFilter]);
 
-  const handleRefresh = async () => {
+  const handleRefresh = async (force = false) => {
     setRefreshing(true);
     setRefreshMsg(null);
-    setBatchStatus(null);
     try {
-      await screenerApi.refresh(universe);
+      const result = await screenerApi.refresh(universe, force);
+      if (result.status === "fresh") {
+        setRefreshMsg("오늘 데이터가 이미 최신입니다.");
+        setRefreshing(false);
+        return;
+      }
       startPolling(universe);
     } catch (e) {
       setRefreshMsg(`오류: ${e instanceof Error ? e.message : String(e)}`);
@@ -142,14 +147,30 @@ export default function ScreenerPage() {
             ?
           </button>
         </div>
-        <button
-          onClick={handleRefresh}
-          disabled={refreshing}
-          className="rounded border border-border px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted disabled:opacity-50"
-        >
-          {refreshing ? "배치 실행 중..." : "데이터 갱신"}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => handleRefresh()}
+            disabled={refreshing || batchStatus?.is_fresh}
+            className="rounded border border-border px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted disabled:opacity-50"
+          >
+            {refreshing ? "배치 실행 중..." : "데이터 갱신"}
+          </button>
+          <button
+            onClick={() => handleRefresh(true)}
+            disabled={refreshing}
+            className="px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground disabled:opacity-50"
+          >
+            강제 갱신
+          </button>
+        </div>
       </div>
+
+      {(batchStatus?.finished_at || batchStatus?.latest_as_of) && (
+        <p className="font-data text-xs text-muted-foreground">
+          마지막 갱신: {batchStatus.finished_at || batchStatus.latest_as_of}
+          {batchStatus.is_fresh ? " · 오늘 데이터 최신" : ""}
+        </p>
+      )}
 
       {helpOpen && (
         <div className="rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm space-y-3">

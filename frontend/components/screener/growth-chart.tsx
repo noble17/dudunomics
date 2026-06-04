@@ -158,16 +158,23 @@ export function GrowthChart({ data }: Props) {
             <Bar dataKey="value" radius={[3, 3, 0, 0]} maxBarSize={40}>
               <LabelList
                 dataKey="value"
-                content={(props: Record<string, unknown>) => {
-                  const x = props.x as number;
-                  const y = props.y as number;
-                  const width = props.width as number;
-                  const height = props.height as number;
-                  const value = props.value as number;
+                content={(props: unknown) => {
+                  const item = props as {
+                    x?: number;
+                    y?: number;
+                    width?: number;
+                    height?: number;
+                    value?: number;
+                  };
+                  const x = item.x ?? 0;
+                  const y = item.y ?? 0;
+                  const width = item.width ?? 0;
+                  const height = item.height ?? 0;
+                  const value = item.value;
                   const label = typeof value === "number" ? fmtValue(value, activeTab) : String(value ?? "");
                   const cx = x + width / 2;
                   // 음수 막대: props.y=막대하단, height=막대높이 → y-height/2가 중간
-                  const cy = value < 0 ? y - Math.abs(height) / 2 : y - 4;
+                  const cy = typeof value === "number" && value < 0 ? y - Math.abs(height) / 2 : y - 4;
                   return (
                     <text x={cx} y={cy} textAnchor="middle" fontSize={9} fill="var(--muted-foreground)">
                       {label}

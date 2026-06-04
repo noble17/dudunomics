@@ -72,17 +72,17 @@ def _make_fake_single_ticker_df(ticker: str, n: int = 10) -> pd.DataFrame:
     }, index=idx)
 
 
-def test_fetch_ohlcv_cache_miss_calls_yfinance():
-    """캐시 없으면 KIS 실패 시 yfinance 호출."""
-    import pandas as pd
+def test_fetch_ohlcv_cache_miss_calls_kis():
+    """캐시 없으면 해외 OHLCV도 KIS로 조회한다."""
     from core.data import ohlcv_cache
     fake = _make_fake_single_ticker_df("AAPL")
-    with patch("core.prices.kis.fetch_ohlcv_overseas", return_value=pd.DataFrame()), \
-         patch("yfinance.download", return_value=fake) as mock_dl:
+    with patch("core.prices.kis.fetch_ohlcv_overseas", return_value=fake) as mock_kis, \
+         patch("yfinance.download") as mock_dl:
         prices, warns = ohlcv_cache.fetch_ohlcv(
             ["AAPL"], date(2023, 1, 2), date(2023, 1, 13)
         )
-    assert mock_dl.called
+    assert mock_kis.called
+    assert not mock_dl.called
     assert not prices.empty
     assert "AAPL" in prices.columns.get_level_values(0)
     assert "Close" in prices["AAPL"].columns
@@ -117,11 +117,11 @@ def test_fetch_ohlcv_stores_data_in_cache():
     fake = _make_fake_single_ticker_df("TSLA", n=5)
     call_count = {"n": 0}
 
-    def counting_download(*a, **kw):
+    def counting_kis(*a, **kw):
         call_count["n"] += 1
         return fake
 
-    with patch("yfinance.download", side_effect=counting_download):
+    with patch("core.prices.kis.fetch_ohlcv_overseas", side_effect=counting_kis):
         ohlcv_cache.fetch_ohlcv(["TSLA"], date(2023, 1, 2), date(2023, 1, 6))
 
     # 두 번째 요청은 캐시 히트 (yfinance 미호출)
@@ -131,16 +131,35 @@ def test_fetch_ohlcv_stores_data_in_cache():
     assert not prices.empty
 
 
-def test_fetch_index_cache_miss_calls_yfinance():
-    """인덱스 캐시 없으면 KIS 실패 시 yfinance 호출."""
-    import pandas as pd
+def test_fetch_ohlcv_overseas_warns_when_kis_partial():
+    """KIS가 일부 구간만 주면 yfinance를 호출하지 않고 부족 경고를 반환한다."""
+    from core.data import ohlcv_cache
+
+    kis_partial = _make_fake_single_ticker_df("BE", n=10)
+    kis_partial.index = pd.date_range("2023-07-03", periods=10, freq="B")
+
+    with patch("core.prices.kis.fetch_ohlcv_overseas", return_value=kis_partial), \
+         patch("yfinance.download") as mock_yf:
+        prices, warns = ohlcv_cache.fetch_ohlcv(
+            ["BE"], date(2023, 1, 2), date(2023, 7, 14), force=True
+        )
+
+    assert not mock_yf.called
+    assert not prices.empty
+    assert prices.index.min().date() == date(2023, 7, 3)
+    assert any("KIS 데이터가 요청 구간보다 짧습니다" in warning for warning in warns)
+
+
+def test_fetch_index_cache_miss_calls_kis():
+    """인덱스 캐시 없으면 KIS로 조회한다."""
     from core.data import ohlcv_cache
     fake = _make_fake_single_ticker_df("SPY", n=5)
 
-    with patch("core.prices.kis.fetch_ohlcv_overseas", return_value=pd.DataFrame()), \
-         patch("yfinance.download", return_value=fake) as mock_dl:
+    with patch("core.prices.kis.fetch_ohlcv_overseas", return_value=fake) as mock_kis, \
+         patch("yfinance.download") as mock_dl:
         series = ohlcv_cache.fetch_index("SPY", date(2023, 1, 2), date(2023, 1, 6))
-    assert mock_dl.called
+    assert mock_kis.called
+    assert not mock_dl.called
     assert not series.empty
 
 

@@ -1,11 +1,12 @@
 from datetime import datetime, date, timedelta
 from fastapi import APIRouter, Depends
 from core.auth.deps import current_user, CurrentUser
-from api.models import PortfolioRow, PortfolioSnapshot, SnapshotHistory, EventIn, EventOut, PerformanceOut, BenchmarkStats, PerformanceChartPoint, RebalancingRow
+from api.models import PortfolioAnalyticsRow, PortfolioRow, PortfolioSnapshot, SnapshotHistory, EventIn, EventOut, PerformanceOut, BenchmarkStats, PerformanceChartPoint, RebalancingRow
 import core.repository as repo
 from core.fx import get_fx_provider
 from core.prices.kis import KISPriceProvider
 from core.data.ohlcv_cache import fetch_index
+from core.analytics.ticker_performance import build_ticker_performance
 
 router = APIRouter(prefix="/api/portfolio", tags=["portfolio"])
 
@@ -86,6 +87,44 @@ def get_history(limit: int = 400, user: CurrentUser = Depends(current_user)):
         )
         for r in rows
     ]
+
+
+@router.get("/analytics", response_model=list[PortfolioAnalyticsRow])
+def get_analytics(user: CurrentUser = Depends(current_user)):
+    holdings = repo.get_holdings(user.id)
+    if not holdings:
+        return []
+
+    tickers = [h["ticker"] for h in holdings]
+    names = {h["ticker"]: h["name"] for h in holdings}
+    performance = build_ticker_performance(tickers, names=names)
+    perf_by_ticker = {row["ticker"]: row for row in performance}
+
+    total_value = 0.0
+    value_by_ticker: dict[str, float] = {}
+    for h in holdings:
+        perf = perf_by_ticker.get(h["ticker"], {})
+        price = perf.get("price")
+        value = float(price) * h["quantity"] if price is not None else 0.0
+        value_by_ticker[h["ticker"]] = value
+        total_value += value
+
+    result = []
+    for h in holdings:
+        ticker = h["ticker"]
+        perf = perf_by_ticker.get(ticker, {"ticker": ticker, "name": h["name"]})
+        price = perf.get("price")
+        return_pct = (float(price) - h["avg_price"]) / h["avg_price"] * 100 if price is not None and h["avg_price"] else None
+        result.append({
+            **perf,
+            "quantity": h["quantity"],
+            "avg_price": h["avg_price"],
+            "currency": h["currency"],
+            "market_value_krw": value_by_ticker.get(ticker),
+            "return_pct": return_pct,
+            "weight_pct": value_by_ticker.get(ticker, 0.0) / total_value * 100 if total_value else None,
+        })
+    return result
 
 
 @router.get("/events", response_model=list[EventOut])

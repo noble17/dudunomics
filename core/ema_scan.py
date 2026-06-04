@@ -49,11 +49,11 @@ def _load_tickers(market: str) -> list[str]:
     return result
 
 
-def _detect_golden_cross(close: pd.Series) -> dict | None:
-    """
-    EMA5 > EMA20 상태 확인.
-    반환: {ema5, ema20, ema60, close, is_new_cross} or None (조건 미충족)
-    최소 62 거래일 필요 (EMA60 워밍업).
+def _detect_golden_cross(close: pd.Series, today: date) -> dict | None:
+    """EMA5 > EMA20 상태 확인. 최소 62 거래일 필요 (EMA60 워밍업).
+
+    day_count: 골든크로스 첫 거래일~오늘 기준 영업일 수 (캐시 최신 여부와 무관).
+    cross_start_date: 해당 구간의 첫 거래일.
     """
     if len(close) < 62:
         return None
@@ -67,12 +67,27 @@ def _detect_golden_cross(close: pd.Series) -> dict | None:
         return None
 
     prev_above = ema5.iloc[-2] > ema20.iloc[-2]
+
+    # 골든크로스 연속 구간의 첫 거래일 탐색
+    streak_start = len(ema5) - 1
+    while streak_start > 0 and ema5.iloc[streak_start - 1] > ema20.iloc[streak_start - 1]:
+        streak_start -= 1
+
+    cross_start = close.index[streak_start]
+    if hasattr(cross_start, "date"):
+        cross_start = cross_start.date()
+
+    # 오늘 날짜 기준 영업일 수 (주말 제외, 공휴일 미제외)
+    day_count = len(pd.bdate_range(str(cross_start), str(today)))
+
     return {
         "ema5": round(ema5.iloc[-1], 2),
         "ema20": round(ema20.iloc[-1], 2),
         "ema60": round(ema60.iloc[-1], 2),
         "close": round(close.iloc[-1], 2),
         "is_new_cross": not prev_above,
+        "day_count": day_count,
+        "cross_start_date": cross_start,
     }
 
 
@@ -91,7 +106,7 @@ def _build_message(market: str, today: date,
         lines.append("\n🆕 신규")
         for e in new_entries:
             lines.append(
-                f"• {_ticker_label(e['ticker'], names)} — 1일차\n"
+                f"• {_ticker_label(e['ticker'], names)} — {e['day_count']}일차\n"
                 f"  현재가 {e['close']} | EMA5 {e['ema5']} | EMA20 {e['ema20']} | EMA60 {e['ema60']}"
             )
 
@@ -135,7 +150,7 @@ def run_ema_scan(market: str) -> dict:
     for batch_start in range(0, len(tickers), _BATCH_SIZE):
         batch = tickers[batch_start:batch_start + _BATCH_SIZE]
         try:
-            df, _ = fetch_ohlcv(batch, start, end)
+            df, _ = fetch_ohlcv(batch, start, end, cache_only=True)
         except Exception as e:
             log.error("ema_scan fetch_ohlcv 오류 (batch=%s): %s", batch[:3], e)
             continue
@@ -150,7 +165,7 @@ def run_ema_scan(market: str) -> dict:
                 continue
             try:
                 close = df[ticker]["Close"].dropna()
-                result = _detect_golden_cross(close)
+                result = _detect_golden_cross(close, today)
 
                 if result is None:
                     # 골든크로스 아님 → DB에 있으면 삭제
@@ -159,26 +174,21 @@ def run_ema_scan(market: str) -> dict:
                     continue
 
                 if ticker not in active_in_db:
+                    repo.insert_golden_cross(ticker, market, names.get(ticker), result["cross_start_date"])
                     if result["is_new_cross"]:
-                        repo.insert_golden_cross(ticker, market, names.get(ticker), today)
                         new_entries.append({**result, "ticker": ticker})
+                    else:
+                        maintained_entries.append({**result, "ticker": ticker})
                 else:
                     old = active_in_db[ticker]
-                    # last_sent_at이 오늘이면 이미 카운트됨 — 증가 없이 현재 day_count 유지
-                    last_sent = old["last_sent_at"]
-                    already_counted_today = (
-                        last_sent is not None and
-                        getattr(last_sent, "date", lambda: None)() == today
-                    )
-                    if already_counted_today:
-                        maintained_entries.append({**result, "ticker": ticker, "day_count": old["day_count"]})
+                    already_counted_today = old.get("already_sent_today", False)
+                    if result["day_count"] > 5:
+                        repo.delete_golden_cross(ticker)
+                    elif already_counted_today:
+                        maintained_entries.append({**result, "ticker": ticker})
                     else:
-                        new_count = old["day_count"] + 1
-                        if new_count > 7:
-                            repo.delete_golden_cross(ticker)
-                        else:
-                            repo.update_golden_cross(ticker, new_count)
-                            maintained_entries.append({**result, "ticker": ticker, "day_count": new_count})
+                        repo.update_golden_cross(ticker, result["day_count"])
+                        maintained_entries.append({**result, "ticker": ticker})
 
             except Exception as e:
                 log.warning("ema_scan 티커 처리 오류 (%s): %s", ticker, e)

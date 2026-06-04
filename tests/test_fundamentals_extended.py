@@ -1,5 +1,7 @@
 """tests/test_fundamentals_extended.py"""
 import pytest
+import threading
+import time
 from datetime import date
 from unittest.mock import patch
 
@@ -64,3 +66,28 @@ def test_no_yfinance_import():
         if isinstance(node, (ast.Import, ast.ImportFrom)):
             names = [a.name for a in node.names] if isinstance(node, ast.Import) else [node.module or ""]
             assert not any("yfinance" in n for n in names), "yfinance import found!"
+
+
+def test_fetch_extended_uses_limited_parallelism(monkeypatch):
+    from core.data import fundamentals_extended as fe
+
+    active = 0
+    peak = 0
+    lock = threading.Lock()
+
+    def fake_fetch_one(ticker, as_of):
+        nonlocal active, peak
+        with lock:
+            active += 1
+            peak = max(peak, active)
+        time.sleep(0.02)
+        with lock:
+            active -= 1
+        return fe.ExtendedSnapshot(ticker=ticker, as_of=as_of)
+
+    monkeypatch.setattr(fe, "_fetch_one", fake_fetch_one)
+
+    rows = fe.fetch_extended(["A", "B", "C", "D", "E", "F"], max_workers=4)
+
+    assert len(rows) == 6
+    assert 2 <= peak <= 4

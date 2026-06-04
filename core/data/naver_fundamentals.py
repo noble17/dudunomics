@@ -146,7 +146,8 @@ def fetch_naver_summary(ticker: str) -> dict | None:
             "fwd_eps": cns_eps,
             "name": stock_name,
             "sector": sector,
-            "market_cap_krw_b": _safe(raw.get("marketSum")),  # 억원 단위
+            # Naver marketSum은 백만원 단위. 원 단위로 정규화해 저장한다.
+            "market_cap_krw": (_safe(raw.get("marketSum")) or 0) * 1_000_000 if _safe(raw.get("marketSum")) is not None else None,
         }
         _cache[code] = (result, now + _TTL)
         return result

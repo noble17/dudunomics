@@ -1,5 +1,6 @@
 """tests/test_screener_api.py"""
 from datetime import date
+from unittest.mock import patch
 import pytest
 
 
@@ -27,3 +28,23 @@ def test_peg_undervalued_false_when_above_one():
     from api.models import QuantScoreOut
     row = QuantScoreOut(ticker="MSFT", universe="sp500", as_of=date.today(), raw_peg=2.5)
     assert row.peg_undervalued is False
+
+
+def test_screener_refresh_rejects_duplicate_batch(client, monkeypatch):
+    import core.batch_state as bs
+
+    monkeypatch.setitem(bs._state, "sp500", {
+        "status": "running",
+        "step": "펀더멘탈 페치 중",
+        "done": 10,
+        "total": 503,
+        "started_at": "2026-06-02T07:10:00",
+        "finished_at": "",
+        "error": "",
+    })
+
+    with patch("core.scoring.universe_scorer.run_batch") as run_batch:
+        response = client.post("/api/screener/refresh?universe=sp500")
+
+    assert response.status_code == 409
+    run_batch.assert_not_called()

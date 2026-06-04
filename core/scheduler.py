@@ -1,12 +1,13 @@
 """APScheduler 잡 정의 — snapshot(5분), fundamentals(1일, Phase β), universe(1일, γ)."""
 import logging
+import os
 from datetime import date, datetime, timedelta
 
 import pandas as pd
 from apscheduler.schedulers.background import BackgroundScheduler
 
 import core.repository as repo
-from core.ema_scan import run_ema_scan
+from core.ema_scan import run_ema_scan, _load_tickers as _load_ema_tickers
 from core.fx import get_fx_provider
 from core.indicators import compute_indicators
 from core.data.prices_provider import fetch_ohlcv
@@ -90,6 +91,22 @@ def _snapshot_for_user(user_id: int, usdkrw: float, ts: datetime):
         log.error("_snapshot_for_user(user_id=%d) 오류: %s", user_id, e)
 
 
+def prices_refresh_kr_job():
+    """KR EMA 유니버스 OHLCV 강제 갱신 — EMA 스캔 전 15:45 실행."""
+    tickers = _load_ema_tickers("KR")
+    end = date.today()
+    start = end - timedelta(days=130)
+    _BATCH = 50
+    log.info("prices_refresh_kr: %d개 종목 강제 갱신 시작", len(tickers))
+    for i in range(0, len(tickers), _BATCH):
+        batch = tickers[i:i + _BATCH]
+        try:
+            fetch_ohlcv(batch, start, end, force=True)
+        except Exception as e:
+            log.error("prices_refresh_kr 배치 오류 (%s...): %s", batch[:2], e)
+    log.info("prices_refresh_kr: 갱신 완료")
+
+
 def ema_scan_kr_job():
     """국장 EMA 골든크로스 스캔 — 매일 16:00 KST."""
     try:
@@ -99,6 +116,22 @@ def ema_scan_kr_job():
         log.error("ema_scan_kr_job 오류: %s", e)
 
 
+def prices_refresh_us_job():
+    """US EMA 유니버스 OHLCV 강제 갱신 — EMA 스캔 전 06:45 실행."""
+    tickers = _load_ema_tickers("US")
+    end = date.today()
+    start = end - timedelta(days=130)
+    _BATCH = 50
+    log.info("prices_refresh_us: %d개 종목 강제 갱신 시작", len(tickers))
+    for i in range(0, len(tickers), _BATCH):
+        batch = tickers[i:i + _BATCH]
+        try:
+            fetch_ohlcv(batch, start, end, force=True)
+        except Exception as e:
+            log.error("prices_refresh_us 배치 오류 (%s...): %s", batch[:2], e)
+    log.info("prices_refresh_us: 갱신 완료")
+
+
 def ema_scan_us_job():
     """미장 EMA 골든크로스 스캔 — 매일 07:00 KST."""
     try:
@@ -106,6 +139,39 @@ def ema_scan_us_job():
         log.info("ema_scan_us 완료: %s", result)
     except Exception as e:
         log.error("ema_scan_us_job 오류: %s", e)
+
+
+def growth_batch_kr_job():
+    """국장 성장주 배치 — 매일 16:10 KST."""
+    if not os.getenv("DART_API_KEY"):
+        log.error("growth_batch_kr 건너뜀: DART_API_KEY가 필요합니다.")
+        return
+    _run_growth_universes(("kospi200", "kosdaq150"))
+
+
+def growth_batch_us_job():
+    """미장 성장주 배치 — 매일 07:10 KST."""
+    _run_growth_universes(("sp500", "nasdaq100"))
+
+
+def _run_growth_universes(universes: tuple[str, ...]):
+    import core.batch_state as bs
+    from core.batch_refresh import get_status
+    from core.scoring.universe_scorer import run_batch
+
+    for universe in universes:
+        status = get_status(universe)
+        if status["status"] == "running":
+            log.warning("growth batch 건너뜀: %s 배치가 이미 실행 중입니다.", universe)
+            continue
+        if status["is_fresh"]:
+            log.info("growth batch 건너뜀: %s 데이터가 이미 최신입니다.", universe)
+            continue
+        try:
+            run_batch(universe)
+        except Exception as e:
+            log.error("growth batch 오류 (%s): %s", universe, e)
+            bs.fail(universe, str(e))
 
 
 def _check_condition(alert: dict, current_price: float, ohlcv_df: pd.DataFrame | None) -> bool:
@@ -214,8 +280,16 @@ def create_scheduler() -> BackgroundScheduler:
     scheduler.add_job(snapshot_job, "interval", minutes=5, id="snapshot",
                       next_run_time=datetime.now())
     scheduler.add_job(alert_check_job, "interval", minutes=1, id="alert_check")
+    scheduler.add_job(prices_refresh_kr_job, "cron", hour=15, minute=45,
+                      id="prices_refresh_kr", timezone="Asia/Seoul")
     scheduler.add_job(ema_scan_kr_job, "cron", hour=16, minute=0,
                       id="ema_scan_kr", timezone="Asia/Seoul")
+    scheduler.add_job(prices_refresh_us_job, "cron", hour=6, minute=45,
+                      id="prices_refresh_us", timezone="Asia/Seoul")
     scheduler.add_job(ema_scan_us_job, "cron", hour=7, minute=0,
                       id="ema_scan_us", timezone="Asia/Seoul")
+    scheduler.add_job(growth_batch_kr_job, "cron", hour=16, minute=10,
+                      id="growth_batch_kr", timezone="Asia/Seoul")
+    scheduler.add_job(growth_batch_us_job, "cron", hour=7, minute=10,
+                      id="growth_batch_us", timezone="Asia/Seoul")
     return scheduler

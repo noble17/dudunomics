@@ -1,6 +1,6 @@
 import type {
   BacktestRunIn, BacktestRunOut, CandlesOut, CashUpdate, EventOut,
-  HoldingIn, HoldingOut, PortfolioSnapshot,
+  HoldingIn, HoldingOut, PortfolioAnalyticsRow, PortfolioSnapshot,
   SnapshotHistory, StrategyDef,
   TickerLookupOut, TickerSearchHit,
   QuantScore, TickerNote,
@@ -9,7 +9,9 @@ import type {
   NewsOut, AISummaryOut, ChatMessage,
   AlertCondition, AlertEvent, AlertIn,
   TradeIn, TradeOut, PerformanceData, RebalancingRow,
-  FinancialsData, PriceChartData,
+  FinancialsData, PriceChartData, Watchlist, WatchlistItem, WatchlistMembership,
+  GrowthScore, GrowthTiming, GrowthValuation, GrowthWatchlistStatus,
+  GrowthHydrate, TickerHydrate, TickerOverview,
 } from "./types";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -53,6 +55,7 @@ export const holdingsApi = {
 
 export const portfolioApi = {
   current: () => request<PortfolioSnapshot>("/api/portfolio/current"),
+  analytics: () => request<PortfolioAnalyticsRow[]>("/api/portfolio/analytics"),
   history: (limit = 8640) =>
     request<SnapshotHistory[]>(`/api/portfolio/history?limit=${limit}`),
   events: () => request<EventOut[]>("/api/portfolio/events"),
@@ -60,6 +63,29 @@ export const portfolioApi = {
     request<EventOut>("/api/portfolio/events", { method: "POST", body: JSON.stringify(body) }),
   deleteEvent: (id: number) =>
     request<{ ok: boolean }>(`/api/portfolio/events/${id}`, { method: "DELETE" }),
+};
+
+export const watchlistsApi = {
+  list: () => request<Watchlist[]>("/api/watchlists"),
+  create: (name: string) =>
+    request<Watchlist>("/api/watchlists", { method: "POST", body: JSON.stringify({ name }) }),
+  update: (id: number, body: { name: string; description?: string | null }) =>
+    request<Watchlist>(`/api/watchlists/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  delete: (id: number) =>
+    request<{ ok: boolean }>(`/api/watchlists/${id}`, { method: "DELETE" }),
+  items: (id: number) => request<WatchlistItem[]>(`/api/watchlists/${id}/items`),
+  memberships: (ticker: string) =>
+    request<WatchlistMembership[]>(`/api/watchlists/memberships/${encodeURIComponent(ticker)}`),
+  addItem: (id: number, ticker: string, body: { name?: string; universe?: string; memo?: string }) =>
+    request<{ ok: boolean; watchlist_id: number; ticker: string; universe: string }>(
+      `/api/watchlists/${id}/items/${encodeURIComponent(ticker)}`,
+      { method: "PUT", body: JSON.stringify(body) },
+    ),
+  removeItem: (id: number, ticker: string, universe = "sp500") =>
+    request<{ ok: boolean }>(
+      `/api/watchlists/${id}/items/${encodeURIComponent(ticker)}?universe=${encodeURIComponent(universe)}`,
+      { method: "DELETE" },
+    ),
 };
 
 export const backtestApi = {
@@ -73,10 +99,10 @@ export const screenerApi = {
     request<QuantScore[]>(`/api/screener/scores?universe=${universe}`),
   ticker: (ticker: string, universe = "sp500") =>
     request<QuantScore>(`/api/screener/ticker/${ticker}?universe=${universe}`),
-  refresh: (universe = "sp500") =>
-    request<{ status: string }>(`/api/screener/refresh?universe=${universe}`, { method: "POST" }),
+  refresh: (universe = "sp500", force = false) =>
+    request<{ status: string }>(`/api/screener/refresh?universe=${universe}&force=${force}`, { method: "POST" }),
   status: (universe = "sp500") =>
-    request<{ status: string; step: string; done: number; total: number }>(`/api/screener/status?universe=${universe}`),
+    request<{ status: string; step: string; done: number; total: number; finished_at: string; latest_as_of: string; is_fresh: boolean }>(`/api/screener/status?universe=${universe}`),
   getNote: (ticker: string) =>
     request<TickerNote | null>(`/api/screener/notes/${ticker}`),
   upsertNote: (ticker: string, body: Omit<TickerNote, "ticker" | "updated_at">) =>
@@ -88,6 +114,36 @@ export const screenerApi = {
     request<FinancialsData>(`/api/screener/ticker/${ticker}/financials?universe=${universe}`),
   priceChart: (ticker: string) =>
     request<PriceChartData>(`/api/screener/ticker/${ticker}/price-chart`),
+};
+
+export const growthApi = {
+  scores: (universe = "sp500") =>
+    request<GrowthScore[]>(`/api/growth/scores?universe=${universe}`),
+  top: (universe = "sp500", sector = "", cap = "", signal = "") => {
+    const params = new URLSearchParams({ universe });
+    if (sector) params.set("sector", sector);
+    if (cap) params.set("cap", cap);
+    if (signal) params.set("signal", signal);
+    return request<GrowthScore[]>(`/api/growth/top?${params.toString()}`);
+  },
+  valuation: (ticker: string, universe = "sp500") =>
+    request<GrowthValuation>(`/api/growth/ticker/${ticker}/valuation?universe=${universe}`),
+  timing: (ticker: string) =>
+    request<GrowthTiming>(`/api/growth/ticker/${ticker}/timing`),
+  hydrate: (ticker: string, universe = "sp500") =>
+    request<GrowthHydrate>(`/api/growth/ticker/${ticker}/hydrate?universe=${universe}`, { method: "POST" }),
+  watchlist: (universe = "sp500") =>
+    request<GrowthScore[]>(`/api/growth/watchlist?universe=${universe}`),
+  watchlistStatus: (ticker: string, universe = "sp500") =>
+    request<GrowthWatchlistStatus>(`/api/growth/watchlist/${ticker}?universe=${universe}`),
+  addWatchlist: (ticker: string, universe = "sp500") =>
+    request<GrowthWatchlistStatus>(`/api/growth/watchlist/${ticker}?universe=${universe}`, { method: "PUT" }),
+  removeWatchlist: (ticker: string, universe = "sp500") =>
+    request<GrowthWatchlistStatus>(`/api/growth/watchlist/${ticker}?universe=${universe}`, { method: "DELETE" }),
+  refresh: (universe = "sp500", force = false) =>
+    request<{ status: string; universe: string }>(`/api/growth/refresh?universe=${universe}&force=${force}`, { method: "POST" }),
+  status: (universe = "sp500") =>
+    request<{ status: string; step: string; done: number; total: number; finished_at: string; latest_as_of: string; is_fresh: boolean }>(`/api/screener/status?universe=${universe}`),
 };
 
 export const workspaceApi = {
@@ -108,6 +164,18 @@ export const candlesApi = {
   get: (ticker: string, period: string, indicators = false) =>
     request<CandlesOut>(
       `/api/candles?ticker=${encodeURIComponent(ticker)}&period=${encodeURIComponent(period)}${indicators ? "&indicators=true" : ""}`
+    ),
+};
+
+export const tickersApi = {
+  overview: (ticker: string, universe = "sp500") =>
+    request<TickerOverview>(
+      `/api/tickers/${encodeURIComponent(ticker)}/overview?universe=${encodeURIComponent(universe)}`
+    ),
+  hydrate: (ticker: string, scopes = ["ohlcv"]) =>
+    request<TickerHydrate>(
+      `/api/tickers/${encodeURIComponent(ticker)}/hydrate?${scopes.map((scope) => `scopes=${encodeURIComponent(scope)}`).join("&")}`,
+      { method: "POST" },
     ),
 };
 

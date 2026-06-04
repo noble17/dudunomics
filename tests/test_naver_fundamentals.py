@@ -63,6 +63,7 @@ class TestFetchNaverSummary:
         assert result["per"] == pytest.approx(25.62)
         assert result["pbr"] == pytest.approx(4.41)
         assert result["eps"] == pytest.approx(12372.0)
+        assert result["market_cap_krw"] == pytest.approx(1_853_270_318_000_000.0)
 
     def test_zero_values_become_none(self):
         m = MagicMock()

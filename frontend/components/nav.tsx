@@ -5,9 +5,12 @@ import { usePathname } from "next/navigation";
 
 const links = [
   { href: "/portfolio", label: "포트폴리오" },
+  { href: "/watchlist", label: "관심종목" },
   { href: "/holdings", label: "보유종목" },
   { href: "/backtest", label: "백테스트" },
+  { href: "/stocks", label: "종목검색" },
   { href: "/screener", label: "종목분석" },
+  { href: "/growth", label: "좋은종목찾기" },
   { href: "/terminal", label: "터미널" },
 ];
 

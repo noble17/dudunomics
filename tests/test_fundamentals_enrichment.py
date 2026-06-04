@@ -52,17 +52,17 @@ def test_fundamentals_snapshot_json_serializable():
 
 
 def test_fetch_finviz_parses_new_fields(monkeypatch):
-    """_fetch_finviz가 ROI/Gross Margin/Oper. Margin/Curr R./Sales Q/Q를 파싱한다."""
+    """_fetch_finviz가 ROIC/Gross Margin/Oper. Margin/Current Ratio/Sales Q/Q를 decimal 단위로 파싱한다."""
     from core.data.fundamentals_scraper import _fetch_finviz
 
     html = """
     <table class="snapshot-table2">
       <tr>
         <td>P/E</td><td>20.0</td>
-        <td>ROI</td><td>15.3%</td>
+        <td>ROIC</td><td>15.3%</td>
         <td>Gross Margin</td><td>62.1%</td>
         <td>Oper. Margin</td><td>28.5%</td>
-        <td>Curr R.</td><td>2.1</td>
+        <td>Current Ratio</td><td>2.1</td>
         <td>Sales Q/Q</td><td>12.4%</td>
         <td>Market Cap</td><td>2.5T</td>
       </tr>
@@ -79,11 +79,54 @@ def test_fetch_finviz_parses_new_fields(monkeypatch):
     )
 
     snap = _fetch_finviz("AAPL")
-    assert snap.roic == pytest.approx(15.3)
-    assert snap.gross_margin == pytest.approx(62.1)
-    assert snap.operating_margin == pytest.approx(28.5)
+    assert snap.roic == pytest.approx(0.153)
+    assert snap.gross_margin == pytest.approx(0.621)
+    assert snap.operating_margin == pytest.approx(0.285)
     assert snap.current_ratio == pytest.approx(2.1)
-    assert snap.sales_qq == pytest.approx(12.4)
+    assert snap.sales_qq == pytest.approx(0.124)
+
+
+def test_fetch_fundamentals_refetches_stale_cache_without_growth_fields(tmp_path, monkeypatch):
+    """기존 캐시에 신규 필드가 없으면 캐시를 버리고 재페치한다."""
+    import json
+    import sqlite3
+    import time
+    from core.data import fundamentals_scraper as fs
+
+    db_path = tmp_path / "fundamentals_cache.sqlite"
+    monkeypatch.setattr(fs, "_DB_PATH", db_path)
+    conn = sqlite3.connect(db_path)
+    conn.execute("CREATE TABLE cache (ticker TEXT PRIMARY KEY, data TEXT, ts REAL)")
+    conn.execute(
+        "INSERT INTO cache VALUES (?, ?, ?)",
+        ("AAPL", json.dumps({"ticker": "AAPL", "forward_pe": 30.0}), time.time()),
+    )
+    conn.commit()
+    conn.close()
+
+    class FakeResponse:
+        text = """
+        <table class="snapshot-table2">
+          <tr>
+            <td>Forward P/E</td><td>31.0</td>
+            <td>ROIC</td><td>10.0%</td>
+            <td>Gross Margin</td><td>50.0%</td>
+            <td>Oper. Margin</td><td>20.0%</td>
+            <td>Current Ratio</td><td>1.8</td>
+            <td>Sales Q/Q</td><td>8.0%</td>
+          </tr>
+        </table>
+        """
+        def raise_for_status(self): pass
+
+    monkeypatch.setattr(fs, "_CLIENT", type("C", (), {"get": lambda self, u: FakeResponse()})())
+    monkeypatch.setattr(fs, "_supplement_stockanalysis", lambda snap: None)
+
+    snap = fs.fetch_fundamentals("AAPL")
+
+    assert snap is not None
+    assert snap.forward_pe == pytest.approx(31.0)
+    assert snap.roic == pytest.approx(0.10)
 
 
 # ── 2. compute_consensus_growth CAGR 계산 ────────────────────────────────────
@@ -209,11 +252,11 @@ def test_extended_snapshot_new_fields():
     assert hasattr(snap, "sales_growth")
     assert hasattr(snap, "fwd_revenue_growth")
     assert hasattr(snap, "fwd_eps_growth")
-    assert hasattr(snap, "market_cap_krw_b")
+    assert hasattr(snap, "market_cap_krw")
     # 기본값 None
     assert snap.roic is None
     assert snap.fwd_revenue_growth is None
-    assert snap.market_cap_krw_b is None
+    assert snap.market_cap_krw is None
 
 
 def test_extended_snapshot_foreign_branch_maps_growth(monkeypatch):
@@ -256,7 +299,7 @@ def test_extended_snapshot_foreign_branch_maps_growth(monkeypatch):
 
 
 def test_extended_snapshot_domestic_maps_market_cap(monkeypatch):
-    """국내 종목 _fetch_one이 market_cap_krw_b를 올바르게 매핑한다."""
+    """국내 종목 _fetch_one이 market_cap_krw를 올바르게 매핑한다."""
     from core.data import fundamentals_extended as fe
     from datetime import date
 
@@ -268,7 +311,7 @@ def test_extended_snapshot_domestic_maps_market_cap(monkeypatch):
         "fwd_eps": 5500.0,
         "name": "삼성전자",
         "sector": "전기전자",
-        "market_cap_krw_b": 3_800_000.0,
+        "market_cap_krw": 3_800_000_000_000.0,
     }
 
     monkeypatch.setattr(
@@ -281,5 +324,5 @@ def test_extended_snapshot_domestic_maps_market_cap(monkeypatch):
     monkeypatch.setattr(nf, "fetch_naver_summary", lambda ticker: mock_nav)
 
     snap = fe._fetch_one("005930.KS", date.today())
-    assert snap.market_cap_krw_b == pytest.approx(3_800_000.0)
+    assert snap.market_cap_krw == pytest.approx(3_800_000_000_000.0)
     assert snap.company_name == "삼성전자"

@@ -2,13 +2,14 @@
 import json
 import os
 from contextlib import contextmanager
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
 import duckdb
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
+from core.data.normalization import normalize_finite_numbers
 
 DB_PATH = Path(os.getenv("DB_PATH", "data/dudunomics.duckdb"))
 
@@ -141,6 +142,58 @@ def _init_schema(engine):
         PRIMARY KEY (ticker, as_of)
     );
 
+    CREATE TABLE IF NOT EXISTS ticker_profiles (
+        ticker     TEXT PRIMARY KEY,
+        name       TEXT,
+        market     TEXT,
+        country    TEXT,
+        currency   TEXT,
+        sector     TEXT,
+        industry   TEXT,
+        exchange   TEXT,
+        source     TEXT,
+        updated_at TIMESTAMP DEFAULT current_timestamp
+    );
+
+    CREATE TABLE IF NOT EXISTS fundamental_snapshots (
+        ticker           TEXT NOT NULL,
+        as_of            DATE NOT NULL,
+        source           TEXT NOT NULL,
+        per              DOUBLE,
+        pbr              DOUBLE,
+        psr              DOUBLE,
+        peg              DOUBLE,
+        forward_pe       DOUBLE,
+        trailing_pe      DOUBLE,
+        forward_eps      DOUBLE,
+        eps_ttm          DOUBLE,
+        roe              DOUBLE,
+        roic             DOUBLE,
+        debt_ratio       DOUBLE,
+        current_ratio    DOUBLE,
+        gross_margin     DOUBLE,
+        operating_margin DOUBLE,
+        revenue_growth   DOUBLE,
+        eps_growth       DOUBLE,
+        market_cap       DOUBLE,
+        raw_json         JSON,
+        fetched_at       TIMESTAMP DEFAULT current_timestamp,
+        PRIMARY KEY (ticker, as_of, source)
+    );
+
+    CREATE TABLE IF NOT EXISTS ticker_data_status (
+        ticker          TEXT NOT NULL,
+        data_type       TEXT NOT NULL,
+        source          TEXT NOT NULL,
+        min_date        DATE,
+        max_date        DATE,
+        last_fetched_at TIMESTAMP,
+        last_success_at TIMESTAMP,
+        last_error      TEXT,
+        coverage_json   JSON,
+        PRIMARY KEY (ticker, data_type, source)
+    );
+
     CREATE TABLE IF NOT EXISTS quant_scores (
         ticker           TEXT,
         universe         TEXT,
@@ -175,12 +228,49 @@ def _init_schema(engine):
         updated_at   TIMESTAMP
     );
 
+    CREATE TABLE IF NOT EXISTS quant_rank_history (
+        universe         TEXT,
+        as_of            DATE,
+        ticker           TEXT,
+        growth_composite DOUBLE,
+        rank             INTEGER,
+        PRIMARY KEY (universe, as_of, ticker)
+    );
+
     CREATE TABLE IF NOT EXISTS user_workspaces (
         user_id     INTEGER NOT NULL,
         name        TEXT NOT NULL DEFAULT 'default',
         layout_json TEXT NOT NULL DEFAULT '{}',
         updated_at  TIMESTAMP DEFAULT current_timestamp,
         PRIMARY KEY (user_id, name)
+    );
+
+    CREATE TABLE IF NOT EXISTS growth_watchlist (
+        user_id    INTEGER NOT NULL,
+        universe   TEXT NOT NULL,
+        ticker     TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT current_timestamp,
+        PRIMARY KEY (user_id, universe, ticker)
+    );
+
+    CREATE SEQUENCE IF NOT EXISTS watchlists_id_seq START 1;
+    CREATE TABLE IF NOT EXISTS watchlists (
+        id          INTEGER DEFAULT nextval('watchlists_id_seq') PRIMARY KEY,
+        user_id     INTEGER NOT NULL,
+        name        TEXT NOT NULL,
+        description TEXT,
+        created_at  TIMESTAMP DEFAULT current_timestamp,
+        updated_at  TIMESTAMP DEFAULT current_timestamp
+    );
+
+    CREATE TABLE IF NOT EXISTS watchlist_items (
+        watchlist_id INTEGER NOT NULL,
+        ticker       TEXT NOT NULL,
+        universe     TEXT NOT NULL DEFAULT 'sp500',
+        name         TEXT,
+        memo         TEXT,
+        created_at   TIMESTAMP DEFAULT current_timestamp,
+        PRIMARY KEY (watchlist_id, ticker, universe)
     );
 
     CREATE SEQUENCE IF NOT EXISTS user_alerts_id_seq START 1;
@@ -270,7 +360,34 @@ def _init_schema(engine):
             "ALTER TABLE quant_scores ADD COLUMN IF NOT EXISTS negative_book_value BOOLEAN DEFAULT FALSE",
             "ALTER TABLE quant_scores ADD COLUMN IF NOT EXISTS sector             TEXT",
             "ALTER TABLE quant_scores ADD COLUMN IF NOT EXISTS industry           TEXT",
+            "ALTER TABLE quant_scores ADD COLUMN IF NOT EXISTS pct_growth                  DOUBLE",
+            "ALTER TABLE quant_scores ADD COLUMN IF NOT EXISTS pct_profitability           DOUBLE",
+            "ALTER TABLE quant_scores ADD COLUMN IF NOT EXISTS pct_cashflow                DOUBLE",
+            "ALTER TABLE quant_scores ADD COLUMN IF NOT EXISTS pct_stability               DOUBLE",
+            "ALTER TABLE quant_scores ADD COLUMN IF NOT EXISTS growth_composite            DOUBLE",
+            "ALTER TABLE quant_scores ADD COLUMN IF NOT EXISTS raw_roic                    DOUBLE",
+            "ALTER TABLE quant_scores ADD COLUMN IF NOT EXISTS raw_gross_margin            DOUBLE",
+            "ALTER TABLE quant_scores ADD COLUMN IF NOT EXISTS raw_oper_margin             DOUBLE",
+            "ALTER TABLE quant_scores ADD COLUMN IF NOT EXISTS raw_current_ratio           DOUBLE",
+            "ALTER TABLE quant_scores ADD COLUMN IF NOT EXISTS raw_sales_growth            DOUBLE",
+            "ALTER TABLE quant_scores ADD COLUMN IF NOT EXISTS raw_rev_yoy                 DOUBLE",
+            "ALTER TABLE quant_scores ADD COLUMN IF NOT EXISTS raw_market_cap_usd_m        DOUBLE",
+            "ALTER TABLE quant_scores ADD COLUMN IF NOT EXISTS raw_market_cap_krw          DOUBLE",
+            "ALTER TABLE quant_scores ADD COLUMN IF NOT EXISTS raw_fwd_rev_growth          DOUBLE",
+            "ALTER TABLE quant_scores ADD COLUMN IF NOT EXISTS raw_fwd_eps_growth          DOUBLE",
+            "ALTER TABLE quant_scores ADD COLUMN IF NOT EXISTS raw_operating_cashflow      DOUBLE",
+            "ALTER TABLE quant_scores ADD COLUMN IF NOT EXISTS data_coverage               JSON",
+            "ALTER TABLE quant_scores ADD COLUMN IF NOT EXISTS sector_percentile_fallback  BOOLEAN DEFAULT FALSE",
+            "CREATE TABLE IF NOT EXISTS quant_rank_history (universe TEXT, as_of DATE, ticker TEXT, growth_composite DOUBLE, rank INTEGER, PRIMARY KEY (universe, as_of, ticker))",
+            "CREATE INDEX IF NOT EXISTS idx_rank_hist ON quant_rank_history (universe, as_of)",
             "CREATE TABLE IF NOT EXISTS quarterly_financials (ticker TEXT NOT NULL, period TEXT NOT NULL, eps DOUBLE, roe DOUBLE, debt_ratio DOUBLE, revenue DOUBLE, op_income DOUBLE, source TEXT, PRIMARY KEY (ticker, period))",
+            "CREATE TABLE IF NOT EXISTS growth_watchlist (user_id INTEGER NOT NULL, universe TEXT NOT NULL, ticker TEXT NOT NULL, created_at TIMESTAMP DEFAULT current_timestamp, PRIMARY KEY (user_id, universe, ticker))",
+            "CREATE SEQUENCE IF NOT EXISTS watchlists_id_seq START 1",
+            "CREATE TABLE IF NOT EXISTS watchlists (id INTEGER DEFAULT nextval('watchlists_id_seq') PRIMARY KEY, user_id INTEGER NOT NULL, name TEXT NOT NULL, description TEXT, created_at TIMESTAMP DEFAULT current_timestamp, updated_at TIMESTAMP DEFAULT current_timestamp)",
+            "CREATE TABLE IF NOT EXISTS watchlist_items (watchlist_id INTEGER NOT NULL, ticker TEXT NOT NULL, universe TEXT NOT NULL DEFAULT 'sp500', name TEXT, memo TEXT, created_at TIMESTAMP DEFAULT current_timestamp, PRIMARY KEY (watchlist_id, ticker, universe))",
+            "CREATE TABLE IF NOT EXISTS ticker_profiles (ticker TEXT PRIMARY KEY, name TEXT, market TEXT, country TEXT, currency TEXT, sector TEXT, industry TEXT, exchange TEXT, source TEXT, updated_at TIMESTAMP DEFAULT current_timestamp)",
+            "CREATE TABLE IF NOT EXISTS fundamental_snapshots (ticker TEXT NOT NULL, as_of DATE NOT NULL, source TEXT NOT NULL, per DOUBLE, pbr DOUBLE, psr DOUBLE, peg DOUBLE, forward_pe DOUBLE, trailing_pe DOUBLE, forward_eps DOUBLE, eps_ttm DOUBLE, roe DOUBLE, roic DOUBLE, debt_ratio DOUBLE, current_ratio DOUBLE, gross_margin DOUBLE, operating_margin DOUBLE, revenue_growth DOUBLE, eps_growth DOUBLE, market_cap DOUBLE, raw_json JSON, fetched_at TIMESTAMP DEFAULT current_timestamp, PRIMARY KEY (ticker, as_of, source))",
+            "CREATE TABLE IF NOT EXISTS ticker_data_status (ticker TEXT NOT NULL, data_type TEXT NOT NULL, source TEXT NOT NULL, min_date DATE, max_date DATE, last_fetched_at TIMESTAMP, last_success_at TIMESTAMP, last_error TEXT, coverage_json JSON, PRIMARY KEY (ticker, data_type, source))",
         ]:
             try:
                 conn.execute(text(migration))
@@ -651,6 +768,182 @@ def get_latest_fundamental(ticker: str, as_of: date) -> dict | None:
         return dict(row._mapping) if row else None
 
 
+# ── Common Ticker Data (공유) ─────────────────────────────────────────────────
+
+def upsert_ticker_profile(row: dict) -> None:
+    row = normalize_finite_numbers({
+        "ticker": row["ticker"].upper(),
+        "name": row.get("name"),
+        "market": row.get("market"),
+        "country": row.get("country"),
+        "currency": row.get("currency"),
+        "sector": row.get("sector"),
+        "industry": row.get("industry"),
+        "exchange": row.get("exchange"),
+        "source": row.get("source"),
+        "updated_at": datetime.now(),
+    })
+    with session() as s:
+        s.execute(text("""
+            INSERT INTO ticker_profiles
+                (ticker, name, market, country, currency, sector, industry, exchange, source, updated_at)
+            VALUES
+                (:ticker, :name, :market, :country, :currency, :sector, :industry, :exchange, :source, :updated_at)
+            ON CONFLICT (ticker) DO UPDATE SET
+                name = excluded.name,
+                market = excluded.market,
+                country = excluded.country,
+                currency = excluded.currency,
+                sector = excluded.sector,
+                industry = excluded.industry,
+                exchange = excluded.exchange,
+                source = excluded.source,
+                updated_at = excluded.updated_at
+        """), row)
+        s.commit()
+
+
+def get_ticker_profile(ticker: str) -> dict | None:
+    with session() as s:
+        row = s.execute(text("""
+            SELECT ticker, name, market, country, currency, sector, industry, exchange, source, updated_at
+            FROM ticker_profiles
+            WHERE ticker = :ticker
+        """), {"ticker": ticker.upper()}).mappings().fetchone()
+    return dict(row) if row else None
+
+
+_FUNDAMENTAL_SNAPSHOT_DEFAULTS = {
+    "per": None,
+    "pbr": None,
+    "psr": None,
+    "peg": None,
+    "forward_pe": None,
+    "trailing_pe": None,
+    "forward_eps": None,
+    "eps_ttm": None,
+    "roe": None,
+    "roic": None,
+    "debt_ratio": None,
+    "current_ratio": None,
+    "gross_margin": None,
+    "operating_margin": None,
+    "revenue_growth": None,
+    "eps_growth": None,
+    "market_cap": None,
+    "raw_json": {},
+}
+
+
+def upsert_fundamental_snapshot(row: dict) -> None:
+    row = normalize_finite_numbers({
+        **_FUNDAMENTAL_SNAPSHOT_DEFAULTS,
+        **row,
+        "ticker": row["ticker"].upper(),
+        "raw_json": json.dumps(row.get("raw_json") or {}),
+        "fetched_at": datetime.now(),
+    })
+    with session() as s:
+        s.execute(text("""
+            INSERT INTO fundamental_snapshots
+                (ticker, as_of, source, per, pbr, psr, peg, forward_pe, trailing_pe,
+                 forward_eps, eps_ttm, roe, roic, debt_ratio, current_ratio, gross_margin,
+                 operating_margin, revenue_growth, eps_growth, market_cap, raw_json, fetched_at)
+            VALUES
+                (:ticker, :as_of, :source, :per, :pbr, :psr, :peg, :forward_pe, :trailing_pe,
+                 :forward_eps, :eps_ttm, :roe, :roic, :debt_ratio, :current_ratio, :gross_margin,
+                 :operating_margin, :revenue_growth, :eps_growth, :market_cap, :raw_json, :fetched_at)
+            ON CONFLICT (ticker, as_of, source) DO UPDATE SET
+                per = excluded.per,
+                pbr = excluded.pbr,
+                psr = excluded.psr,
+                peg = excluded.peg,
+                forward_pe = excluded.forward_pe,
+                trailing_pe = excluded.trailing_pe,
+                forward_eps = excluded.forward_eps,
+                eps_ttm = excluded.eps_ttm,
+                roe = excluded.roe,
+                roic = excluded.roic,
+                debt_ratio = excluded.debt_ratio,
+                current_ratio = excluded.current_ratio,
+                gross_margin = excluded.gross_margin,
+                operating_margin = excluded.operating_margin,
+                revenue_growth = excluded.revenue_growth,
+                eps_growth = excluded.eps_growth,
+                market_cap = excluded.market_cap,
+                raw_json = excluded.raw_json,
+                fetched_at = excluded.fetched_at
+        """), row)
+        s.commit()
+
+
+def get_latest_fundamental_snapshot(ticker: str) -> dict | None:
+    with session() as s:
+        row = s.execute(text("""
+            SELECT *
+            FROM fundamental_snapshots
+            WHERE ticker = :ticker
+            ORDER BY as_of DESC, fetched_at DESC
+            LIMIT 1
+        """), {"ticker": ticker.upper()}).mappings().fetchone()
+    if not row:
+        return None
+    result = dict(row)
+    raw = result.get("raw_json")
+    if isinstance(raw, str):
+        result["raw_json"] = json.loads(raw)
+    return result
+
+
+def upsert_ticker_data_status(row: dict) -> None:
+    row = normalize_finite_numbers({
+        "ticker": row["ticker"].upper(),
+        "data_type": row["data_type"],
+        "source": row["source"],
+        "min_date": row.get("min_date"),
+        "max_date": row.get("max_date"),
+        "last_fetched_at": row.get("last_fetched_at"),
+        "last_success_at": row.get("last_success_at"),
+        "last_error": row.get("last_error"),
+        "coverage_json": json.dumps(row.get("coverage_json") or {}),
+    })
+    with session() as s:
+        s.execute(text("""
+            INSERT INTO ticker_data_status
+                (ticker, data_type, source, min_date, max_date, last_fetched_at,
+                 last_success_at, last_error, coverage_json)
+            VALUES
+                (:ticker, :data_type, :source, :min_date, :max_date, :last_fetched_at,
+                 :last_success_at, :last_error, :coverage_json)
+            ON CONFLICT (ticker, data_type, source) DO UPDATE SET
+                min_date = excluded.min_date,
+                max_date = excluded.max_date,
+                last_fetched_at = excluded.last_fetched_at,
+                last_success_at = excluded.last_success_at,
+                last_error = excluded.last_error,
+                coverage_json = excluded.coverage_json
+        """), row)
+        s.commit()
+
+
+def get_ticker_data_status(ticker: str) -> list[dict]:
+    with session() as s:
+        rows = s.execute(text("""
+            SELECT *
+            FROM ticker_data_status
+            WHERE ticker = :ticker
+            ORDER BY data_type, source
+        """), {"ticker": ticker.upper()}).mappings().fetchall()
+    result = []
+    for row in rows:
+        item = dict(row)
+        raw = item.get("coverage_json")
+        if isinstance(raw, str):
+            item["coverage_json"] = json.loads(raw)
+        result.append(item)
+    return result
+
+
 # ── Portfolio Events ──────────────────────────────────────────────────────────
 
 def get_events(user_id: int) -> list[dict]:
@@ -757,11 +1050,36 @@ def upsert_ohlcv_rows(rows: list[dict]) -> None:
 
 # ── Quant Scores (공유) ───────────────────────────────────────────────────────
 
+_QUANT_GROWTH_DEFAULTS = {
+    "pct_growth": None,
+    "pct_profitability": None,
+    "pct_cashflow": None,
+    "pct_stability": None,
+    "growth_composite": None,
+    "raw_roic": None,
+    "raw_gross_margin": None,
+    "raw_oper_margin": None,
+    "raw_current_ratio": None,
+    "raw_sales_growth": None,
+    "raw_rev_yoy": None,
+    "raw_market_cap_usd_m": None,
+    "raw_market_cap_krw": None,
+    "raw_fwd_rev_growth": None,
+    "raw_fwd_eps_growth": None,
+    "raw_operating_cashflow": None,
+    "data_coverage": None,
+    "sector_percentile_fallback": False,
+}
+
+
 def upsert_quant_scores(rows: list[dict]) -> None:
     if not rows:
         return
     with session() as s:
         for r in rows:
+            r = normalize_finite_numbers({**_QUANT_GROWTH_DEFAULTS, **r})
+            if isinstance(r["data_coverage"], (dict, list)):
+                r["data_coverage"] = json.dumps(r["data_coverage"])
             s.execute(text("""
                 INSERT INTO quant_scores
                     (ticker, universe, as_of,
@@ -770,7 +1088,13 @@ def upsert_quant_scores(rows: list[dict]) -> None:
                      raw_eps_ttm, raw_fwd_eps, raw_roe, raw_debt_ratio, raw_rsi,
                      above_ma200, cfo_positive, company_name,
                      raw_ev_ebitda, raw_peg, raw_fcf_yield, raw_eps_momentum,
-                     negative_book_value, sector, industry)
+                     negative_book_value, sector, industry,
+                     pct_growth, pct_profitability, pct_cashflow, pct_stability,
+                     growth_composite, raw_roic, raw_gross_margin, raw_oper_margin,
+                     raw_current_ratio, raw_sales_growth, raw_rev_yoy,
+                     raw_market_cap_usd_m, raw_market_cap_krw, raw_fwd_rev_growth,
+                     raw_fwd_eps_growth, raw_operating_cashflow, data_coverage,
+                     sector_percentile_fallback)
                 VALUES
                     (:ticker, :universe, :as_of,
                      :pct_momentum, :pct_valuation, :pct_eps_momentum, :pct_quality, :pct_technical,
@@ -778,7 +1102,13 @@ def upsert_quant_scores(rows: list[dict]) -> None:
                      :raw_eps_ttm, :raw_fwd_eps, :raw_roe, :raw_debt_ratio, :raw_rsi,
                      :above_ma200, :cfo_positive, :company_name,
                      :raw_ev_ebitda, :raw_peg, :raw_fcf_yield, :raw_eps_momentum,
-                     :negative_book_value, :sector, :industry)
+                     :negative_book_value, :sector, :industry,
+                     :pct_growth, :pct_profitability, :pct_cashflow, :pct_stability,
+                     :growth_composite, :raw_roic, :raw_gross_margin, :raw_oper_margin,
+                     :raw_current_ratio, :raw_sales_growth, :raw_rev_yoy,
+                     :raw_market_cap_usd_m, :raw_market_cap_krw, :raw_fwd_rev_growth,
+                     :raw_fwd_eps_growth, :raw_operating_cashflow, :data_coverage,
+                     :sector_percentile_fallback)
                 ON CONFLICT (ticker, universe, as_of) DO UPDATE SET
                     pct_momentum = excluded.pct_momentum,
                     pct_valuation = excluded.pct_valuation,
@@ -804,7 +1134,25 @@ def upsert_quant_scores(rows: list[dict]) -> None:
                     raw_eps_momentum = excluded.raw_eps_momentum,
                     negative_book_value = excluded.negative_book_value,
                     sector = excluded.sector,
-                    industry = excluded.industry
+                    industry = excluded.industry,
+                    pct_growth = excluded.pct_growth,
+                    pct_profitability = excluded.pct_profitability,
+                    pct_cashflow = excluded.pct_cashflow,
+                    pct_stability = excluded.pct_stability,
+                    growth_composite = excluded.growth_composite,
+                    raw_roic = excluded.raw_roic,
+                    raw_gross_margin = excluded.raw_gross_margin,
+                    raw_oper_margin = excluded.raw_oper_margin,
+                    raw_current_ratio = excluded.raw_current_ratio,
+                    raw_sales_growth = excluded.raw_sales_growth,
+                    raw_rev_yoy = excluded.raw_rev_yoy,
+                    raw_market_cap_usd_m = excluded.raw_market_cap_usd_m,
+                    raw_market_cap_krw = excluded.raw_market_cap_krw,
+                    raw_fwd_rev_growth = excluded.raw_fwd_rev_growth,
+                    raw_fwd_eps_growth = excluded.raw_fwd_eps_growth,
+                    raw_operating_cashflow = excluded.raw_operating_cashflow,
+                    data_coverage = excluded.data_coverage,
+                    sector_percentile_fallback = excluded.sector_percentile_fallback
             """), r)
         s.commit()
 
@@ -820,6 +1168,13 @@ def get_latest_quant_scores(universe: str) -> list[dict]:
         return [dict(r) for r in rows]
 
 
+def get_latest_quant_as_of(universe: str) -> date | None:
+    with session() as s:
+        return s.execute(text("""
+            SELECT MAX(as_of) FROM quant_scores WHERE universe = :universe
+        """), {"universe": universe}).scalar()
+
+
 def get_quant_ticker(ticker: str, universe: str) -> dict | None:
     with session() as s:
         row = s.execute(text("""
@@ -828,6 +1183,256 @@ def get_quant_ticker(ticker: str, universe: str) -> dict | None:
               AND as_of = (SELECT MAX(as_of) FROM quant_scores WHERE universe = :universe)
         """), {"ticker": ticker, "universe": universe}).mappings().fetchone()
         return dict(row) if row else None
+
+
+# ── Growth Watchlist (사용자별) ────────────────────────────────────────────────
+
+def add_growth_watchlist_item(user_id: int, universe: str, ticker: str) -> None:
+    with session() as s:
+        s.execute(text("""
+            INSERT OR IGNORE INTO growth_watchlist (user_id, universe, ticker, created_at)
+            VALUES (:uid, :universe, :ticker, current_timestamp)
+        """), {"uid": user_id, "universe": universe, "ticker": ticker})
+        s.commit()
+
+
+def remove_growth_watchlist_item(user_id: int, universe: str, ticker: str) -> None:
+    with session() as s:
+        s.execute(text("""
+            DELETE FROM growth_watchlist
+            WHERE user_id = :uid AND universe = :universe AND ticker = :ticker
+        """), {"uid": user_id, "universe": universe, "ticker": ticker})
+        s.commit()
+
+
+def is_growth_watchlist_item(user_id: int, universe: str, ticker: str) -> bool:
+    with session() as s:
+        row = s.execute(text("""
+            SELECT 1 FROM growth_watchlist
+            WHERE user_id = :uid AND universe = :universe AND ticker = :ticker
+        """), {"uid": user_id, "universe": universe, "ticker": ticker}).fetchone()
+        return row is not None
+
+
+def get_growth_watchlist_tickers(user_id: int, universe: str) -> list[str]:
+    with session() as s:
+        rows = s.execute(text("""
+            SELECT ticker FROM growth_watchlist
+            WHERE user_id = :uid AND universe = :universe
+            ORDER BY created_at DESC, ticker
+        """), {"uid": user_id, "universe": universe}).fetchall()
+        return [row[0] for row in rows]
+
+
+# ── Watchlists (사용자별) ─────────────────────────────────────────────────────
+
+def ensure_default_watchlist(user_id: int) -> int:
+    with session() as s:
+        row = s.execute(text("""
+            SELECT id FROM watchlists
+            WHERE user_id = :uid
+            ORDER BY id
+            LIMIT 1
+        """), {"uid": user_id}).fetchone()
+        if row:
+            return row[0]
+        new_id = s.execute(text("SELECT nextval('watchlists_id_seq')")).fetchone()[0]
+        s.execute(text("""
+            INSERT INTO watchlists (id, user_id, name, description, created_at, updated_at)
+            VALUES (:id, :uid, '기본 Watchlist', NULL, current_timestamp, current_timestamp)
+        """), {"id": new_id, "uid": user_id})
+        s.commit()
+        return new_id
+
+
+def create_watchlist(user_id: int, name: str, description: str | None = None) -> dict:
+    with session() as s:
+        new_id = s.execute(text("SELECT nextval('watchlists_id_seq')")).fetchone()[0]
+        s.execute(text("""
+            INSERT INTO watchlists (id, user_id, name, description, created_at, updated_at)
+            VALUES (:id, :uid, :name, :description, current_timestamp, current_timestamp)
+        """), {"id": new_id, "uid": user_id, "name": name, "description": description})
+        s.commit()
+    return get_watchlist(user_id, new_id)
+
+
+def list_watchlists(user_id: int) -> list[dict]:
+    ensure_default_watchlist(user_id)
+    with session() as s:
+        rows = s.execute(text("""
+            SELECT w.*, COUNT(i.ticker) AS item_count
+            FROM watchlists w
+            LEFT JOIN watchlist_items i ON i.watchlist_id = w.id
+            WHERE w.user_id = :uid
+            GROUP BY w.id, w.user_id, w.name, w.description, w.created_at, w.updated_at
+            ORDER BY w.id
+        """), {"uid": user_id}).mappings().all()
+        return [dict(row) for row in rows]
+
+
+def get_watchlist(user_id: int, watchlist_id: int) -> dict | None:
+    with session() as s:
+        row = s.execute(text("""
+            SELECT w.*, COUNT(i.ticker) AS item_count
+            FROM watchlists w
+            LEFT JOIN watchlist_items i ON i.watchlist_id = w.id
+            WHERE w.user_id = :uid AND w.id = :id
+            GROUP BY w.id, w.user_id, w.name, w.description, w.created_at, w.updated_at
+        """), {"uid": user_id, "id": watchlist_id}).mappings().fetchone()
+        return dict(row) if row else None
+
+
+def update_watchlist(user_id: int, watchlist_id: int, name: str, description: str | None = None) -> dict | None:
+    with session() as s:
+        s.execute(text("""
+            UPDATE watchlists
+            SET name = :name, description = :description, updated_at = current_timestamp
+            WHERE user_id = :uid AND id = :id
+        """), {"uid": user_id, "id": watchlist_id, "name": name, "description": description})
+        s.commit()
+    return get_watchlist(user_id, watchlist_id)
+
+
+def delete_watchlist(user_id: int, watchlist_id: int) -> None:
+    with session() as s:
+        s.execute(text("""
+            DELETE FROM watchlist_items
+            WHERE watchlist_id IN (SELECT id FROM watchlists WHERE user_id = :uid AND id = :id)
+        """), {"uid": user_id, "id": watchlist_id})
+        s.execute(text("DELETE FROM watchlists WHERE user_id = :uid AND id = :id"), {"uid": user_id, "id": watchlist_id})
+        s.commit()
+
+
+def upsert_watchlist_item(
+    user_id: int,
+    watchlist_id: int,
+    ticker: str,
+    universe: str,
+    name: str | None = None,
+    memo: str | None = None,
+) -> None:
+    with session() as s:
+        exists = s.execute(text("""
+            SELECT 1 FROM watchlists WHERE user_id = :uid AND id = :id
+        """), {"uid": user_id, "id": watchlist_id}).fetchone()
+        if not exists:
+            raise ValueError("watchlist not found")
+        s.execute(text("""
+            INSERT INTO watchlist_items (watchlist_id, ticker, universe, name, memo, created_at)
+            VALUES (:watchlist_id, :ticker, :universe, :name, :memo, current_timestamp)
+            ON CONFLICT (watchlist_id, ticker, universe) DO UPDATE SET
+                name = excluded.name,
+                memo = excluded.memo
+        """), {
+            "watchlist_id": watchlist_id,
+            "ticker": ticker,
+            "universe": universe,
+            "name": name,
+            "memo": memo,
+        })
+        s.commit()
+
+
+def remove_watchlist_item(user_id: int, watchlist_id: int, ticker: str, universe: str) -> None:
+    with session() as s:
+        s.execute(text("""
+            DELETE FROM watchlist_items
+            WHERE watchlist_id IN (SELECT id FROM watchlists WHERE user_id = :uid AND id = :id)
+              AND ticker = :ticker AND universe = :universe
+        """), {"uid": user_id, "id": watchlist_id, "ticker": ticker, "universe": universe})
+        s.commit()
+
+
+def list_watchlist_items(user_id: int, watchlist_id: int) -> list[dict]:
+    with session() as s:
+        rows = s.execute(text("""
+            SELECT i.*
+            FROM watchlist_items i
+            JOIN watchlists w ON w.id = i.watchlist_id
+            WHERE w.user_id = :uid AND w.id = :id
+            ORDER BY i.created_at DESC, i.ticker
+        """), {"uid": user_id, "id": watchlist_id}).mappings().all()
+        return [dict(row) for row in rows]
+
+
+def list_watchlist_memberships(user_id: int, ticker: str) -> list[dict]:
+    ensure_default_watchlist(user_id)
+    with session() as s:
+        rows = s.execute(text("""
+            SELECT
+                w.id,
+                w.name,
+                w.description,
+                COUNT(all_items.ticker) AS item_count,
+                w.created_at,
+                w.updated_at,
+                i.universe,
+                i.memo
+            FROM watchlists w
+            JOIN watchlist_items i ON i.watchlist_id = w.id
+            LEFT JOIN watchlist_items all_items ON all_items.watchlist_id = w.id
+            WHERE w.user_id = :uid AND i.ticker = :ticker
+            GROUP BY
+                w.id, w.name, w.description, w.created_at, w.updated_at,
+                i.universe, i.memo
+            ORDER BY w.id
+        """), {"uid": user_id, "ticker": ticker.upper()}).mappings().all()
+        return [dict(row) for row in rows]
+
+
+def upsert_rank_history(rows: list[dict]) -> None:
+    if not rows:
+        return
+    with session() as s:
+        s.execute(text("""
+            INSERT INTO quant_rank_history (universe, as_of, ticker, growth_composite, rank)
+            VALUES (:universe, :as_of, :ticker, :growth_composite, :rank)
+            ON CONFLICT (universe, as_of, ticker) DO UPDATE SET
+                growth_composite = excluded.growth_composite,
+                rank = excluded.rank
+        """), rows)
+        s.commit()
+
+
+def get_rank_deltas(universe: str, as_of: date) -> dict[str, dict]:
+    """최신 랭킹과 5/21일 전 가장 가까운 스냅샷의 순위 차이."""
+    current = _rank_rows(universe, as_of)
+    one_week = _rank_rows_at_or_before(universe, as_of - timedelta(days=5))
+    one_month = _rank_rows_at_or_before(universe, as_of - timedelta(days=21))
+    return {
+        ticker: {
+            "rank": row["rank"],
+            "rank_1w_ago": one_week.get(ticker),
+            "rank_1m_ago": one_month.get(ticker),
+            "delta_1w": one_week[ticker] - row["rank"] if ticker in one_week else None,
+            "delta_1m": one_month[ticker] - row["rank"] if ticker in one_month else None,
+        }
+        for ticker, row in current.items()
+    }
+
+
+def _rank_rows(universe: str, as_of: date) -> dict[str, dict]:
+    with session() as s:
+        rows = s.execute(text("""
+            SELECT ticker, rank
+            FROM quant_rank_history
+            WHERE universe = :universe AND as_of = :as_of
+        """), {"universe": universe, "as_of": as_of}).mappings().all()
+        return {r["ticker"]: dict(r) for r in rows}
+
+
+def _rank_rows_at_or_before(universe: str, as_of: date) -> dict[str, int]:
+    with session() as s:
+        rows = s.execute(text("""
+            SELECT ticker, rank
+            FROM quant_rank_history
+            WHERE universe = :universe
+              AND as_of = (
+                SELECT MAX(as_of) FROM quant_rank_history
+                WHERE universe = :universe AND as_of <= :as_of
+              )
+        """), {"universe": universe, "as_of": as_of}).mappings().all()
+        return {r["ticker"]: r["rank"] for r in rows}
 
 
 # ── Ticker Notes ──────────────────────────────────────────────────────────────
@@ -1275,12 +1880,14 @@ def get_active_golden_crosses(market: str) -> list[dict]:
     """시장별 활성 골든크로스 전체 조회."""
     with session() as s:
         rows = s.execute(text("""
-            SELECT ticker, market, name, first_detected_at, last_sent_at, day_count
+            SELECT ticker, market, name, first_detected_at, last_sent_at, day_count,
+                (CAST(last_sent_at AS DATE) = CURRENT_DATE) AS already_sent_today
             FROM golden_cross_events WHERE market = :m
         """), {"m": market}).fetchall()
         return [
             {"ticker": r[0], "market": r[1], "name": r[2],
-             "first_detected_at": r[3], "last_sent_at": r[4], "day_count": r[5]}
+             "first_detected_at": r[3], "last_sent_at": r[4], "day_count": r[5],
+             "already_sent_today": bool(r[6])}
             for r in rows
         ]
 
@@ -1313,7 +1920,7 @@ def get_company_names(tickers: list[str]) -> dict[str, str]:
         with session() as s:
             rows = s.execute(text(f"""
                 SELECT ticker, company_name
-                FROM screener_scores
+                FROM quant_scores
                 WHERE ticker IN ({placeholders})
                   AND company_name IS NOT NULL
                 QUALIFY ROW_NUMBER() OVER (PARTITION BY ticker ORDER BY as_of DESC) = 1

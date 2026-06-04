@@ -27,6 +27,8 @@ class ExtendedSnapshot:
     ev_ebitda: float | None = None
     peg: float | None = None
     market_cap_m: float | None = None
+    market_cap_usd_m: float | None = None
+    market_cap_krw: float | None = None
     # 현금흐름
     operating_cashflow: float | None = None
     capex: float | None = None
@@ -50,7 +52,7 @@ class ExtendedSnapshot:
     sales_growth: float | None = None       # Sales Q/Q (%)
     fwd_revenue_growth: float | None = None  # 컨센서스 매출 CAGR
     fwd_eps_growth: float | None = None      # 컨센서스 EPS CAGR
-    market_cap_krw_b: float | None = None    # 국내 시총 (억원)
+    data_coverage: dict | None = None
     error: str | None = field(default=None, hash=False, compare=False)
 
 
@@ -64,8 +66,16 @@ def _compute_fcf_yield(ocf: float | None, capex: float | None, market_cap_m: flo
 def _fetch_one(ticker: str, as_of: date) -> ExtendedSnapshot:
     t_upper = ticker.upper()
     if t_upper.endswith(".KS") or t_upper.endswith(".KQ"):
+        import os
         from core.data.naver_fundamentals import fetch_naver_summary
         nav = fetch_naver_summary(ticker)
+        dart = None
+        if os.getenv("DART_API_KEY"):
+            try:
+                from core.data.dart_fundamentals import fetch_dart_snapshot
+                dart = fetch_dart_snapshot(ticker, market_cap_krw=nav.get("market_cap_krw") if nav else None)
+            except Exception as e:
+                log.debug("dart fundamentals failed (%s): %s", ticker, e)
         if nav:
             return ExtendedSnapshot(
                 ticker=ticker,
@@ -77,7 +87,17 @@ def _fetch_one(ticker: str, as_of: date) -> ExtendedSnapshot:
                 forward_eps=nav.get("fwd_eps"),
                 eps_ttm=nav["eps"],
                 sector=nav.get("sector"),
-                market_cap_krw_b=nav.get("market_cap_krw_b"),
+                market_cap_krw=nav.get("market_cap_krw"),
+                operating_cashflow=dart.operating_cashflow if dart else None,
+                capex=dart.capex if dart else None,
+                fcf_yield=dart.fcf_yield if dart else None,
+                roic=dart.roic if dart else None,
+                operating_margin=dart.operating_margin if dart else None,
+                current_ratio=dart.current_ratio if dart else None,
+                data_coverage=(
+                    dart.data_coverage if dart else
+                    {"dart_required_complete": False, "missing": ["DART_API_KEY"]}
+                ),
             )
         return ExtendedSnapshot(ticker=ticker, as_of=as_of)
 
@@ -102,6 +122,7 @@ def _fetch_one(ticker: str, as_of: date) -> ExtendedSnapshot:
         ev_ebitda=scraped.ev_ebitda if (scraped.ev_ebitda is not None and scraped.ev_ebitda > 0) else None,
         peg=scraped.peg,
         market_cap_m=scraped.market_cap_m,
+        market_cap_usd_m=scraped.market_cap_m,
         operating_cashflow=scraped.operating_cashflow,
         capex=scraped.capex,
         fcf_yield=_compute_fcf_yield(scraped.operating_cashflow, scraped.capex, scraped.market_cap_m),
@@ -124,18 +145,20 @@ def _fetch_one(ticker: str, as_of: date) -> ExtendedSnapshot:
 
 def fetch_extended(
     tickers: list[str],
-    max_workers: int = 1,
+    max_workers: int = 4,
     progress_callback=None,
 ) -> list[ExtendedSnapshot]:
-    """순차 페치. progress_callback(done, total): 각 티커 완료 후 호출."""
+    """제한 병렬 페치. progress_callback(done, total): 각 티커 완료 후 호출."""
+    from concurrent.futures import ThreadPoolExecutor
     from datetime import date as dt_date
     today = dt_date.today()
     results: list[ExtendedSnapshot] = []
     total = len(tickers)
-    for i, ticker in enumerate(tickers, 1):
-        if i % 50 == 0:
-            log.info("[fundamentals] %d/%d 완료", i, total)
-        results.append(_fetch_one(ticker, today))
-        if progress_callback:
-            progress_callback(i, total)
+    with ThreadPoolExecutor(max_workers=max(1, min(max_workers, 4))) as executor:
+        for i, snapshot in enumerate(executor.map(lambda ticker: _fetch_one(ticker, today), tickers), 1):
+            if i % 50 == 0:
+                log.info("[fundamentals] %d/%d 완료", i, total)
+            results.append(snapshot)
+            if progress_callback:
+                progress_callback(i, total)
     return results
