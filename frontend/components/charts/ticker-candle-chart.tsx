@@ -238,6 +238,7 @@ export function TickerCandleChart({
     };
 
     chartRef.current = chart;
+    applyPaneLayout(chart, indicatorOptions);
     const crosshairHandler = (param: { time?: Time }) => {
       setHoveredTime(timeToString(param.time));
     };
@@ -424,7 +425,7 @@ export function TickerCandleChart({
             </span>
           ))}
         </div>
-        <div className="mt-2 grid gap-2 text-[10px] font-data text-[var(--color-text-muted)] md:grid-cols-2 xl:grid-cols-4">
+        <div className="mt-2 grid min-h-[58px] grid-cols-1 gap-2 text-[10px] font-data text-[var(--color-text-muted)] lg:grid-cols-[minmax(520px,1fr)_minmax(240px,0.8fr)] xl:grid-cols-[minmax(580px,1fr)_minmax(260px,1fr)_minmax(220px,0.7fr)_minmax(220px,0.7fr)]">
           {indicatorOptions.ma && (
             <MetricGroup title="PRICE / SMA">
               {Object.entries(latestSma).map(([periodValue, value]) => (
@@ -566,9 +567,9 @@ function Dot({ color }: { color: string }) {
 
 function MetricGroup({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <div className="rounded border border-[var(--color-border)] bg-[var(--color-bg)]/50 px-2 py-1.5">
+    <div className="h-[58px] overflow-hidden rounded border border-[var(--color-border)] bg-[var(--color-bg)]/50 px-2 py-1.5">
       <p className="mb-1 text-[9px] uppercase tracking-widest text-[var(--color-primary)]">{title}</p>
-      <div className="flex flex-wrap gap-x-2 gap-y-1">{children}</div>
+      <div className="flex min-w-0 flex-wrap gap-x-2 gap-y-1 leading-tight">{children}</div>
     </div>
   );
 }
@@ -580,8 +581,14 @@ function applyPaneLayout(
   const panes = chart.panes();
   panes[0]?.setStretchFactor(5);
   panes[1]?.setStretchFactor(1.15);
-  panes[2]?.setStretchFactor(indicatorOptions.rsi ? 1 : 0.01);
-  panes[3]?.setStretchFactor(indicatorOptions.macd ? 1 : 0.01);
+  if (panes[2]) {
+    panes[2].setStretchFactor(indicatorOptions.rsi ? 1 : 0);
+    panes[2].setHeight(indicatorOptions.rsi ? 96 : 0);
+  }
+  if (panes[3]) {
+    panes[3].setStretchFactor(indicatorOptions.macd ? 1 : 0);
+    panes[3].setHeight(indicatorOptions.macd ? 96 : 0);
+  }
 }
 
 function readChartColors(): ChartColors {
