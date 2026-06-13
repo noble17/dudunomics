@@ -86,7 +86,6 @@ function annualPointDate(point: FinancialDataPoint) {
 function buildPriceEpsData(
   priceData: PriceChartData | undefined,
   epsPoints: FinancialDataPoint[] | undefined,
-  forwardEps: number | null | undefined,
 ) {
   if (!priceData) return [];
   const actualEps = (epsPoints ?? [])
@@ -112,7 +111,6 @@ function buildPriceEpsData(
     price: number | null;
     eps: number | null;
     epsProjected: number | null;
-    forwardEps: number | null;
   }[] = priceData.ohlcv.map((point) => {
     const matched = sourceActual.filter((eps) => eps.date <= point.date).at(-1);
     return {
@@ -121,7 +119,6 @@ function buildPriceEpsData(
       price: point.close,
       eps: matched?.value ?? null,
       epsProjected: null as number | null,
-      forwardEps: point.date === lastPriceDate && forwardEps != null ? forwardEps : null,
     };
   });
 
@@ -138,7 +135,6 @@ function buildPriceEpsData(
       price: null,
       eps: null,
       epsProjected: point.value,
-      forwardEps: null,
     });
   }
 
@@ -157,12 +153,11 @@ export function WatchlistInsightCharts({ ticker, universe }: Props) {
   );
   const emaData = useMemo(() => mergeEmaData(priceData, emaMode), [priceData, emaMode]);
   const priceEpsData = useMemo(
-    () => buildPriceEpsData(priceData, financials?.eps, financials?.metrics.forward_eps),
-    [priceData, financials?.eps, financials?.metrics.forward_eps],
+    () => buildPriceEpsData(priceData, financials?.eps),
+    [priceData, financials?.eps],
   );
   const activeEmaKeys = EMA_BY_MODE[emaMode];
   const hasProjectedEps = priceEpsData.some((point) => point.epsProjected != null);
-  const hasForwardEps = priceEpsData.some((point) => point.forwardEps != null);
   const epsUnavailable = Boolean(financialsError);
 
   return (
@@ -230,7 +225,8 @@ export function WatchlistInsightCharts({ ticker, universe }: Props) {
                   dataKey="close"
                   stroke={EMA_CONFIG.close.color}
                   strokeWidth={3}
-                  strokeDasharray="5 5"
+                  strokeDasharray="2 8"
+                  strokeOpacity={0.72}
                   dot={false}
                   name="close"
                   connectNulls={false}
@@ -312,31 +308,21 @@ export function WatchlistInsightCharts({ ticker, universe }: Props) {
                   labelFormatter={(value) => formatDate(new Date(value as number).toISOString())}
                   formatter={(value, name) => [
                     formatNumber(value),
-                    name === "price" ? "주가" : name === "epsProjected" ? "예상 EPS" : name === "forwardEps" ? "Fwd EPS" : "EPS",
+                    name === "price" ? "주가" : name === "epsProjected" ? "예상 EPS" : "EPS",
                   ]}
                 />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
                 <Line yAxisId="price" type="monotone" dataKey="price" stroke="#4f7cff" strokeWidth={2} dot={false} name="주가" connectNulls={false} />
                 <Line yAxisId="eps" type="stepAfter" dataKey="eps" stroke="#22c55e" strokeWidth={2.2} dot={false} name="EPS" connectNulls />
-                {hasForwardEps && (
-                  <Line
-                    yAxisId="eps"
-                    type="monotone"
-                    dataKey="forwardEps"
-                    stroke="#f59e0b"
-                    strokeWidth={0}
-                    dot={{ r: 4, strokeWidth: 2, fill: "var(--card)" }}
-                    name="Fwd EPS"
-                  />
-                )}
                 {hasProjectedEps && (
                   <Line
                     yAxisId="eps"
                     type="stepAfter"
                     dataKey="epsProjected"
-                    stroke="#a8b2c1"
-                    strokeDasharray="6 5"
-                    strokeWidth={2.2}
+                    stroke="#9ca3af"
+                    strokeDasharray="10 7"
+                    strokeOpacity={0.8}
+                    strokeWidth={2}
                     dot={false}
                     name="예상 EPS"
                     connectNulls={false}
