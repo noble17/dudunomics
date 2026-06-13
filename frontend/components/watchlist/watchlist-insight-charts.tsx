@@ -111,7 +111,7 @@ function buildPriceEpsData(
     ts: number;
     price: number | null;
     eps: number | null;
-    epsEstimate: number | null;
+    epsProjected: number | null;
     forwardEps: number | null;
   }[] = priceData.ohlcv.map((point) => {
     const matched = sourceActual.filter((eps) => eps.date <= point.date).at(-1);
@@ -120,10 +120,16 @@ function buildPriceEpsData(
       ts: toTs(point.date),
       price: point.close,
       eps: matched?.value ?? null,
-      epsEstimate: null as number | null,
+      epsProjected: null as number | null,
       forwardEps: point.date === lastPriceDate && forwardEps != null ? forwardEps : null,
     };
   });
+
+  const latestActual = sourceActual.filter((eps) => eps.date <= lastPriceDate).at(-1);
+  const lastPriceRow = rows.at(-1);
+  if (latestActual && lastPriceRow) {
+    lastPriceRow.epsProjected = latestActual.value;
+  }
 
   for (const point of estimateEps.filter((eps) => eps.date > lastPriceDate)) {
     rows.push({
@@ -131,7 +137,7 @@ function buildPriceEpsData(
       ts: toTs(point.date),
       price: null,
       eps: null,
-      epsEstimate: point.value,
+      epsProjected: point.value,
       forwardEps: null,
     });
   }
@@ -155,7 +161,7 @@ export function WatchlistInsightCharts({ ticker, universe }: Props) {
     [priceData, financials?.eps, financials?.metrics.forward_eps],
   );
   const activeEmaKeys = EMA_BY_MODE[emaMode];
-  const hasEstimate = priceEpsData.some((point) => point.epsEstimate != null);
+  const hasProjectedEps = priceEpsData.some((point) => point.epsProjected != null);
   const hasForwardEps = priceEpsData.some((point) => point.forwardEps != null);
   const epsUnavailable = Boolean(financialsError);
 
@@ -224,6 +230,7 @@ export function WatchlistInsightCharts({ ticker, universe }: Props) {
                   dataKey="close"
                   stroke={EMA_CONFIG.close.color}
                   strokeWidth={3}
+                  strokeDasharray="5 5"
                   dot={false}
                   name="close"
                   connectNulls={false}
@@ -305,7 +312,7 @@ export function WatchlistInsightCharts({ ticker, universe }: Props) {
                   labelFormatter={(value) => formatDate(new Date(value as number).toISOString())}
                   formatter={(value, name) => [
                     formatNumber(value),
-                    name === "price" ? "주가" : name === "epsEstimate" ? "예상 EPS" : name === "forwardEps" ? "Fwd EPS" : "EPS",
+                    name === "price" ? "주가" : name === "epsProjected" ? "예상 EPS" : name === "forwardEps" ? "Fwd EPS" : "EPS",
                   ]}
                 />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
@@ -322,17 +329,17 @@ export function WatchlistInsightCharts({ ticker, universe }: Props) {
                     name="Fwd EPS"
                   />
                 )}
-                {hasEstimate && (
+                {hasProjectedEps && (
                   <Line
                     yAxisId="eps"
                     type="stepAfter"
-                    dataKey="epsEstimate"
+                    dataKey="epsProjected"
                     stroke="#a8b2c1"
                     strokeDasharray="6 5"
                     strokeWidth={2.2}
                     dot={false}
                     name="예상 EPS"
-                    connectNulls
+                    connectNulls={false}
                   />
                 )}
               </LineChart>
