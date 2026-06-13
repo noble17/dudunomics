@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import useSWR from "swr";
 
 import { PerformanceTable } from "@/components/performance/performance-table";
@@ -19,6 +19,7 @@ export default function WatchlistPage() {
   const [hits, setHits] = useState<TickerSearchHit[]>([]);
   const [message, setMessage] = useState<string | null>(null);
   const [selectedTicker, setSelectedTicker] = useState<string | null>(null);
+  const detailRef = useRef<HTMLElement | null>(null);
 
   const { data: lists = [], mutate: mutateLists } = useSWR("/api/watchlists", watchlistsApi.list);
   const activeId = selectedId ?? lists[0]?.id ?? null;
@@ -93,6 +94,13 @@ export default function WatchlistPage() {
     if (selectedTicker === row.ticker) setSelectedTicker(null);
     setMessage(`${row.ticker}를 Watchlist에서 제거했습니다.`);
     await Promise.all([mutateItems(), mutateLists()]);
+  };
+
+  const selectTicker = (ticker: string) => {
+    setSelectedTicker(ticker);
+    window.setTimeout(() => {
+      detailRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 0);
   };
 
   return (
@@ -221,7 +229,8 @@ export default function WatchlistPage() {
               <PerformanceTable
                 rows={items}
                 mode="watchlist"
-                onSelect={setSelectedTicker}
+                selectedTicker={detailTicker}
+                onSelect={selectTicker}
                 onRemove={removeTicker}
               />
             ) : (
@@ -232,8 +241,9 @@ export default function WatchlistPage() {
           </section>
 
           {detailTicker && (
-            <section className="min-w-0 space-y-4">
+            <section ref={detailRef} className="scroll-mt-20 min-w-0 space-y-4">
               <TickerDetail
+                key={`${detailTicker}-${detailUniverse}`}
                 ticker={detailTicker}
                 universe={detailUniverse}
                 name={selectedItem?.name}

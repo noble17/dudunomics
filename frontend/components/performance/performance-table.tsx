@@ -8,6 +8,7 @@ type Row = TickerPerformance | PortfolioAnalyticsRow | WatchlistItem;
 interface Props {
   rows: Row[];
   mode: "portfolio" | "watchlist";
+  selectedTicker?: string | null;
   onSelect?: (ticker: string) => void;
   onRemove?: (row: WatchlistItem) => void;
 }
@@ -209,7 +210,7 @@ function isWatchlistRow(row: Row): row is WatchlistItem {
   return "watchlist_id" in row;
 }
 
-export function PerformanceTable({ rows, mode, onSelect, onRemove }: Props) {
+export function PerformanceTable({ rows, mode, selectedTicker, onSelect, onRemove }: Props) {
   const tableMinWidth = mode === "portfolio" ? 1960 : 1940;
   const scrollerRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef({ active: false, startX: 0, scrollLeft: 0 });
@@ -316,13 +317,15 @@ export function PerformanceTable({ rows, mode, onSelect, onRemove }: Props) {
             {rows.map((row) => (
               <tr
                 key={isWatchlistRow(row) ? `${row.watchlist_id}-${row.ticker}-${row.universe}` : row.ticker}
-                className="group"
+                className={`group ${selectedTicker === row.ticker ? "bg-primary/5" : ""}`}
               >
                 <td className={`${STICKY_SYMBOL} border-t border-border`}>
                   <button
                     type="button"
                     onClick={() => onSelect?.(row.ticker)}
-                    className="font-data text-[13px] font-medium text-primary tabular-nums hover:underline"
+                    className={`font-data text-[13px] font-medium tabular-nums hover:underline ${
+                      selectedTicker === row.ticker ? "text-rise" : "text-primary"
+                    }`}
                   >
                     {row.ticker}
                   </button>
