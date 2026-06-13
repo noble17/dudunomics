@@ -148,12 +148,31 @@ def test_analyze_frame_accepts_bullish_volume_at_one_times_average():
 
     assert result["volume_ratio"] == 1.0
     assert result["volume_explosion"] is False
-    assert result["status"] == "suitable"
+    assert result["status"] == "watch"
+    assert result["rsi_signal"] == "fading_above_50"
+    assert "rsi_fading_above_50" in [reason["code"] for reason in result["downgrade_reasons"]]
     assert [reason["code"] for reason in result["positive_reasons"]] == [
         "aligned",
         "pullback",
         "bullish_volume_increase",
     ]
+
+
+def test_analyze_frame_treats_rsi_50_reclaim_as_positive():
+    from core.scoring.technical_timing import analyze_frame
+
+    close = np.linspace(100.0, 200.0, 250) + np.sin(np.arange(250)) * 3
+    close[-2] = close[-3] * 0.96
+    close[-1] = close[-2] * 1.04
+    open_ = close.copy()
+    open_[-1] = close[-1] * 0.995
+    volume = np.full(250, 1000.0)
+
+    result = analyze_frame(pd.DataFrame({"Open": open_, "Close": close, "Volume": volume}))
+
+    assert result["prev_rsi14"] < 50 <= result["rsi14"]
+    assert result["rsi_signal"] == "reclaim_50"
+    assert "rsi_reclaim_50" in [reason["code"] for reason in result["positive_reasons"]]
 
 
 def test_analyze_frame_classifies_pullback_stage():

@@ -34,8 +34,11 @@ def analyze_frame(df: pd.DataFrame) -> dict:
     volume_ratio = latest_volume / avg_volume20 if avg_volume20 and avg_volume20 > 0 else 0.0
     volume_direction = _volume_direction(latest_open, latest_close)
     volume_level = _volume_level(volume_ratio)
-    rsi14 = _wilder_rsi(close, 14)
+    rsi_series = _wilder_rsi_series(close, 14)
+    rsi14 = float(rsi_series.iloc[-1])
+    prev_rsi14 = float(rsi_series.iloc[-2]) if len(rsi_series) >= 2 else None
     rsi_level = _rsi_level(rsi14)
+    rsi_signal = _rsi_signal(prev_rsi14, rsi14)
 
     aligned = latest_ema20 > latest_ema50 > latest_ema200 if has_ema20 and has_ema50 and has_ema200 else False
     pullback_stage = _pullback_stage(latest_close, latest_ema20, latest_ema50, latest_ema200)
@@ -65,6 +68,12 @@ def analyze_frame(df: pd.DataFrame) -> dict:
         positive_reasons.append(_reason("bullish_volume_increase", "평균 이상 양봉 거래량이 유입되었습니다.", "positive"))
     if aligned and volume_direction == "bullish" and volume_ratio < 1.0:
         warning_reasons.append(_reason("low_bullish_volume", "양봉이지만 20일 평균보다 거래량이 낮아 매수 확인이 부족합니다.", "warning"))
+    if rsi_signal == "reclaim_50":
+        positive_reasons.append(_reason("rsi_reclaim_50", "RSI가 50선을 아래에서 회복해 모멘텀이 개선됐습니다.", "positive"))
+    elif rsi_signal == "lose_50":
+        warning_reasons.append(_reason("rsi_lose_50", "RSI가 50선을 이탈해 단기 모멘텀이 약해졌습니다.", "warning"))
+    elif rsi_signal == "fading_above_50":
+        warning_reasons.append(_reason("rsi_fading_above_50", "RSI는 50 위지만 하락 중이라 모멘텀 둔화를 확인해야 합니다.", "warning"))
     if rsi14 >= 80:
         warning_reasons.append(_reason("extreme_rsi", "RSI가 80 이상으로 극단적 과열 구간입니다.", "warning"))
     if volume_direction == "bearish" and volume_ratio >= 1.0:
@@ -99,7 +108,9 @@ def analyze_frame(df: pd.DataFrame) -> dict:
         "volume_direction": volume_direction,
         "recent_bearish_volume_spike": recent_bearish_volume_spike,
         "rsi14": rsi14,
+        "prev_rsi14": prev_rsi14,
         "rsi_level": rsi_level,
+        "rsi_signal": rsi_signal,
         "positive_reasons": positive_reasons,
         "warning_reasons": warning_reasons,
         "downgrade_reasons": downgrade_reasons,
@@ -176,14 +187,18 @@ def _volume_direction(open_: float, close: float) -> str:
 
 
 def _wilder_rsi(close: pd.Series, period: int) -> float:
+    return float(_wilder_rsi_series(close, period).iloc[-1])
+
+
+def _wilder_rsi_series(close: pd.Series, period: int) -> pd.Series:
     delta = close.diff()
     gain = delta.clip(lower=0).ewm(alpha=1 / period, adjust=False).mean()
     loss = (-delta.clip(upper=0)).ewm(alpha=1 / period, adjust=False).mean()
-    latest_gain = float(gain.iloc[-1])
-    latest_loss = float(loss.iloc[-1])
-    if latest_loss == 0:
-        return 100.0 if latest_gain > 0 else 50.0
-    return 100.0 - (100.0 / (1.0 + latest_gain / latest_loss))
+    rs = gain / loss
+    rsi = 100.0 - (100.0 / (1.0 + rs))
+    rsi = rsi.mask((loss == 0) & (gain > 0), 100.0)
+    rsi = rsi.mask((loss == 0) & (gain <= 0), 50.0)
+    return rsi.fillna(50.0)
 
 
 def _rsi_level(rsi: float) -> str:
@@ -194,6 +209,26 @@ def _rsi_level(rsi: float) -> str:
     if rsi < 80:
         return "overheated"
     return "extreme_overheated"
+
+
+def _rsi_signal(prev_rsi: float | None, current_rsi: float) -> str:
+    if prev_rsi is None:
+        return "unknown"
+    if prev_rsi < 50 <= current_rsi:
+        return "reclaim_50"
+    if prev_rsi >= 50 > current_rsi:
+        return "lose_50"
+    if current_rsi >= 70:
+        return "overheated"
+    if current_rsi > 50 and current_rsi < prev_rsi:
+        return "fading_above_50"
+    if current_rsi > 50 and current_rsi >= prev_rsi:
+        return "rising_above_50"
+    if current_rsi < 50 and current_rsi > prev_rsi:
+        return "recovering_below_50"
+    if current_rsi < 50:
+        return "weak_below_50"
+    return "neutral"
 
 
 def _has_recent_bearish_volume_spike(clean: pd.DataFrame) -> bool:
