@@ -45,6 +45,7 @@ export function ReturnBar({ rows }: Props) {
           tickFormatter={(v: string) => v.length > 16 ? v.slice(0, 15) + "…" : v}
         />
         <Tooltip
+          cursor={{ fill: "var(--muted)", fillOpacity: 0.42 }}
           formatter={(v: unknown) => {
             const n = typeof v === "number" ? v : 0;
             return [`${n > 0 ? "+" : ""}${n.toFixed(2)}%`, "수익률"];

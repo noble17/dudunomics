@@ -14,13 +14,41 @@ import {
 import useSWR from "swr";
 import { candlesApi } from "@/lib/api";
 import type { CandleItem, IndicatorsData } from "@/lib/types";
-import { chartTheme } from "@/lib/design-tokens";
 
 type Period = "5D" | "1M" | "3M" | "6M" | "1Y";
 const PERIODS: Period[] = ["5D", "1M", "3M", "6M", "1Y"];
 type IndicatorKey = "ma" | "bollinger" | "rsi" | "macd" | "volumeMa";
 const MA_PERIODS = ["20", "50", "120", "200"] as const;
 const LEGACY_MA_PERIODS = ["5", "60"] as const;
+
+type ChartColors = {
+  bg: string;
+  grid: string;
+  axisLine: string;
+  text: string;
+  up: string;
+  down: string;
+  brand: string;
+  brandAlt: string;
+  ma: Record<(typeof MA_PERIODS)[number], string>;
+};
+
+const FALLBACK_CHART_COLORS: ChartColors = {
+  bg: "#101013",
+  grid: "rgba(214,224,239,0.09)",
+  axisLine: "rgba(214,224,239,0.09)",
+  text: "rgba(242,242,255,0.47)",
+  up: "#dc2e47",
+  down: "#3182f6",
+  brand: "#3182f6",
+  brandAlt: "#4391ff",
+  ma: {
+    "20": "#ff9f0a",
+    "50": "#ffd60a",
+    "120": "#3182f6",
+    "200": "#22d3ee",
+  },
+};
 
 interface Props {
   ticker: string;
@@ -30,13 +58,6 @@ interface Props {
   heightClassName?: string;
 }
 
-const MA_COLORS: Record<string, string> = {
-  "20":  "#ff9f0a",
-  "50":  "#ffd60a",
-  "120": chartTheme.palette[0],
-  "200": "#22d3ee",
-};
-
 const TOGGLE_LABELS: Record<IndicatorKey, string> = {
   ma: "SMA",
   bollinger: "Bollinger",
@@ -44,20 +65,6 @@ const TOGGLE_LABELS: Record<IndicatorKey, string> = {
   macd: "MACD",
   volumeMa: "Vol MA",
 };
-
-const LEGEND_ITEMS = [
-  { label: "일봉 캔들", color: chartTheme.up, note: "종가 기준" },
-  { label: "거래량", color: "rgba(150,150,150,0.75)", note: "막대" },
-  { label: "SMA20", color: MA_COLORS["20"], group: "ma" },
-  { label: "SMA50", color: MA_COLORS["50"], group: "ma" },
-  { label: "SMA120", color: MA_COLORS["120"], group: "ma" },
-  { label: "SMA200", color: MA_COLORS["200"], group: "ma" },
-  { label: "Bollinger", color: "rgba(100, 210, 255, 0.7)", group: "bollinger" },
-  { label: "RSI 14", color: "#bf5af2", group: "rsi" },
-  { label: "MACD", color: chartTheme.brand, group: "macd" },
-  { label: "Signal", color: "#ff9f0a", group: "macd" },
-  { label: "Vol MA20", color: "#ff9f0a", group: "volumeMa" },
-] as const;
 
 export function TickerCandleChart({
   ticker,
@@ -68,6 +75,7 @@ export function TickerCandleChart({
 }: Props) {
   const [period, setPeriod] = useState<Period>(defaultPeriod);
   const [hoveredTime, setHoveredTime] = useState<string | null>(null);
+  const [chartColors, setChartColors] = useState<ChartColors>(FALLBACK_CHART_COLORS);
   const [indicatorOptions, setIndicatorOptions] = useState<Record<IndicatorKey, boolean>>({
     ma: true,
     bollinger: defaultShowIndicators,
@@ -81,11 +89,33 @@ export function TickerCandleChart({
   const seriesRef = useRef<Record<string, any>>({});
 
   const indicatorsEnabled = Object.values(indicatorOptions).some(Boolean);
+  const legendItems = [
+    { label: "일봉 캔들", color: chartColors.up, note: "종가 기준" },
+    { label: "거래량", color: "rgba(139,149,161,0.65)", note: "막대" },
+    { label: "SMA20", color: chartColors.ma["20"], group: "ma" },
+    { label: "SMA50", color: chartColors.ma["50"], group: "ma" },
+    { label: "SMA120", color: chartColors.ma["120"], group: "ma" },
+    { label: "SMA200", color: chartColors.ma["200"], group: "ma" },
+    { label: "Bollinger", color: "rgba(100, 210, 255, 0.7)", group: "bollinger" },
+    { label: "RSI 14", color: "#bf5af2", group: "rsi" },
+    { label: "MACD", color: chartColors.brand, group: "macd" },
+    { label: "Signal", color: "#ff9f0a", group: "macd" },
+    { label: "Vol MA20", color: "#ff9f0a", group: "volumeMa" },
+  ] as const;
   const { data, isLoading } = useSWR(
     ["candles", ticker, period, indicatorsEnabled, refreshKey],
     () => candlesApi.get(ticker, period, indicatorsEnabled),
     { dedupingInterval: 60_000 },
   );
+
+  useEffect(() => {
+    setChartColors(readChartColors());
+
+    const observer = new MutationObserver(() => setChartColors(readChartColors()));
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+
+    return () => observer.disconnect();
+  }, []);
 
   // 차트 생성 (마운트 시 1회)
   useEffect(() => {
@@ -94,29 +124,29 @@ export function TickerCandleChart({
 
     const chart = createChart(container, {
       layout: {
-        background: { type: ColorType.Solid, color: chartTheme.bg },
-        textColor: chartTheme.text,
+        background: { type: ColorType.Solid, color: chartColors.bg },
+        textColor: chartColors.text,
         panes: {
           enableResize: true,
-          separatorColor: chartTheme.axisLine,
-          separatorHoverColor: `${chartTheme.brand}33`,
+          separatorColor: chartColors.axisLine,
+          separatorHoverColor: chartColors.brand,
         },
       },
       grid: {
-        vertLines: { color: chartTheme.grid },
-        horzLines: { color: chartTheme.grid },
+        vertLines: { color: chartColors.grid },
+        horzLines: { color: chartColors.grid },
       },
       crosshair: { mode: CrosshairMode.Normal },
-      rightPriceScale: { borderColor: chartTheme.axisLine },
-      timeScale: { borderColor: chartTheme.axisLine, timeVisible: false },
+      rightPriceScale: { borderColor: chartColors.axisLine },
+      timeScale: { borderColor: chartColors.axisLine, timeVisible: false },
       width: container.clientWidth,
       height: container.clientHeight,
     });
 
     const candleSeries = chart.addSeries(CandlestickSeries, {
-      upColor: chartTheme.up, downColor: chartTheme.down,
-      borderUpColor: chartTheme.up, borderDownColor: chartTheme.down,
-      wickUpColor: chartTheme.up, wickDownColor: chartTheme.down,
+      upColor: chartColors.up, downColor: chartColors.down,
+      borderUpColor: chartColors.up, borderDownColor: chartColors.down,
+      wickUpColor: chartColors.up, wickDownColor: chartColors.down,
     }, 0);
 
     // ── 볼륨 ─────────────────────────────────────────────────
@@ -136,12 +166,12 @@ export function TickerCandleChart({
       priceLineVisible: false,
     }, 2);
     chart.priceScale("right", 2).applyOptions({ borderVisible: false, visible: true });
-    rsiSeries.createPriceLine({ price: 70, color: chartTheme.up, lineStyle: 2, lineWidth: 1, axisLabelVisible: false, title: "70" });
-    rsiSeries.createPriceLine({ price: 30, color: chartTheme.down, lineStyle: 2, lineWidth: 1, axisLabelVisible: false, title: "30" });
+    rsiSeries.createPriceLine({ price: 70, color: chartColors.up, lineStyle: 2, lineWidth: 1, axisLabelVisible: false, title: "70" });
+    rsiSeries.createPriceLine({ price: 30, color: chartColors.down, lineStyle: 2, lineWidth: 1, axisLabelVisible: false, title: "30" });
 
     // ── MACD ─────────────────────────────────────────────────
     const macdLineSeries = chart.addSeries(LineSeries, {
-      color: chartTheme.brand,
+      color: chartColors.brand,
       lineWidth: 1,
       lastValueVisible: false,
       priceLineVisible: false,
@@ -160,7 +190,7 @@ export function TickerCandleChart({
 
     // ── MA (기본 포함) ────────────────────────────────────────
     const maSeriesMap: Record<string, unknown> = {};
-    for (const [p, color] of Object.entries(MA_COLORS)) {
+    for (const [p, color] of Object.entries(chartColors.ma)) {
       maSeriesMap[p] = chart.addSeries(LineSeries, {
         color,
         lineWidth: 2,
@@ -225,7 +255,7 @@ export function TickerCandleChart({
       chartRef.current = null;
       seriesRef.current = {};
     };
-  }, []);
+  }, [chartColors]);
 
   // 데이터 업데이트
   useEffect(() => {
@@ -238,7 +268,7 @@ export function TickerCandleChart({
 
     s.volume.setData(data.candles.map((c: CandleItem) => ({
       time: c.time, value: c.volume,
-      color: c.close >= c.open ? `${chartTheme.up}59` : `${chartTheme.down}59`,
+      color: c.close >= c.open ? withOpacity(chartColors.up, 0.38) : withOpacity(chartColors.down, 0.38),
     })));
 
     const ind: IndicatorsData | null | undefined = data.indicators;
@@ -268,7 +298,7 @@ export function TickerCandleChart({
       (indicatorOptions.macd ? ind?.macd?.histogram ?? [] : []).map((pt) => ({
         time: pt.time,
         value: pt.value,
-        color: pt.value >= 0 ? `${chartTheme.up}99` : `${chartTheme.down}99`,
+        color: pt.value >= 0 ? withOpacity(chartColors.up, 0.65) : withOpacity(chartColors.down, 0.65),
       }))
     );
 
@@ -276,7 +306,7 @@ export function TickerCandleChart({
     s.volumeMa?.setData(indicatorOptions.volumeMa ? ind?.volume_ma ?? [] : []);
 
     chartRef.current?.timeScale().fitContent();
-  }, [data, indicatorOptions]);
+  }, [data, indicatorOptions, chartColors]);
 
   useEffect(() => {
     if (!chartRef.current) return;
@@ -386,7 +416,7 @@ export function TickerCandleChart({
           ))}
         </div>
         <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
-          {LEGEND_ITEMS.filter((item) => isLegendVisible(item, indicatorOptions)).map((item) => (
+          {legendItems.filter((item) => isLegendVisible(item, indicatorOptions)).map((item) => (
             <span key={item.label} className="inline-flex items-center gap-1 text-[10px] font-data text-[var(--color-text-muted)]">
               <span className="h-1.5 w-3 rounded-full" style={{ backgroundColor: item.color }} />
               <span>{item.label}</span>
@@ -399,7 +429,7 @@ export function TickerCandleChart({
             <MetricGroup title="PRICE / SMA">
               {Object.entries(latestSma).map(([periodValue, value]) => (
                 <span key={periodValue} className="inline-flex items-center gap-1">
-                  <Dot color={MA_COLORS[periodValue]} />
+                  <Dot color={chartColors.ma[periodValue as keyof ChartColors["ma"]]} />
                   SMA{periodValue} <strong className="font-normal text-[var(--color-text-primary)]">{formatNumber(value)}</strong>
                   {displayCandle && value != null && (
                     <em className={displayCandle.close >= value ? "not-italic text-rise" : "not-italic text-fall"}>
@@ -431,7 +461,7 @@ export function TickerCandleChart({
           {indicatorOptions.macd && (
             <MetricGroup title="MACD">
               <span className="inline-flex items-center gap-1">
-                <Dot color={chartTheme.brand} />
+                <Dot color={chartColors.brand} />
                 MACD <strong className="font-normal text-[var(--color-text-primary)]">{formatNumber(latestMacd, 2)}</strong>
               </span>
               <span className="inline-flex items-center gap-1">
@@ -524,10 +554,10 @@ function rsiLabel(value: number | null | undefined) {
 }
 
 function isLegendVisible(
-  item: (typeof LEGEND_ITEMS)[number],
+  item: { label: string; color: string; note?: string; group?: IndicatorKey },
   indicatorOptions: Record<IndicatorKey, boolean>,
 ) {
-  return !("group" in item) || indicatorOptions[item.group];
+  return !item.group || indicatorOptions[item.group];
 }
 
 function Dot({ color }: { color: string }) {
@@ -552,4 +582,49 @@ function applyPaneLayout(
   panes[1]?.setStretchFactor(1.15);
   panes[2]?.setStretchFactor(indicatorOptions.rsi ? 1 : 0.01);
   panes[3]?.setStretchFactor(indicatorOptions.macd ? 1 : 0.01);
+}
+
+function readChartColors(): ChartColors {
+  if (typeof window === "undefined") return FALLBACK_CHART_COLORS;
+
+  const styles = getComputedStyle(document.documentElement);
+  const css = (name: string, fallback: string) => styles.getPropertyValue(name).trim() || fallback;
+  const card = css("--card", FALLBACK_CHART_COLORS.bg);
+  const border = css("--border", FALLBACK_CHART_COLORS.grid);
+  const muted = css("--muted-foreground", FALLBACK_CHART_COLORS.text);
+  const primary = css("--primary", FALLBACK_CHART_COLORS.brand);
+
+  return {
+    bg: card,
+    grid: border,
+    axisLine: border,
+    text: muted,
+    up: css("--rise", FALLBACK_CHART_COLORS.up),
+    down: css("--fall", FALLBACK_CHART_COLORS.down),
+    brand: primary,
+    brandAlt: css("--color-connected", FALLBACK_CHART_COLORS.brandAlt),
+    ma: {
+      "20": "#ff9f0a",
+      "50": "#facc15",
+      "120": primary,
+      "200": "#22d3ee",
+    },
+  };
+}
+
+function withOpacity(color: string, opacity: number) {
+  const trimmed = color.trim();
+  if (trimmed.startsWith("rgba(")) {
+    return trimmed.replace(/rgba\(([^)]+),\s*[\d.]+\)/, `rgba($1, ${opacity})`);
+  }
+  if (trimmed.startsWith("rgb(")) {
+    return trimmed.replace("rgb(", "rgba(").replace(")", `, ${opacity})`);
+  }
+  if (/^#[\da-f]{6}$/i.test(trimmed)) {
+    const r = parseInt(trimmed.slice(1, 3), 16);
+    const g = parseInt(trimmed.slice(3, 5), 16);
+    const b = parseInt(trimmed.slice(5, 7), 16);
+    return `rgba(${r}, ${g}, ${b}, ${opacity})`;
+  }
+  return trimmed;
 }
