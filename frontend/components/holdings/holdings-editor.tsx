@@ -25,12 +25,39 @@ interface Row {
   currency: "KRW" | "USD";
   quantity: string;
   avg_price: string;
+  sourceSummary: string;
+  source: string;
+  accountId: string;
+  excludedFromPortfolio: boolean;
+  hasManual: boolean;
+  locked: boolean;
   saved: boolean;
   lookupError: boolean;
 }
 
-function toRow(h: HoldingOut): Row {
-  return {
+function toRows(h: HoldingOut): Row[] {
+  const sources = h.sources ?? [];
+  if (sources.length) {
+    return sources.map((s) => ({
+      id: `${s.source}:${s.account_id}:${s.ticker}`,
+      ticker: s.ticker,
+      name: s.name,
+      sector: s.sector ?? "",
+      market: s.market ?? "",
+      currency: s.currency as "KRW" | "USD",
+      quantity: String(s.quantity),
+      avg_price: String(s.avg_price),
+      sourceSummary: s.source,
+      source: s.source,
+      accountId: s.account_id,
+      excludedFromPortfolio: Boolean(s.excluded_from_portfolio),
+      hasManual: s.source === "manual",
+      locked: s.source !== "manual",
+      saved: true,
+      lookupError: false,
+    }));
+  }
+  return [{
     id: h.ticker,
     ticker: h.ticker,
     name: h.name,
@@ -39,25 +66,44 @@ function toRow(h: HoldingOut): Row {
     currency: h.currency as "KRW" | "USD",
     quantity: String(h.quantity),
     avg_price: String(h.avg_price),
+    sourceSummary: "manual",
+    source: "manual",
+    accountId: "",
+    excludedFromPortfolio: false,
+    hasManual: true,
+    locked: false,
     saved: true,
     lookupError: false,
-  };
+  }];
 }
 
 interface Props {
   initialHoldings: HoldingOut[];
   initialCashKrw: number;
   initialCashUsd: number;
+  cashSources: Array<{ source: string; cash_krw: number; cash_usd: number }>;
+  totalCashKrw: number;
+  totalCashUsd: number;
+  onReload: () => void;
 }
 
-export function HoldingsEditor({ initialHoldings, initialCashKrw, initialCashUsd }: Props) {
-  const [rows, setRows] = useState<Row[]>(initialHoldings.map(toRow));
+export function HoldingsEditor({
+  initialHoldings,
+  initialCashKrw,
+  initialCashUsd,
+  cashSources,
+  totalCashKrw,
+  totalCashUsd,
+  onReload,
+}: Props) {
+  const [rows, setRows] = useState<Row[]>(initialHoldings.flatMap(toRows));
   const [savedTickers, setSavedTickers] = useState<Set<string>>(
-    () => new Set(initialHoldings.map((h) => h.ticker))
+    () => new Set(initialHoldings.filter((h) => !h.sources?.length || h.sources.some((s) => s.source === "manual")).map((h) => h.ticker))
   );
   const [cashKrw, setCashKrw] = useState(String(initialCashKrw));
   const [cashUsd, setCashUsd] = useState(String(initialCashUsd));
   const [saving, setSaving] = useState(false);
+  const [syncing, setSyncing] = useState<"Toss" | null>(null);
   const [status, setStatus] = useState("");
 
   // 검색 콤보박스 상태
@@ -77,6 +123,9 @@ export function HoldingsEditor({ initialHoldings, initialCashKrw, initialCashUsd
         id: crypto.randomUUID(),
         ticker: "", name: "", sector: "", market: "",
         currency: "KRW", quantity: "0", avg_price: "0",
+        sourceSummary: "manual", source: "manual", accountId: "", hasManual: true,
+        excludedFromPortfolio: false,
+        locked: false,
         saved: false, lookupError: false,
       },
     ]);
@@ -88,6 +137,11 @@ export function HoldingsEditor({ initialHoldings, initialCashKrw, initialCashUsd
   ) =>
     setRows((prev) =>
       prev.map((r) => (r.id === id ? { ...r, [field]: value, saved: false, lookupError: false } : r))
+    );
+
+  const togglePortfolioVisibility = (id: string) =>
+    setRows((prev) =>
+      prev.map((r) => (r.id === id && !r.hasManual ? { ...r, excludedFromPortfolio: !r.excludedFromPortfolio, saved: false } : r))
     );
 
   const remove = async (row: Row) => {
@@ -178,17 +232,40 @@ export function HoldingsEditor({ initialHoldings, initialCashKrw, initialCashUsd
     return () => document.removeEventListener("click", handler);
   }, []);
 
+  useEffect(() => {
+    setRows(initialHoldings.flatMap(toRows));
+    setSavedTickers(new Set(
+      initialHoldings
+        .filter((h) => !h.sources?.length || h.sources.some((s) => s.source === "manual"))
+        .map((h) => h.ticker)
+    ));
+    setCashKrw(String(initialCashKrw));
+    setCashUsd(String(initialCashUsd));
+  }, [initialHoldings, initialCashKrw, initialCashUsd]);
+
   const save = async () => {
     setSaving(true);
     setStatus("");
     try {
       const existing = [...savedTickers];
-      const current = rows.map((r) => r.ticker).filter(Boolean);
+      const current = rows.filter((r) => !r.locked && r.hasManual).map((r) => r.ticker).filter(Boolean);
       for (const t of existing) {
         if (!current.includes(t)) await holdingsApi.delete(t);
       }
       for (const row of rows) {
         if (!row.ticker) continue;
+        if (!row.hasManual) {
+          if (!row.saved) {
+            await holdingsApi.updateSourceMeta(row.ticker, {
+              source: row.source,
+              account_id: row.accountId,
+              name: row.name || undefined,
+              sector: row.sector,
+              excluded_from_portfolio: row.excludedFromPortfolio,
+            });
+          }
+          continue;
+        }
         await holdingsApi.upsert(row.ticker, {
           name: row.name || row.ticker,
           sector: row.sector || undefined,
@@ -203,7 +280,7 @@ export function HoldingsEditor({ initialHoldings, initialCashKrw, initialCashUsd
         cash_usd: parseFloat(cashUsd) || 0,
       });
       setRows((prev) => prev.map((r) => ({ ...r, saved: true })));
-      setSavedTickers(new Set(rows.map((r) => r.ticker).filter(Boolean)));
+      setSavedTickers(new Set(rows.filter((r) => r.hasManual).map((r) => r.ticker).filter(Boolean)));
       setStatus("저장 완료");
     } catch (e: unknown) {
       setStatus(`오류: ${e instanceof Error ? e.message : String(e)}`);
@@ -212,8 +289,34 @@ export function HoldingsEditor({ initialHoldings, initialCashKrw, initialCashUsd
     }
   };
 
+  const sync = async () => {
+    const provider = "Toss";
+    setSyncing(provider);
+    setStatus("");
+    try {
+      const result = await holdingsApi.syncFromToss();
+      onReload();
+      if (result.errors.length) {
+        setStatus(`오류: ${result.errors[0]}`);
+      } else {
+        setStatus(`${provider} 동기화 완료: 추가 ${result.added}개, 수정 ${result.updated}개`);
+      }
+    } catch (e: unknown) {
+      setStatus(`오류: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setSyncing(null);
+    }
+  };
+
   return (
     <div className="space-y-6">
+      <div className="flex flex-wrap items-center gap-2 border border-border bg-card p-4">
+        <span className="mr-2 text-sm text-muted-foreground">증권사 데이터 가져오기</span>
+        <Button variant="outline" onClick={sync} disabled={syncing !== null}>
+          {syncing === "Toss" ? "Toss 동기화 중…" : "Toss 가져오기"}
+        </Button>
+      </div>
+
       {/* 현금 입력 */}
       <div className="border border-border bg-card p-5">
         <h3 className="mb-4 text-sm font-medium text-muted-foreground">현금 잔고</h3>
@@ -228,6 +331,10 @@ export function HoldingsEditor({ initialHoldings, initialCashKrw, initialCashUsd
             <Input value={cashUsd} onChange={(e) => setCashUsd(e.target.value)}
               type="number" className="w-40 font-data" />
           </div>
+          <div className="flex items-end pb-1 font-data text-xs text-muted-foreground">
+            총 현금 KRW {Math.round(totalCashKrw).toLocaleString("ko-KR")} · USD {totalCashUsd.toLocaleString("ko-KR", { maximumFractionDigits: 2 })}
+            {cashSources.length > 0 ? ` (${cashSources.map((s) => `${s.source}: KRW ${Math.round(s.cash_krw).toLocaleString("ko-KR")}, USD ${s.cash_usd.toLocaleString("ko-KR", { maximumFractionDigits: 2 })}`).join(" / ")})` : ""}
+          </div>
         </div>
       </div>
 
@@ -237,7 +344,7 @@ export function HoldingsEditor({ initialHoldings, initialCashKrw, initialCashUsd
         <table className="w-full text-sm">
           <thead className="border-b border-border bg-[var(--card)]">
             <tr>
-              {["티커", "종목명", "섹터", "시장", "통화", "수량", "평균단가", "상태", ""].map((h) => (
+              {["티커", "종목명", "섹터", "시장", "통화", "수량", "평균단가", "출처", "포트폴리오", "상태", ""].map((h) => (
                 <th key={h} className="px-4 py-3 text-left text-[11px] font-medium text-muted-foreground">{h}</th>
               ))}
             </tr>
@@ -259,6 +366,7 @@ export function HoldingsEditor({ initialHoldings, initialCashKrw, initialCashUsd
                       }}
                       className="h-8 w-32 font-data"
                       placeholder="005930.KS"
+                      disabled={row.locked}
                     />
                     {/* 검색 드롭다운 — fixed로 렌더링해서 overflow 클리핑 우회 */}
                     {searchRowId === row.id && (searchHits.length > 0 || searching) && dropdownPos && (
@@ -303,6 +411,7 @@ export function HoldingsEditor({ initialHoldings, initialCashKrw, initialCashUsd
                   {row.lookupError ? (
                     <Select
                       value={row.market}
+                      disabled={row.locked}
                       onValueChange={(v) => {
                         if (!v) return;
                         update(row.id, "market", v);
@@ -324,13 +433,14 @@ export function HoldingsEditor({ initialHoldings, initialCashKrw, initialCashUsd
                       onChange={(e) => update(row.id, "market", e.target.value)}
                       className="h-8 w-24 font-data text-xs"
                       placeholder="NASDAQ"
+                      disabled={row.locked}
                     />
                   )}
                 </td>
 
                 {/* 통화 */}
                 <td className="px-4 py-2">
-                  <Select value={row.currency} onValueChange={(v) => { if (v) update(row.id, "currency", v); }}>
+                  <Select value={row.currency} disabled={row.locked} onValueChange={(v) => { if (v) update(row.id, "currency", v); }}>
                     <SelectTrigger className="h-8 w-20 font-data"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="KRW">KRW</SelectItem>
@@ -342,13 +452,37 @@ export function HoldingsEditor({ initialHoldings, initialCashKrw, initialCashUsd
                 {/* 수량 */}
                 <td className="px-4 py-2">
                   <Input value={row.quantity} onChange={(e) => update(row.id, "quantity", e.target.value)}
-                    type="number" className="h-8 w-24 font-data" />
+                    type="number" className="h-8 w-24 font-data" disabled={row.locked} />
                 </td>
 
                 {/* 평균단가 */}
                 <td className="px-4 py-2">
                   <Input value={row.avg_price} onChange={(e) => update(row.id, "avg_price", e.target.value)}
-                    type="number" className="h-8 w-28 font-data" />
+                    type="number" className="h-8 w-28 font-data" disabled={row.locked} />
+                </td>
+
+                {/* 상태 */}
+                <td className="px-4 py-2">
+                  <span className="font-data text-xs text-muted-foreground" title={row.locked ? "증권사 동기화 데이터는 직접 수정할 수 없습니다." : undefined}>
+                    {row.sourceSummary}
+                  </span>
+                </td>
+
+                {/* 포트폴리오 포함 여부 */}
+                <td className="px-4 py-2">
+                  <button
+                    type="button"
+                    onClick={() => togglePortfolioVisibility(row.id)}
+                    disabled={row.hasManual}
+                    className={`border px-2 py-1 font-data text-[10px] ${
+                      row.excludedFromPortfolio
+                        ? "border-border text-muted-foreground hover:text-foreground"
+                        : "border-primary text-primary"
+                    } disabled:cursor-not-allowed disabled:border-border disabled:text-muted-foreground`}
+                    title={row.excludedFromPortfolio ? "포트폴리오에서 숨김" : "포트폴리오에 포함"}
+                  >
+                    {row.excludedFromPortfolio ? "숨김" : "포함"}
+                  </button>
                 </td>
 
                 {/* 상태 */}
@@ -364,14 +498,14 @@ export function HoldingsEditor({ initialHoldings, initialCashKrw, initialCashUsd
                     <Button
                       variant="ghost"
                       size="sm"
-                      disabled={!row.ticker || lookingUp.has(row.id)}
+                      disabled={row.locked || !row.ticker || lookingUp.has(row.id)}
                       onClick={() => handleLookup(row.id, row.ticker, row.market || undefined)}
                       className="h-8 w-8 p-0 font-data text-xs text-muted-foreground hover:text-foreground"
                       title="티커 정보 자동 조회"
                     >
                       {lookingUp.has(row.id) ? "…" : "🔍"}
                     </Button>
-                    <Button variant="ghost" size="sm" onClick={() => remove(row)}
+                    <Button variant="ghost" size="sm" onClick={() => remove(row)} disabled={row.locked}
                       className="h-8 text-xs text-error hover:text-error hover:bg-[rgba(221,60,68,0.08)]">삭제</Button>
                   </div>
                 </td>

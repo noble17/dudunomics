@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Roboto, Roboto_Mono, Noto_Sans_KR } from "next/font/google";
 import "./globals.css";
 import { Nav } from "@/components/nav";
+import { ThemeScript } from "@/components/theme-script";
 
 const roboto = Roboto({
   subsets: ["latin"],
@@ -31,12 +32,15 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="ko">
+    <html lang="ko" suppressHydrationWarning>
+      <head>
+        <ThemeScript />
+      </head>
       <body
         className={`${roboto.variable} ${robotoMono.variable} ${notoSansKR.variable} min-h-screen bg-background antialiased`}
       >
         <Nav />
-        <main className="mx-auto max-w-screen-xl px-6 py-8">{children}</main>
+        <main className="mx-auto w-full max-w-[1800px] px-4 py-8 sm:px-6 2xl:px-8">{children}</main>
       </body>
     </html>
   );

@@ -13,6 +13,7 @@ from sqlalchemy import text
 
 from core import repository as repo
 from core.ids import is_domestic
+from core.prices.selection import prefer_toss_market_data
 
 log = logging.getLogger(__name__)
 
@@ -110,6 +111,9 @@ def _fetch_and_store(tickers: list[str], start: date, end: date) -> list[str]:
     - 국내 종목: KIS API → FDR fallback (개별)
     - 해외 종목: KIS API only
     """
+    if prefer_toss_market_data():
+        return _fetch_and_store_toss(tickers, start, end)
+
     from core.prices.kis import fetch_ohlcv_domestic, fetch_ohlcv_overseas
 
     warns: list[str] = []
@@ -155,6 +159,24 @@ def _fetch_and_store(tickers: list[str], start: date, end: date) -> list[str]:
         if not _covers_requested_start(df, start):
             warns.append(f"{ticker}: KIS 데이터가 요청 구간보다 짧습니다.")
 
+    return warns
+
+
+def _fetch_and_store_toss(tickers: list[str], start: date, end: date) -> list[str]:
+    from core.prices.toss import fetch_ohlcv_daily
+
+    warns: list[str] = []
+    for ticker in tickers:
+        df = fetch_ohlcv_daily(ticker, start, end)
+        if df.empty:
+            warns.append(f"{ticker}: Toss OHLCV 데이터 없음")
+            continue
+        try:
+            _store_df(ticker, df)
+        except Exception as e:
+            warns.append(f"{ticker}: 저장 실패 — {e}")
+        if not _covers_requested_start(df, start):
+            warns.append(f"{ticker}: Toss 데이터가 요청 구간보다 짧습니다.")
     return warns
 
 

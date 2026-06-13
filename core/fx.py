@@ -4,6 +4,7 @@ import os
 from abc import ABC, abstractmethod
 
 from core.data.yf_session import get_session
+from core.prices.selection import prefer_toss_market_data
 
 log = logging.getLogger(__name__)
 
@@ -67,8 +68,18 @@ class YFinanceFxProvider(FxProvider):
         return float(info.last_price)
 
 
+class TossFxProvider(FxProvider):
+    """Toss OpenAPI 환율 provider."""
+
+    def get_rate(self, pair: str) -> float:
+        from core.prices.toss import fetch_exchange_rate
+        return fetch_exchange_rate(pair)
+
+
 def get_fx_provider() -> FxProvider:
-    """환경변수에 KIS 키가 있으면 KisFxProvider, 없으면 YFinanceFxProvider."""
-    if os.getenv("KIS_APPKEY"):
+    """환경변수에 따라 환율 provider 선택."""
+    if prefer_toss_market_data():
+        return TossFxProvider()
+    if os.getenv("MARKET_DATA_PROVIDER", "").lower() == "kis" and os.getenv("KIS_APPKEY"):
         return KisFxProvider()
     return YFinanceFxProvider()

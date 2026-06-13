@@ -6,7 +6,7 @@ services:
     container_name: dudunomics-api
     restart: always
     ports:
-      - "8000:8000"
+      - "8888:8888"
     volumes:
       - ./data:/app/data
     env_file: .env
@@ -15,7 +15,7 @@ services:
         limits:
           memory: 600M
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8888/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -25,13 +25,13 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        - API_URL=http://api:8000
+        - API_URL=http://api:8888
     container_name: dudunomics-frontend
     restart: always
     ports:
-      - "3000:3333"
+      - "3333:3333"
     environment:
-      - API_URL=http://api:8000
+      - API_URL=http://api:8888
       - NODE_ENV=production
     depends_on:
       - api

@@ -10,6 +10,7 @@ finance-datareader
 pandas==2.2.3
 numpy==2.1.3
 scipy==1.14.1
+pypdf==5.9.0
 python-kis==2.1.6
 
 # DB

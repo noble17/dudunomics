@@ -14,11 +14,11 @@ from api.models import GrowthHydrateOut, GrowthScoreOut, GrowthTimingOut, Growth
 from core.auth.deps import CurrentUser, current_user
 from core.data.normalization import normalize_finite_numbers
 from core.data.ohlcv_cache import fetch_ohlcv
-from core.data.fundamentals_scraper import fetch_fundamentals
 from core.data.price_target_consensus import fetch_price_target_consensus
-from core.data.stockanalysis_financials import compute_consensus_growth
 from core.data.ticker_data_service import get_fundamentals
+from core.prices.selection import prefer_toss_market_data
 from core.prices.kis import KISPriceProvider
+from core.prices.toss import TossPriceProvider
 from core.scoring.growth_scorer import filter_growth_top
 from core.scoring.technical_timing import analyze_timing
 import core.repository as repo
@@ -26,7 +26,7 @@ import core.repository as repo
 
 router = APIRouter(prefix="/api/growth", tags=["growth"])
 log = logging.getLogger(__name__)
-_price_provider = KISPriceProvider()
+_price_provider = TossPriceProvider() if prefer_toss_market_data() else KISPriceProvider()
 _KR_UNIVERSES = {"kospi200", "kosdaq150"}
 
 
@@ -126,28 +126,33 @@ def remove_watchlist_item(
 def get_valuation(
     ticker: str,
     universe: str = "sp500",
+    refresh_consensus: bool = False,
     user: CurrentUser = Depends(current_user),
 ):
     ticker = ticker.upper()
     row = repo.get_quant_ticker(ticker, universe)
     common = get_fundamentals(ticker, universe=universe)
     has_common_snapshot = row is None and common.get("valuation_source") is not None
-    fallback = None if row or has_common_snapshot else _on_demand_valuation(ticker)
-    try:
-        consensus = fetch_price_target_consensus(ticker)
-    except Exception as exc:
-        log.warning(
-            "price target consensus fetch failed ticker=%s source=%s error_type=%s",
-            ticker,
-            _consensus_source(ticker),
-            type(exc).__name__,
-        )
-        consensus = _temporary_consensus_error(ticker)
+    fallback = None if row or has_common_snapshot else _missing_cached_valuation(ticker)
+    consensus = _consensus_not_hydrated(ticker)
+    if refresh_consensus:
+        try:
+            consensus = fetch_price_target_consensus(ticker)
+        except Exception as exc:
+            log.warning(
+                "price target consensus fetch failed ticker=%s source=%s error_type=%s",
+                ticker,
+                _consensus_source(ticker),
+                type(exc).__name__,
+            )
+            consensus = _temporary_consensus_error(ticker)
     consensus = _with_current_price(ticker, consensus)
     return normalize_finite_numbers({
         "ticker": ticker,
         **_score_status(ticker, universe, row),
         "valuation_source": "BATCH" if row else common["valuation_source"] if has_common_snapshot else fallback["valuation_source"],
+        "valuation_as_of": str(row.get("as_of")) if row else str(common.get("valuation_as_of")) if has_common_snapshot else None,
+        "valuation_stale": False,
         "missing_reasons": [] if row or has_common_snapshot else fallback["missing_reasons"],
         "peg": row.get("raw_peg") if row else common["peg"] if has_common_snapshot else fallback["peg"],
         "forward_pe": row.get("raw_fwd_pe") if row else common["forward_pe"] if has_common_snapshot else fallback["forward_pe"],
@@ -320,54 +325,45 @@ def _score_status(ticker: str, universe: str, row: dict | None) -> dict:
     }
 
 
-def _on_demand_valuation(ticker: str) -> dict:
-    snap = fetch_fundamentals(ticker)
-    growth = compute_consensus_growth(ticker)
-    if not snap:
-        return {
-            "valuation_source": None,
-            "missing_reasons": _on_demand_missing_reasons(None, growth),
-            "peg": None,
-            "forward_pe": None,
-            "psr": None,
-            "forward_eps": None,
-            "forward_revenue_growth": growth.get("rev_fwd_cagr"),
-            "forward_eps_growth": growth.get("eps_fwd_cagr"),
-        }
-    missing = []
-    values = {
-        "peg": snap.peg,
-        "forward_pe": snap.forward_pe,
-        "psr": snap.price_to_sales,
-        "forward_eps": snap.forward_eps,
-    }
-    if all(value is None for value in values.values()):
-        missing.append("Finviz valuation 지표 미제공")
-    if growth.get("rev_fwd_cagr") is None:
-        missing.append("StockAnalysis 매출 CAGR 미제공")
-    if growth.get("eps_fwd_cagr") is None:
-        missing.append("StockAnalysis EPS CAGR 미제공")
+def _missing_cached_valuation(ticker: str) -> dict:
     return {
-        "valuation_source": "FINVIZ",
-        "missing_reasons": missing,
-        "forward_revenue_growth": growth.get("rev_fwd_cagr"),
-        "forward_eps_growth": growth.get("eps_fwd_cagr"),
-        **values,
+        "valuation_source": None,
+        "missing_reasons": [
+            f"{ticker} 펀더멘털 snapshot이 없습니다.",
+            "데이터 보강 작업 또는 종목 hydrate를 먼저 실행해 주세요.",
+        ],
+        "peg": None,
+        "forward_pe": None,
+        "psr": None,
+        "forward_eps": None,
+        "forward_revenue_growth": None,
+        "forward_eps_growth": None,
     }
 
 
-def _on_demand_missing_reasons(snap, growth: dict) -> list[str]:
-    reasons = []
-    if not snap:
-        reasons.append("Finviz fundamentals 미제공")
-    if growth.get("rev_fwd_cagr") is None:
-        reasons.append("StockAnalysis 매출 CAGR 미제공")
-    if growth.get("eps_fwd_cagr") is None:
-        reasons.append("StockAnalysis EPS CAGR 미제공")
-    return reasons
+def _consensus_not_hydrated(ticker: str) -> dict:
+    return {
+        "consensus_status": "missing",
+        "consensus_message": f"{ticker} 목표주가 consensus는 화면 조회 중 외부 호출하지 않습니다. 데이터 보강 작업을 실행해 주세요.",
+        "consensus_source": _consensus_source(ticker),
+        "retry_after": None,
+        "current_price": None,
+        "target_mean": None,
+        "target_median": None,
+        "target_low": None,
+        "target_high": None,
+        "upside_pct": None,
+        "analyst_count": None,
+        "consensus_as_of": None,
+        "fallback_used": False,
+        "consensus_attempts": [],
+    }
 
 
 def _with_current_price(ticker: str, consensus: dict) -> dict:
+    target_mean = consensus.get("target_mean")
+    if not _is_positive_finite(target_mean):
+        return consensus
     try:
         current_price = float(_price_provider.get_current_price(ticker).current)
     except Exception as exc:
@@ -376,9 +372,7 @@ def _with_current_price(ticker: str, consensus: dict) -> dict:
     if not _is_positive_finite(current_price):
         return consensus
     updated = {**consensus, "current_price": current_price}
-    target_mean = consensus.get("target_mean")
-    if _is_positive_finite(target_mean):
-        updated["upside_pct"] = (float(target_mean) - current_price) / current_price * 100
+    updated["upside_pct"] = (float(target_mean) - current_price) / current_price * 100
     return updated
 
 

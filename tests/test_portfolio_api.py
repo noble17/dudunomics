@@ -1,4 +1,5 @@
 import pytest
+from datetime import datetime
 from unittest.mock import patch
 from core.prices.base import Price
 import core.repository as repo
@@ -36,10 +37,62 @@ def test_portfolio_with_holdings(client):
     assert krw_row["return_pct"] == pytest.approx((75000 - 70000) / 70000 * 100, rel=1e-3)
 
 
+def test_portfolio_keeps_holding_when_quote_missing(client):
+    user = repo.get_user_by_email("test@test.com")
+    uid = user["id"]
+    repo.upsert_holding(uid, "0195R0.KS", "삼성전자 2X", "KRW", 800, 25345, market="KRX")
+
+    with patch("api.routers.portfolio._price_provider.get_current_prices", return_value={}), \
+         patch("api.routers.portfolio._get_usdkrw", return_value=1350.0):
+        res = client.get("/api/portfolio/current")
+
+    assert res.status_code == 200
+    data = res.json()
+    assert len(data["rows"]) == 1
+    row = data["rows"][0]
+    assert row["ticker"] == "0195R0.KS"
+    assert row["current_price"] == 25345
+    assert row["return_pct"] == 0
+
+
+def test_portfolio_row_includes_saved_market(client):
+    user = repo.get_user_by_email("test@test.com")
+    uid = user["id"]
+    repo.upsert_holding(uid, "0195R0", "TIGER 삼성전자단일종목레버리지", "KRW", 800, 25345, sector="ETF 2x", market="KOSPI")
+
+    with patch("api.routers.portfolio._price_provider.get_current_prices", return_value={}), \
+         patch("api.routers.portfolio._get_usdkrw", return_value=1350.0):
+        res = client.get("/api/portfolio/current")
+
+    row = res.json()["rows"][0]
+    assert row["market"] == "KOSPI"
+    assert row["sector"] == "ETF 2x"
+
+
 def test_portfolio_history_empty(client):
     res = client.get("/api/portfolio/history")
     assert res.status_code == 200
     assert res.json() == []
+
+
+def test_portfolio_history_supports_rollup_bucket(client):
+    user = repo.get_user_by_email("test@test.com")
+    uid = user["id"]
+    repo.insert_snapshot(uid, datetime(2026, 6, 7, 9, 3), 100, 150, 50, 1, 1.5, 0.5, 1000, [])
+    repo.insert_snapshot(uid, datetime(2026, 6, 7, 9, 11), 110, 170, 60, 1.1, 1.7, 0.6, 1000, [])
+    repo.refresh_snapshot_rollups(user_id=uid, buckets=("10m", "1h", "1w"))
+
+    res = client.get("/api/portfolio/history?bucket=10m&limit=10")
+    assert res.status_code == 200
+    assert [row["total_with_cash_krw"] for row in res.json()] == [170, 150]
+
+    hourly = client.get("/api/portfolio/history?bucket=1h&limit=10").json()
+    assert len(hourly) == 1
+    assert hourly[0]["total_with_cash_krw"] == 170
+
+    weekly = client.get("/api/portfolio/history?bucket=1w&limit=10").json()
+    assert len(weekly) == 1
+    assert weekly[0]["total_with_cash_krw"] == 170
 
 
 def test_portfolio_analytics_returns_holding_performance(client):

@@ -3,112 +3,275 @@
 import { useMemo, useState } from "react";
 import useSWR from "swr";
 import {
-  Brush, CartesianGrid, Legend, Line, LineChart,
-  ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis,
+  Area,
+  Bar,
+  CartesianGrid,
+  Cell,
+  ReferenceLine,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+  ComposedChart,
 } from "recharts";
 import { portfolioApi } from "@/lib/api";
-import type { EventOut, SnapshotHistory } from "@/lib/types";
-import { chartTheme } from "@/lib/design-tokens";
+import type { EventOut, PortfolioSnapshot, SnapshotHistory } from "@/lib/types";
 
-interface Props { history: SnapshotHistory[] }
+interface Props {
+  snapshot: PortfolioSnapshot;
+  history: SnapshotHistory[];
+}
 
-const RANGES = ["1H", "6H", "24H", "3D", "7D", "30D"] as const;
-type Range = typeof RANGES[number];
-const RANGE_MS: Record<Range, number> = {
-  "1H": 3_600_000, "6H": 21_600_000, "24H": 86_400_000,
-  "3D": 259_200_000, "7D": 604_800_000, "30D": 2_592_000_000,
+type FlowMode = "10m" | "1h" | "1d" | "1w" | "1mo";
+
+const FLOW_MODES: Array<{ key: FlowMode; label: string }> = [
+  { key: "10m", label: "10분" },
+  { key: "1h", label: "1시간" },
+  { key: "1d", label: "일" },
+  { key: "1w", label: "주" },
+  { key: "1mo", label: "월" },
+];
+
+const FLOW_LIMIT: Record<FlowMode, number> = {
+  "10m": 144,
+  "1h": 168,
+  "1d": 90,
+  "1w": 104,
+  "1mo": 36,
 };
-const RANGE_TICK_GAP: Record<Range, number> = {
-  "1H": 8, "6H": 12, "24H": 16, "3D": 20, "7D": 28, "30D": 40,
-};
+const CHART_MARGIN = { top: 18, right: 18, bottom: 4, left: 2 };
+const AXIS_WIDTH = 58;
 
-const MONO = "var(--font-roboto-mono, 'Roboto Mono', monospace)";
-const EVENT_ICON: Record<string, string> = { "입금": "💰", "출금": "💳", "기타": "📌" };
+const EVENT_LABEL: Record<string, string> = { "입금": "IN", "출금": "OUT", "기타": "EVT" };
+const EMPTY_FORM = { ts: "", label: "", amount: "", type: "입금" };
 
-function fmtCompact(v: number): string {
-  const sign = v < 0 ? "−" : v > 0 ? "+" : "";
-  const abs = Math.abs(v);
+function won(value: number, digits = 0) {
+  return `₩${Math.abs(value).toLocaleString("ko-KR", { maximumFractionDigits: digits })}`;
+}
+
+function signedWon(value: number) {
+  return `${value >= 0 ? "+" : "-"}${won(value)}`;
+}
+
+function pct(value: number) {
+  return `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`;
+}
+
+function compactWon(value: number) {
+  const abs = Math.abs(value);
+  const sign = value < 0 ? "-" : value > 0 ? "+" : "";
   if (abs >= 100_000_000) return `${sign}₩${(abs / 100_000_000).toFixed(1)}억`;
   if (abs >= 10_000) return `${sign}₩${(abs / 10_000).toFixed(0)}만`;
   return `${sign}₩${abs.toLocaleString("ko-KR")}`;
 }
 
-function fmtTick(ts: string): string {
+function displayLabel(ts: string, mode: FlowMode) {
   const d = new Date(ts);
-  const MM = String(d.getMonth() + 1).padStart(2, "0");
-  const DD = String(d.getDate()).padStart(2, "0");
-  const HH = String(d.getHours()).padStart(2, "0");
-  const mm = String(d.getMinutes()).padStart(2, "0");
-  return `${MM}-${DD} ${HH}:${mm}`;
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  const hour = String(d.getHours()).padStart(2, "0");
+  const min = String(d.getMinutes()).padStart(2, "0");
+  if (mode === "10m") return `${hour}:${min}`;
+  if (mode === "1h") return `${m}.${day} ${hour}시`;
+  if (mode === "1d") return `${m}.${day}`;
+  if (mode === "1w") return `${m}.${day}주`;
+  return `${String(y).slice(2)}.${m}`;
 }
 
-function TwoLineTick({ x, y, payload }: { x?: number; y?: number; payload?: { value: string } }) {
-  if (!payload?.value) return null;
-  const d = new Date(payload.value);
-  const date = `${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  const time = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+function buildFlow(rows: SnapshotHistory[], mode: FlowMode) {
+  const sorted = [...rows].sort((a, b) => new Date(a.ts).getTime() - new Date(b.ts).getTime());
+  let previousTotal: number | null = null;
+  return sorted.map((row) => {
+    const start = previousTotal ?? row.total_with_cash_krw;
+    const flow = row.total_with_cash_krw - start;
+    previousTotal = row.total_with_cash_krw;
+    return {
+      key: row.ts,
+      label: displayLabel(row.ts, mode),
+      total: row.total_with_cash_krw,
+      equity: row.total_equity_krw,
+      cash: row.cash_krw,
+      flow,
+    };
+  });
+}
+
+function flowSummary(data: ReturnType<typeof buildFlow>) {
+  if (!data.length) return null;
+  const first = data[0];
+  const last = data[data.length - 1];
+  const change = last.total - first.total;
+  const changePct = first.total > 0 ? (change / first.total) * 100 : 0;
+  return {
+    current: last.total,
+    equity: last.equity,
+    cash: last.cash,
+    change,
+    changePct,
+    high: Math.max(...data.map((d) => d.total)),
+    low: Math.min(...data.map((d) => d.total)),
+  };
+}
+
+function AssetMetric({ label, value, tone }: { label: string; value: string; tone?: "up" | "down" }) {
+  const color = tone === "up" ? "text-gain" : tone === "down" ? "text-loss" : "text-foreground";
   return (
-    <g transform={`translate(${x},${y})`}>
-      <text textAnchor="middle" dy={12} fontSize={10} fill={chartTheme.text} fontFamily={MONO}>{time}</text>
-      <text textAnchor="middle" dy={23} fontSize={9} fill={chartTheme.text} fontFamily={MONO}>{date}</text>
-    </g>
+    <div className="flex items-center justify-between gap-4 border-b border-border py-2 last:border-0">
+      <span className="text-sm text-muted-foreground">{label}</span>
+      <span className={`font-data text-sm font-medium ${color}`}>{value}</span>
+    </div>
   );
 }
 
-interface FormState { ts: string; label: string; amount: string; type: string }
-const EMPTY_FORM: FormState = { ts: "", label: "", amount: "", type: "입금" };
+function ChartTooltip({
+  active,
+  label,
+  payload,
+}: {
+  active?: boolean;
+  label?: string;
+  payload?: Array<{ dataKey?: string; value?: number }>;
+}) {
+  if (!active || !payload?.length) return null;
+  const row = Object.fromEntries(payload.map((item) => [item.dataKey, Number(item.value ?? 0)]));
+  return (
+    <div className="min-w-[220px] border border-border bg-popover px-4 py-3 text-popover-foreground">
+      <p className="font-data text-sm text-foreground">{label}</p>
+      <div className="mt-2 grid gap-1 font-data text-sm">
+        <p className="flex items-center justify-between gap-4 text-[var(--portfolio-equity)]">
+          <span>주식평가액</span>
+          <span>{compactWon(row.equity ?? 0)}</span>
+        </p>
+        <p className="flex items-center justify-between gap-4 text-[var(--portfolio-total)]">
+          <span>전체자산</span>
+          <span>{compactWon(row.total ?? 0)}</span>
+        </p>
+        <p className={`flex items-center justify-between gap-4 ${(row.flow ?? 0) >= 0 ? "text-rise" : "text-fall"}`}>
+          <span>기간 손익</span>
+          <span>{compactWon(row.flow ?? 0)}</span>
+        </p>
+      </div>
+    </div>
+  );
+}
 
-export function EquityCurve({ history }: Props) {
-  const [range, setRange] = useState<Range>("7D");
+function AssetFlowChart({ data }: { data: ReturnType<typeof buildFlow> }) {
+  return (
+    <div className="h-[420px]">
+      <ResponsiveContainer width="100%" height="100%">
+        <ComposedChart data={data} margin={CHART_MARGIN} barCategoryGap="45%">
+          <defs>
+            <linearGradient id="assetTotalFill" x1="0" x2="0" y1="0" y2="1">
+              <stop offset="0%" stopColor="var(--portfolio-total-fill)" stopOpacity={1} />
+              <stop offset="64%" stopColor="var(--portfolio-total-fill)" stopOpacity={0.5} />
+              <stop offset="100%" stopColor="var(--portfolio-total-fill)" stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          <CartesianGrid stroke="var(--border)" vertical={false} />
+          <XAxis
+            dataKey="label"
+            tick={false}
+            axisLine={{ stroke: "var(--border)" }}
+            tickLine={false}
+            height={24}
+          />
+          <YAxis
+            yAxisId="asset"
+            tickFormatter={(value) => `${Math.round(Number(value) / 1_000_000)}M`}
+            tick={{ fill: "var(--portfolio-total)", fontSize: 11 }}
+            axisLine={false}
+            tickLine={false}
+            width={AXIS_WIDTH}
+            label={{
+              value: "자산(원)",
+              angle: -90,
+              position: "insideLeft",
+              fill: "var(--portfolio-total)",
+              fontSize: 11,
+              offset: 4,
+            }}
+          />
+          <YAxis
+            yAxisId="flow"
+            orientation="right"
+            tickFormatter={(value) => `${Math.round(Number(value) / 10_000)}만`}
+            tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
+            axisLine={false}
+            tickLine={false}
+            width={AXIS_WIDTH}
+            label={{
+              value: "기간손익",
+              angle: 90,
+              position: "insideRight",
+              fill: "var(--muted-foreground)",
+              fontSize: 11,
+              offset: 4,
+            }}
+          />
+          <Tooltip
+            cursor={{ stroke: "var(--foreground)", strokeOpacity: 0.45, fill: "transparent" }}
+            content={<ChartTooltip />}
+          />
+          <ReferenceLine yAxisId="flow" y={0} stroke="var(--border)" />
+          <Bar
+            yAxisId="flow"
+            dataKey="flow"
+            barSize={18}
+            radius={[2, 2, 0, 0]}
+          >
+            {data.map((entry) => (
+              <Cell key={entry.key} fill={entry.flow >= 0 ? "var(--rise)" : "var(--fall)"} />
+            ))}
+          </Bar>
+          <Area
+            yAxisId="asset"
+            type="monotone"
+            dataKey="total"
+            stroke="var(--portfolio-total)"
+            strokeWidth={2.5}
+            fill="url(#assetTotalFill)"
+            dot={{ r: 2.5, strokeWidth: 1 }}
+          />
+          <Area
+            yAxisId="asset"
+            type="monotone"
+            dataKey="equity"
+            stroke="var(--portfolio-equity)"
+            strokeWidth={1.7}
+            fill="transparent"
+            dot={false}
+          />
+        </ComposedChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+export function EquityCurve({ snapshot, history }: Props) {
+  const [mode, setMode] = useState<FlowMode>("1d");
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState<FormState>(EMPTY_FORM);
+  const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
 
   const { data: events = [], mutate: mutateEvents } =
     useSWR("/api/portfolio/events", portfolioApi.events);
+  const { data: bucketHistory = history } =
+    useSWR(`/api/portfolio/history?bucket=${mode}&limit=${FLOW_LIMIT[mode]}`, () => portfolioApi.history(mode, FLOW_LIMIT[mode]), {
+      refreshInterval: 60_000,
+    });
 
-  // 범위 필터링 + 차트 데이터 변환
-  const filtered = useMemo(() => {
-    const cutoff = Date.now() - RANGE_MS[range];
-    return [...history]
-      .reverse()
-      .filter((h) => new Date(h.ts).getTime() >= cutoff)
-      .map((h) => ({ ts: h.ts, equity: h.total_equity_krw, total: h.total_with_cash_krw }));
-  }, [history, range]);
-
-  // 통계 행
-  const stats = useMemo(() => {
-    if (filtered.length === 0) return null;
-    const totals = filtered.map((d) => d.total);
-    return {
-      current: filtered[filtered.length - 1].total,
-      change: filtered[filtered.length - 1].total - filtered[0].total,
-      max: Math.max(...totals),
-      min: Math.min(...totals),
-    };
-  }, [filtered]);
-
-  // 차트 범위 내 이벤트 → 가장 가까운 스냅샷 ts로 매핑
-  const visibleEvents = useMemo(() => {
-    if (filtered.length === 0) return [] as (EventOut & { nearestTs: string })[];
-    const start = new Date(filtered[0].ts).getTime();
-    const end = new Date(filtered[filtered.length - 1].ts).getTime();
-    return (events as EventOut[])
-      .filter((e) => {
-        const t = new Date(e.ts).getTime();
-        return t >= start && t <= end;
-      })
-      .map((e) => {
-        const t = new Date(e.ts).getTime();
-        const nearest = filtered.reduce((prev, curr) =>
-          Math.abs(new Date(curr.ts).getTime() - t) <
-          Math.abs(new Date(prev.ts).getTime() - t)
-            ? curr
-            : prev
-        );
-        return { ...e, nearestTs: nearest.ts };
-      });
-  }, [events, filtered]);
+  const data = useMemo(() => buildFlow(bucketHistory, mode), [bucketHistory, mode]);
+  const summary = flowSummary(data);
+  const latest = summary ?? {
+    current: snapshot.total_with_cash_krw,
+    equity: snapshot.total_equity_krw,
+    cash: snapshot.cash_krw,
+    change: 0,
+    changePct: 0,
+    high: snapshot.total_with_cash_krw,
+    low: snapshot.total_with_cash_krw,
+  };
 
   const handleSave = async () => {
     if (!form.ts || !form.label) return;
@@ -133,128 +296,88 @@ export function EquityCurve({ history }: Props) {
     mutateEvents();
   };
 
-  if (filtered.length === 0) {
-    return (
-      <div className="flex h-48 items-center justify-center text-xs text-muted-foreground">
-        스냅샷 없음 — 5분 후 자동 생성됩니다.
-      </div>
-    );
-  }
-
   return (
-    <div className="space-y-3">
-      {/* 헤더: 타이틀 + 범위 버튼 */}
-      <div className="flex items-center justify-between">
-        <span className="text-[11px] font-medium text-muted-foreground">자산 추이</span>
-        <div className="flex gap-1">
-          {RANGES.map((r) => (
-            <button
-              key={r}
-              onClick={() => setRange(r)}
-              className={`px-2 py-0.5 text-[10px] border rounded-sm font-data transition-colors ${
-                r === range
-                  ? "border-primary text-primary bg-blue-50"
-                  : "border-border text-muted-foreground hover:border-primary hover:text-primary"
-              }`}
-            >
-              {r}
-            </button>
-          ))}
+    <div className="space-y-4">
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="relative border border-border bg-card p-5">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-[11px] font-medium text-muted-foreground">전체자산</p>
+              <p className="mt-2 font-data text-3xl font-semibold tracking-tight text-foreground">
+                {won(latest.current)}
+              </p>
+              <p className={`mt-2 font-data text-sm ${latest.change >= 0 ? "text-gain" : "text-loss"}`}>
+                선택 구간 이익/손실 {signedWon(latest.change)} ({pct(latest.changePct)})
+              </p>
+            </div>
+            <div className="flex rounded-full bg-muted p-1">
+              {FLOW_MODES.map((item) => (
+                <button
+                  key={item.key}
+                  type="button"
+                  onClick={() => setMode(item.key)}
+                  className={`h-8 min-w-12 rounded-full px-4 text-sm transition-colors ${
+                    mode === item.key
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:bg-background hover:text-foreground"
+                  }`}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="mt-5 border-t border-border pt-4">
+            {data.length > 1 ? (
+              <div>
+                <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
+                  <span>자산 / 기간별 이익·손실</span>
+                  <span className="font-data text-[var(--portfolio-total)]">왼쪽 축: 전체자산·주식평가액</span>
+                  <span className="font-data">오른쪽 축: 기간손익 막대</span>
+                </div>
+                <AssetFlowChart data={data} />
+              </div>
+            ) : (
+              <div className="flex h-[340px] items-center justify-center text-sm text-muted-foreground">
+                자산 흐름을 그리려면 스냅샷이 2개 이상 필요합니다.
+              </div>
+            )}
+          </div>
+
+          <div className="mt-3 flex flex-wrap gap-4 font-data text-xs text-muted-foreground">
+            <span className="inline-flex items-center gap-1"><span className="h-2 w-4 bg-[var(--portfolio-total)]" />전체자산</span>
+            <span className="inline-flex items-center gap-1"><span className="h-2 w-4 bg-[var(--portfolio-equity)]" />주식평가액</span>
+            <span className="inline-flex items-center gap-1"><span className="h-2 w-4 bg-rise" />이익</span>
+            <span className="inline-flex items-center gap-1"><span className="h-2 w-4 bg-fall" />손실</span>
+          </div>
+        </div>
+
+        <div className="border border-border bg-card p-5">
+          <p className="text-[11px] font-medium text-muted-foreground">자산 구성</p>
+          <div className="mt-4">
+            <AssetMetric label="보유상품 평가금액" value={won(latest.equity)} />
+            <AssetMetric
+              label="선택 구간 이익/손실"
+              value={`${signedWon(latest.change)} (${pct(latest.changePct)})`}
+              tone={latest.change >= 0 ? "up" : "down"}
+            />
+            <AssetMetric label="현금" value={won(latest.cash)} />
+            <AssetMetric label="최고 순자산" value={won(latest.high)} />
+            <AssetMetric label="최저 순자산" value={won(latest.low)} />
+          </div>
+          <p className="mt-4 text-xs leading-5 text-muted-foreground">
+            매도 후 현금화된 금액은 순자산에 남고, 주식평가액은 줄어듭니다. 외부 입출금은 이벤트로 기록하면 흐름 해석이 쉬워집니다.
+          </p>
         </div>
       </div>
 
-      {/* 통계 행 */}
-      {stats && (
-        <div className="grid grid-cols-4 border border-border divide-x divide-border bg-card">
-          {(
-            [
-              { label: "현재", value: fmtCompact(stats.current).replace(/^[+−]/, ""), className: "text-foreground" },
-              {
-                label: "변동",
-                value: fmtCompact(stats.change),
-                className: stats.change >= 0 ? "text-gain" : "text-loss",
-              },
-              { label: "최고", value: fmtCompact(stats.max).replace(/^[+−]/, ""), className: "text-foreground" },
-              { label: "최저", value: fmtCompact(stats.min).replace(/^[+−]/, ""), className: "text-foreground" },
-            ] as { label: string; value: string; className: string }[]
-          ).map(({ label, value, className }) => (
-            <div key={label} className="flex flex-col items-center py-2">
-              <span className="text-[9px] text-muted-foreground mb-0.5">{label}</span>
-              <span className={`font-data text-xs font-medium ${className}`}>{value}</span>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* 메인 차트 */}
-      <ResponsiveContainer width="100%" height={240}>
-        <LineChart data={filtered} margin={{ top: 20, right: 8, bottom: 0, left: 8 }}>
-          <CartesianGrid strokeDasharray="4 4" stroke={chartTheme.grid} />
-          <XAxis
-            dataKey="ts"
-            tick={<TwoLineTick />}
-            minTickGap={RANGE_TICK_GAP[range]}
-            height={36}
-          />
-          <YAxis
-            tickFormatter={(v) => `₩${(v / 1_000_000).toFixed(0)}M`}
-            tick={{ fontSize: 10, fill: chartTheme.text, fontFamily: MONO }}
-            width={55}
-          />
-          <Tooltip
-            formatter={(v: unknown, name: unknown) => [
-              typeof v === "number" ? `₩${v.toLocaleString("ko-KR")}` : String(v),
-              name === "equity" ? "주식평가액" : "순자산",
-            ]}
-            labelFormatter={(ts) => fmtTick(String(ts))}
-            contentStyle={{
-              background: chartTheme.bg,
-              border: `1px solid ${chartTheme.grid}`,
-              borderRadius: 4,
-              fontFamily: MONO,
-              fontSize: 12,
-              color: chartTheme.upText,
-            }}
-          />
-          <Legend
-            formatter={(v) => (v === "equity" ? "주식평가액" : "순자산")}
-            wrapperStyle={{ fontSize: 11, fontFamily: MONO, color: chartTheme.text }}
-          />
-          {visibleEvents.map((e) => (
-            <ReferenceLine
-              key={e.id}
-              x={e.nearestTs}
-              stroke={chartTheme.palette[7]}
-              strokeDasharray="4 3"
-              strokeWidth={1.5}
-              label={{ value: e.label, position: "top", fontSize: 10, fill: chartTheme.palette[7], fontFamily: MONO }}
-            />
-          ))}
-          <Line type="monotone" dataKey="equity" stroke={chartTheme.brand} strokeWidth={2} dot={false} />
-          <Line
-            type="monotone"
-            dataKey="total"
-            stroke={chartTheme.cash}
-            strokeWidth={1.5}
-            strokeDasharray="4 2"
-            dot={false}
-          />
-          <Brush
-            dataKey="ts"
-            height={24}
-            stroke={chartTheme.brand}
-            travellerWidth={8}
-            tickFormatter={fmtTick}
-          />
-        </LineChart>
-      </ResponsiveContainer>
-
-      {/* 이벤트 섹션 */}
       <div className="border border-border bg-card">
-        <div className="flex items-center justify-between px-4 py-2 border-b border-border">
-          <span className="text-[11px] font-medium text-muted-foreground">이벤트</span>
+        <div className="flex items-center justify-between border-b border-border px-4 py-2">
+          <span className="text-[11px] font-medium text-muted-foreground">입출금/메모 이벤트</span>
           <button
-            onClick={() => setShowForm((v) => !v)}
+            type="button"
+            onClick={() => setShowForm((value) => !value)}
             className="text-[11px] text-primary hover:underline"
           >
             + 이벤트 추가
@@ -262,108 +385,103 @@ export function EquityCurve({ history }: Props) {
         </div>
 
         {showForm && (
-          <div className="px-4 py-3 border-b border-border flex flex-wrap gap-2 items-end bg-[var(--secondary)]">
-            <div className="space-y-1">
-              <label className="block text-[10px] text-muted-foreground">날짜/시간</label>
+          <div className="flex flex-wrap items-end gap-2 border-b border-border bg-[var(--secondary)] px-4 py-3">
+            <label className="grid gap-1 text-[10px] text-muted-foreground">
+              날짜/시간
               <input
                 type="datetime-local"
                 value={form.ts}
-                onChange={(e) => setForm((f) => ({ ...f, ts: e.target.value }))}
-                className="h-8 border border-border rounded-sm px-2 text-xs font-data"
+                onChange={(event) => setForm((prev) => ({ ...prev, ts: event.target.value }))}
+                className="h-8 border border-border bg-background px-2 font-data text-xs text-foreground"
               />
-            </div>
-            <div className="space-y-1">
-              <label className="block text-[10px] text-muted-foreground">라벨</label>
+            </label>
+            <label className="grid gap-1 text-[10px] text-muted-foreground">
+              라벨
               <input
-                type="text"
                 value={form.label}
-                onChange={(e) => setForm((f) => ({ ...f, label: e.target.value }))}
-                placeholder="5월 월급"
-                className="h-8 w-32 border border-border rounded-sm px-2 text-xs"
+                onChange={(event) => setForm((prev) => ({ ...prev, label: event.target.value }))}
+                placeholder="입금, 매도 현금화"
+                className="h-8 w-40 border border-border bg-background px-2 text-xs text-foreground"
               />
-            </div>
-            <div className="space-y-1">
-              <label className="block text-[10px] text-muted-foreground">금액 (선택)</label>
+            </label>
+            <label className="grid gap-1 text-[10px] text-muted-foreground">
+              금액
               <input
                 type="number"
                 value={form.amount}
-                onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))}
-                placeholder="7900000"
-                className="h-8 w-28 border border-border rounded-sm px-2 text-xs font-data"
+                onChange={(event) => setForm((prev) => ({ ...prev, amount: event.target.value }))}
+                placeholder="1000000"
+                className="h-8 w-32 border border-border bg-background px-2 font-data text-xs text-foreground"
               />
-            </div>
-            <div className="space-y-1">
-              <label className="block text-[10px] text-muted-foreground">타입</label>
+            </label>
+            <label className="grid gap-1 text-[10px] text-muted-foreground">
+              타입
               <select
                 value={form.type}
-                onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))}
-                className="h-8 border border-border rounded-sm px-2 text-xs"
+                onChange={(event) => setForm((prev) => ({ ...prev, type: event.target.value }))}
+                className="h-8 border border-border bg-background px-2 text-xs text-foreground"
               >
                 <option>입금</option>
                 <option>출금</option>
                 <option>기타</option>
               </select>
-            </div>
+            </label>
             <button
+              type="button"
               onClick={handleSave}
               disabled={saving || !form.ts || !form.label}
-              className="h-8 px-3 bg-primary text-white text-xs rounded-sm disabled:opacity-50"
+              className="h-8 border border-primary bg-primary px-3 text-xs text-primary-foreground disabled:opacity-50"
             >
-              {saving ? "저장 중…" : "저장"}
+              {saving ? "저장 중" : "저장"}
             </button>
             <button
+              type="button"
               onClick={() => setShowForm(false)}
-              className="h-8 px-3 border border-border text-xs rounded-sm text-muted-foreground"
+              className="h-8 border border-border px-3 text-xs text-muted-foreground"
             >
               취소
             </button>
           </div>
         )}
 
-        {(events as EventOut[]).length === 0 && !showForm && (
+        {(events as EventOut[]).length === 0 && !showForm ? (
           <div className="flex h-12 items-center justify-center text-xs text-muted-foreground">
             이벤트 없음
           </div>
-        )}
-
-        {(events as EventOut[]).map((e) => (
-          <div
-            key={e.id}
-            className="flex items-center justify-between px-4 py-2 border-b border-border last:border-0 hover:bg-[var(--secondary)]"
-          >
-            <div className="flex items-center gap-2">
-              <span className="text-sm">{EVENT_ICON[e.type] ?? "📌"}</span>
-              <div>
-                <p className="text-xs text-foreground">{e.label}</p>
-                <p className="font-data text-[10px] text-muted-foreground">
-                  {new Date(e.ts).toLocaleString("ko-KR", {
-                    year: "numeric", month: "2-digit", day: "2-digit",
-                    hour: "2-digit", minute: "2-digit",
-                  })}{" "}
-                  · {e.type}
-                </p>
+        ) : (
+          (events as EventOut[]).map((event) => (
+            <div
+              key={event.id}
+              className="flex items-center justify-between border-b border-border px-4 py-2 last:border-0 hover:bg-[var(--secondary)]"
+            >
+              <div className="flex items-center gap-2">
+                <span className="border border-border px-1.5 py-0.5 font-data text-[10px] text-muted-foreground">
+                  {EVENT_LABEL[event.type] ?? "EVT"}
+                </span>
+                <div>
+                  <p className="text-xs text-foreground">{event.label}</p>
+                  <p className="font-data text-[10px] text-muted-foreground">
+                    {new Date(event.ts).toLocaleString("ko-KR")} · {event.type}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                {event.amount !== 0 && (
+                  <span className={`font-data text-xs ${event.amount >= 0 ? "text-gain" : "text-loss"}`}>
+                    {signedWon(event.amount)}
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => handleDelete(event.id)}
+                  className="text-[11px] text-muted-foreground hover:text-error"
+                >
+                  삭제
+                </button>
               </div>
             </div>
-            <div className="flex items-center gap-3">
-              {e.amount !== 0 && (
-                <span
-                  className={`font-data text-xs font-medium ${
-                    e.amount > 0 ? "text-gain" : "text-loss"
-                  }`}
-                >
-                  {e.amount > 0 ? "+" : ""}
-                  {(e.amount / 10_000).toLocaleString()}만원
-                </span>
-              )}
-              <button
-                onClick={() => handleDelete(e.id)}
-                className="text-[11px] text-muted-foreground hover:text-error"
-              >
-                삭제
-              </button>
-            </div>
-          </div>
-        ))}
+          ))
+        )}
       </div>
     </div>
   );

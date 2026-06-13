@@ -1,7 +1,9 @@
-"""APScheduler 잡 정의 — snapshot(5분), fundamentals(1일, Phase β), universe(1일, γ)."""
+"""APScheduler 잡 정의 — snapshot(10분), fundamentals(1일, Phase β), universe(1일, γ)."""
 import logging
 import os
+import traceback
 from datetime import date, datetime, timedelta
+from typing import Callable
 
 import pandas as pd
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -11,20 +13,37 @@ from core.ema_scan import run_ema_scan, _load_tickers as _load_ema_tickers
 from core.fx import get_fx_provider
 from core.indicators import compute_indicators
 from core.data.prices_provider import fetch_ohlcv
+from core.data.fundamental_backfill import hydrate_fundamental_snapshots
+from core.data.news_provider import fetch_news, filter_recent_news
+from core.prices.selection import prefer_toss_market_data
 from core.prices.kis import KISPriceProvider
+from core.prices.toss import fetch_buying_power as fetch_toss_buying_power
+from core.prices.toss import fetch_holdings as fetch_toss_holdings
+from core.prices.toss import TossPriceProvider
+from core.telegram import send_telegram
 
 log = logging.getLogger(__name__)
 
-_price_provider = KISPriceProvider()
+_price_provider = TossPriceProvider() if prefer_toss_market_data() else KISPriceProvider()
 _fx_provider = get_fx_provider()
 
 
+JobFunc = Callable[[], object]
+
+
 def snapshot_job():
-    """보유 종목 있는 사용자 전원에 대해 현재가 + 환율 → portfolio_snapshots (5분 주기)."""
+    """보유 종목 있는 사용자 전원에 대해 현재가 + 환율 → portfolio_snapshots (10분 주기)."""
     try:
-        usdkrw = _fx_provider.get_rate("USDKRW")
         ts = datetime.now().replace(second=0, microsecond=0)
-        repo.insert_fx_rate(ts=ts, pair="USDKRW", rate=usdkrw)
+        try:
+            usdkrw = _fx_provider.get_rate("USDKRW")
+            repo.insert_fx_rate(ts=ts, pair="USDKRW", rate=usdkrw)
+        except Exception as e:
+            cached = repo.get_latest_fx_rate("USDKRW")
+            if not cached:
+                raise
+            usdkrw = cached
+            log.warning("USDKRW 조회 실패: %s — 최신 저장 환율 %.2f 사용", e, usdkrw)
 
         user_ids = repo.get_active_user_ids_with_holdings()
         if not user_ids:
@@ -36,6 +55,7 @@ def snapshot_job():
         log.info("snapshot_job 완료: 사용자 %d명", len(user_ids))
     except Exception as e:
         log.error("snapshot_job 오류: %s", e)
+        raise
 
 
 def _snapshot_for_user(user_id: int, usdkrw: float, ts: datetime):
@@ -46,10 +66,15 @@ def _snapshot_for_user(user_id: int, usdkrw: float, ts: datetime):
 
         tickers = [h["ticker"] for h in holdings]
         markets = {h["ticker"]: h.get("market") for h in holdings}
-        prices = _price_provider.get_current_prices(tickers, markets=markets)
+        try:
+            prices = _price_provider.get_current_prices(tickers, markets=markets)
+        except Exception as e:
+            prices = {}
+            log.warning("스냅샷 현재가 조회 실패(user_id=%d): %s — 평단 기준으로 저장", user_id, e)
 
-        cash_krw = float(repo.get_meta(user_id, "cash_krw") or 0)
-        cash_usd = float(repo.get_meta(user_id, "cash_usd") or 0)
+        cash = repo.get_cash_total(user_id)
+        cash_krw = cash["cash_krw"]
+        cash_usd = cash["cash_usd"]
 
         total_equity_krw = 0.0
         total_equity_usd = 0.0
@@ -57,18 +82,18 @@ def _snapshot_for_user(user_id: int, usdkrw: float, ts: datetime):
 
         for h in holdings:
             ticker = h["ticker"]
-            if ticker not in prices:
-                continue
-            p = prices[ticker]
-            mv = p.current * h["quantity"]
-            if p.currency == "KRW":
+            p = prices.get(ticker)
+            current = p.current if p else h["avg_price"]
+            currency = p.currency if p else h["currency"]
+            mv = current * h["quantity"]
+            if currency == "KRW":
                 mv_krw, mv_usd = mv, mv / usdkrw
             else:
                 mv_krw, mv_usd = mv * usdkrw, mv
             total_equity_krw += mv_krw
             total_equity_usd += mv_usd
             holdings_snapshot.append({
-                "ticker": ticker, "price": p.current, "currency": p.currency,
+                "ticker": ticker, "price": current, "currency": currency,
                 "quantity": h["quantity"], "mv_krw": mv_krw,
             })
 
@@ -89,6 +114,11 @@ def _snapshot_for_user(user_id: int, usdkrw: float, ts: datetime):
         )
     except Exception as e:
         log.error("_snapshot_for_user(user_id=%d) 오류: %s", user_id, e)
+
+
+def snapshot_rollup_job(bucket: str = "10m"):
+    """portfolio_snapshots 원본을 차트용 시간 버킷으로 집계합니다."""
+    return repo.refresh_snapshot_rollups(buckets=(bucket,))
 
 
 def prices_refresh_kr_job():
@@ -114,6 +144,7 @@ def ema_scan_kr_job():
         log.info("ema_scan_kr 완료: %s", result)
     except Exception as e:
         log.error("ema_scan_kr_job 오류: %s", e)
+        raise
 
 
 def prices_refresh_us_job():
@@ -139,6 +170,7 @@ def ema_scan_us_job():
         log.info("ema_scan_us 완료: %s", result)
     except Exception as e:
         log.error("ema_scan_us_job 오류: %s", e)
+        raise
 
 
 def growth_batch_kr_job():
@@ -152,6 +184,52 @@ def growth_batch_kr_job():
 def growth_batch_us_job():
     """미장 성장주 배치 — 매일 07:10 KST."""
     _run_growth_universes(("sp500", "nasdaq100"))
+
+
+def toss_holdings_sync_job():
+    """Toss 보유종목/현금 자동 동기화."""
+    if os.getenv("TOSS_HOLDINGS_SYNC_ENABLED", "").lower() not in ("1", "true", "yes"):
+        return
+
+    user_ids = repo.get_active_user_ids()
+    if not user_ids:
+        return
+
+    try:
+        holdings = fetch_toss_holdings()
+        cash_krw = fetch_toss_buying_power("KRW")
+        cash_usd = fetch_toss_buying_power("USD")
+    except Exception as e:
+        log.error("toss_holdings_sync_job 조회 오류: %s", e)
+        raise
+
+    for user_id in user_ids:
+        try:
+            for item in holdings:
+                repo.upsert_holding(
+                    user_id=user_id,
+                    source="toss",
+                    preserve_display_fields=True,
+                    **item,
+                )
+            repo.set_cash_source(user_id, "toss", cash_krw, cash_usd)
+        except Exception as e:
+            log.error("toss_holdings_sync_job 저장 오류(user_id=%d): %s", user_id, e)
+
+    log.info("toss_holdings_sync_job 완료: 사용자 %d명, 종목 %d개", len(user_ids), len(holdings))
+    return {"users": len(user_ids), "holdings": len(holdings)}
+
+
+def fundamental_snapshots_hydrate_job():
+    """관심종목/보유종목 미국 펀더멘털 snapshot 명시 적재."""
+    result = hydrate_fundamental_snapshots()
+    log.info(
+        "fundamental_snapshots_hydrate_job 완료: requested=%d updated=%d skipped=%d",
+        result["requested"],
+        result["updated"],
+        result["skipped"],
+    )
+    return {key: value for key, value in result.items() if key != "errors"}
 
 
 def _run_growth_universes(universes: tuple[str, ...]):
@@ -224,7 +302,7 @@ def alert_check_job():
             prices = _price_provider.get_current_prices(tickers)
         except Exception as e:
             log.warning("alert_check_job 시세 조회 실패: %s", e)
-            return
+            raise
 
         # RSI/MA 조건이 있는 티커만 OHLCV 조회
         indicator_tickers = {
@@ -273,23 +351,305 @@ def alert_check_job():
 
     except Exception as e:
         log.error("alert_check_job 오류: %s", e)
+        raise
+
+
+def daily_holdings_news_job():
+    """보유종목의 오늘 발행 뉴스를 Telegram으로 발송."""
+    today = datetime.now().date()
+    tickers: set[str] = set()
+    for user_id in repo.get_active_user_ids_with_holdings():
+        tickers.update(h["ticker"] for h in repo.get_holdings(user_id))
+    if not tickers:
+        return {"tickers": 0, "sent": False}
+
+    lines = [f"오늘 수집한 보유종목 뉴스 ({today.isoformat()})"]
+    count = 0
+    for ticker in sorted(tickers):
+        items = filter_recent_news(fetch_news(ticker, limit=12), days=7)
+        today_items = []
+        for item in items:
+            published = str(item.get("published_utc") or "")
+            try:
+                from email.utils import parsedate_to_datetime
+                dt = parsedate_to_datetime(published)
+                if dt.date() == today:
+                    today_items.append(item)
+            except Exception:
+                continue
+        if not today_items:
+            continue
+        lines.append(f"\n[{ticker}]")
+        for item in today_items[:3]:
+            title = item.get("title", "")
+            link = item.get("link", "")
+            publisher = item.get("publisher", "")
+            lines.append(f"- {title} ({publisher})\n  {link}")
+            count += 1
+
+    if count == 0:
+        return {"tickers": len(tickers), "news": 0, "sent": False}
+    sent = send_telegram("\n".join(lines))
+    return {"tickers": len(tickers), "news": count, "sent": sent}
+
+
+def _job_registry() -> list[dict]:
+    return [
+        {
+            "id": "snapshot",
+            "name": "자산 스냅샷",
+            "category": "portfolio",
+            "schedule": "10분마다",
+            "description": "보유종목 현재가, 현금, 환율을 계산해 포트폴리오 스냅샷을 저장합니다.",
+            "bootstrap": True,
+            "bootstrap_description": "보유/현금 동기화 후 포트폴리오 첫 스냅샷을 만듭니다.",
+            "func": snapshot_job,
+        },
+        {
+            "id": "snapshot_rollup_10m",
+            "name": "자산 추이 10분 집계",
+            "category": "portfolio",
+            "schedule": "10분마다",
+            "description": "자산 스냅샷을 10분 단위 차트 데이터로 저장합니다.",
+            "bootstrap": True,
+            "bootstrap_description": "기존 자산 스냅샷을 10분 단위 차트 데이터로 집계합니다.",
+            "func": lambda: snapshot_rollup_job("10m"),
+        },
+        {
+            "id": "snapshot_rollup_1h",
+            "name": "자산 추이 1시간 집계",
+            "category": "portfolio",
+            "schedule": "매시 1분",
+            "description": "자산 스냅샷을 1시간 단위 차트 데이터로 저장합니다.",
+            "bootstrap": True,
+            "bootstrap_description": "기존 자산 스냅샷을 1시간 단위 차트 데이터로 집계합니다.",
+            "func": lambda: snapshot_rollup_job("1h"),
+        },
+        {
+            "id": "snapshot_rollup_1d",
+            "name": "자산 추이 일별 집계",
+            "category": "portfolio",
+            "schedule": "매일 00:05 KST",
+            "description": "자산 스냅샷을 일별 차트 데이터로 저장합니다.",
+            "bootstrap": True,
+            "bootstrap_description": "기존 자산 스냅샷을 일별 차트 데이터로 집계합니다.",
+            "func": lambda: snapshot_rollup_job("1d"),
+        },
+        {
+            "id": "snapshot_rollup_1w",
+            "name": "자산 추이 주별 집계",
+            "category": "portfolio",
+            "schedule": "매주 월요일 00:10 KST",
+            "description": "자산 스냅샷을 주별 차트 데이터로 저장합니다.",
+            "bootstrap": True,
+            "bootstrap_description": "기존 자산 스냅샷을 주별 차트 데이터로 집계합니다.",
+            "func": lambda: snapshot_rollup_job("1w"),
+        },
+        {
+            "id": "snapshot_rollup_1mo",
+            "name": "자산 추이 월별 집계",
+            "category": "portfolio",
+            "schedule": "매월 1일 00:15 KST",
+            "description": "자산 스냅샷을 월별 차트 데이터로 저장합니다.",
+            "bootstrap": True,
+            "bootstrap_description": "기존 자산 스냅샷을 월별 차트 데이터로 집계합니다.",
+            "func": lambda: snapshot_rollup_job("1mo"),
+        },
+        {
+            "id": "alert_check",
+            "name": "가격/지표 알림 체크",
+            "category": "alert",
+            "schedule": "1분마다",
+            "description": "가격, RSI, 이동평균 조건을 확인해 알림 이벤트를 생성합니다.",
+            "func": alert_check_job,
+        },
+        {
+            "id": "prices_refresh_kr",
+            "name": "국장 EMA 가격 갱신",
+            "category": "price",
+            "schedule": "매일 15:45 KST",
+            "description": "국장 EMA 스캔 전에 KOSPI200/KOSDAQ150 OHLCV 캐시를 갱신합니다.",
+            "bootstrap": True,
+            "bootstrap_description": "국내 지수 구성 종목의 가격 캐시를 먼저 채웁니다.",
+            "func": prices_refresh_kr_job,
+        },
+        {
+            "id": "ema_scan_kr",
+            "name": "국장 EMA 골든크로스",
+            "category": "telegram",
+            "schedule": "매일 16:00 KST",
+            "description": "국장 EMA 골든크로스 종목을 스캔하고 Telegram으로 발송합니다.",
+            "func": ema_scan_kr_job,
+        },
+        {
+            "id": "prices_refresh_us",
+            "name": "미장 EMA 가격 갱신",
+            "category": "price",
+            "schedule": "매일 06:45 KST",
+            "description": "미장 EMA 스캔 전에 S&P500/NASDAQ100 OHLCV 캐시를 갱신합니다.",
+            "bootstrap": True,
+            "bootstrap_description": "미국 지수 구성 종목의 가격 캐시를 먼저 채웁니다.",
+            "func": prices_refresh_us_job,
+        },
+        {
+            "id": "ema_scan_us",
+            "name": "미장 EMA 골든크로스",
+            "category": "telegram",
+            "schedule": "매일 07:00 KST",
+            "description": "미장 EMA 골든크로스 종목을 스캔하고 Telegram으로 발송합니다.",
+            "func": ema_scan_us_job,
+        },
+        {
+            "id": "growth_batch_kr",
+            "name": "국장 성장주 배치",
+            "category": "valuation",
+            "schedule": "매일 16:10 KST",
+            "description": "KOSPI200/KOSDAQ150 valuation, quality, growth, technical 점수를 갱신합니다.",
+            "bootstrap": True,
+            "bootstrap_description": "국내 종목 분석 화면에서 사용할 점수 데이터를 적재합니다.",
+            "func": growth_batch_kr_job,
+        },
+        {
+            "id": "growth_batch_us",
+            "name": "미장 성장주 배치",
+            "category": "valuation",
+            "schedule": "매일 07:10 KST",
+            "description": "S&P500/NASDAQ100 valuation, quality, growth, technical 점수를 갱신합니다.",
+            "bootstrap": True,
+            "bootstrap_description": "미국 종목 분석 화면에서 사용할 점수 데이터를 적재합니다.",
+            "func": growth_batch_us_job,
+        },
+        {
+            "id": "toss_holdings_sync",
+            "name": "Toss 보유/현금 동기화",
+            "category": "broker",
+            "schedule": f"{int(os.getenv('TOSS_HOLDINGS_SYNC_INTERVAL_MINUTES', '60'))}분마다",
+            "description": "Toss 보유종목과 매수 가능 현금을 가져와 source=toss로 저장합니다.",
+            "bootstrap": True,
+            "bootstrap_description": "Toss 보유종목과 현금을 최초로 가져옵니다.",
+            "func": toss_holdings_sync_job,
+        },
+        {
+            "id": "fundamental_snapshots_hydrate",
+            "name": "관심/보유 펀더멘털 적재",
+            "category": "valuation",
+            "schedule": "매일 08:20 KST",
+            "description": "관심종목과 보유종목의 미국 펀더멘털 snapshot을 Finviz/StockAnalysis 수집 작업으로 저장합니다.",
+            "bootstrap": True,
+            "bootstrap_description": "관심/보유 미국 종목의 펀더멘털 snapshot을 캐시에 저장합니다.",
+            "func": fundamental_snapshots_hydrate_job,
+        },
+        {
+            "id": "daily_holdings_news",
+            "name": "보유종목 오늘 뉴스",
+            "category": "telegram",
+            "schedule": "매일 08:40 KST",
+            "description": "보유종목의 오늘 발행 뉴스를 최근 7일 뉴스 provider에서 수집해 Telegram으로 발송합니다.",
+            "func": daily_holdings_news_job,
+        },
+    ]
+
+
+def get_job_definitions() -> list[dict]:
+    return [
+        {k: v for k, v in job.items() if k != "func"}
+        for job in _job_registry()
+    ]
+
+
+def get_bootstrap_job_definitions() -> list[dict]:
+    return [
+        {k: v for k, v in job.items() if k != "func"}
+        for job in _job_registry()
+        if job.get("bootstrap")
+    ]
+
+
+def run_bootstrap_jobs(trigger_type: str = "manual_bootstrap") -> dict:
+    results = []
+    for job in get_bootstrap_job_definitions():
+        result = run_registered_job(job["id"], trigger_type)
+        results.append({"job_id": job["id"], **result})
+    return {
+        "requested": len(results),
+        "success": sum(1 for result in results if result.get("status") == "success"),
+        "skipped": sum(1 for result in results if result.get("status") == "skipped"),
+        "failed": sum(1 for result in results if result.get("status") == "failed"),
+        "results": results,
+    }
+
+
+def run_registered_job(job_id: str, trigger_type: str = "manual") -> dict:
+    jobs = {job["id"]: job for job in _job_registry()}
+    if job_id not in jobs:
+        raise KeyError(job_id)
+    return _run_tracked(job_id, trigger_type, jobs[job_id]["func"])
+
+
+def _run_tracked(job_id: str, trigger_type: str, func: JobFunc) -> dict:
+    run_id, should_run = repo.start_job_run(job_id, trigger_type)
+    if not should_run:
+        return {"run_id": run_id, "status": "skipped"}
+
+    try:
+        result = func()
+        meta = result if isinstance(result, dict) else {}
+        message = _job_message(meta)
+        repo.finish_job_run(run_id, "success", message=message, meta=meta)
+        return {"run_id": run_id, "status": "success", "meta": meta}
+    except Exception as e:
+        log.error("job failed: %s: %s", job_id, e)
+        repo.finish_job_run(
+            run_id,
+            "failed",
+            error=traceback.format_exc(limit=8),
+            message=str(e),
+        )
+        return {"run_id": run_id, "status": "failed", "error": str(e)}
+
+
+def _job_message(meta: dict) -> str:
+    if not meta:
+        return "완료"
+    parts = [f"{key}={value}" for key, value in meta.items() if value is not None]
+    return ", ".join(parts) if parts else "완료"
 
 
 def create_scheduler() -> BackgroundScheduler:
     scheduler = BackgroundScheduler(timezone="Asia/Seoul")
-    scheduler.add_job(snapshot_job, "interval", minutes=5, id="snapshot",
+    scheduler.add_job(lambda: run_registered_job("snapshot", "schedule"), "interval", minutes=10, id="snapshot",
                       next_run_time=datetime.now())
-    scheduler.add_job(alert_check_job, "interval", minutes=1, id="alert_check")
-    scheduler.add_job(prices_refresh_kr_job, "cron", hour=15, minute=45,
+    scheduler.add_job(lambda: run_registered_job("snapshot_rollup_10m", "schedule"), "interval", minutes=10,
+                      id="snapshot_rollup_10m")
+    scheduler.add_job(lambda: run_registered_job("snapshot_rollup_1h", "schedule"), "cron", minute=1,
+                      id="snapshot_rollup_1h", timezone="Asia/Seoul")
+    scheduler.add_job(lambda: run_registered_job("snapshot_rollup_1d", "schedule"), "cron", hour=0, minute=5,
+                      id="snapshot_rollup_1d", timezone="Asia/Seoul")
+    scheduler.add_job(lambda: run_registered_job("snapshot_rollup_1w", "schedule"), "cron", day_of_week="mon", hour=0, minute=10,
+                      id="snapshot_rollup_1w", timezone="Asia/Seoul")
+    scheduler.add_job(lambda: run_registered_job("snapshot_rollup_1mo", "schedule"), "cron", day=1, hour=0, minute=15,
+                      id="snapshot_rollup_1mo", timezone="Asia/Seoul")
+    scheduler.add_job(lambda: run_registered_job("alert_check", "schedule"), "interval", minutes=1, id="alert_check")
+    scheduler.add_job(lambda: run_registered_job("prices_refresh_kr", "schedule"), "cron", hour=15, minute=45,
                       id="prices_refresh_kr", timezone="Asia/Seoul")
-    scheduler.add_job(ema_scan_kr_job, "cron", hour=16, minute=0,
+    scheduler.add_job(lambda: run_registered_job("ema_scan_kr", "schedule"), "cron", hour=16, minute=0,
                       id="ema_scan_kr", timezone="Asia/Seoul")
-    scheduler.add_job(prices_refresh_us_job, "cron", hour=6, minute=45,
+    scheduler.add_job(lambda: run_registered_job("prices_refresh_us", "schedule"), "cron", hour=6, minute=45,
                       id="prices_refresh_us", timezone="Asia/Seoul")
-    scheduler.add_job(ema_scan_us_job, "cron", hour=7, minute=0,
+    scheduler.add_job(lambda: run_registered_job("ema_scan_us", "schedule"), "cron", hour=7, minute=0,
                       id="ema_scan_us", timezone="Asia/Seoul")
-    scheduler.add_job(growth_batch_kr_job, "cron", hour=16, minute=10,
+    scheduler.add_job(lambda: run_registered_job("growth_batch_kr", "schedule"), "cron", hour=16, minute=10,
                       id="growth_batch_kr", timezone="Asia/Seoul")
-    scheduler.add_job(growth_batch_us_job, "cron", hour=7, minute=10,
+    scheduler.add_job(lambda: run_registered_job("growth_batch_us", "schedule"), "cron", hour=7, minute=10,
                       id="growth_batch_us", timezone="Asia/Seoul")
+    scheduler.add_job(
+        lambda: run_registered_job("toss_holdings_sync", "schedule"),
+        "interval",
+        minutes=int(os.getenv("TOSS_HOLDINGS_SYNC_INTERVAL_MINUTES", "60")),
+        id="toss_holdings_sync",
+    )
+    scheduler.add_job(lambda: run_registered_job("fundamental_snapshots_hydrate", "schedule"), "cron", hour=8, minute=20,
+                      id="fundamental_snapshots_hydrate", timezone="Asia/Seoul")
+    scheduler.add_job(lambda: run_registered_job("daily_holdings_news", "schedule"), "cron", hour=8, minute=40,
+                      id="daily_holdings_news", timezone="Asia/Seoul")
     return scheduler

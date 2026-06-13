@@ -45,9 +45,9 @@ export function TickerDetail({ ticker, universe = "sp500", name, compact = false
     setIsHydrating(true);
     setHydrateMessage(null);
     try {
-      const result = await tickersApi.hydrate(ticker, ["ohlcv"]);
+      const result = await tickersApi.hydrate(ticker, ["ohlcv", "fundamental"]);
       const warnings = result.warnings.length ? ` · ${result.warnings.join(", ")}` : "";
-      setHydrateMessage(`${ticker} 가격/OHLCV 보강을 완료했습니다. 펀더멘털은 배치 snapshot을 우선 사용합니다.${warnings}`);
+      setHydrateMessage(`${ticker} 가격/OHLCV와 펀더멘털 snapshot 보강을 완료했습니다.${warnings}`);
       setChartRefreshKey((value) => value + 1);
       await Promise.all([mutateOverview(), mutateValuation(), mutateTiming()]);
     } catch (error) {
@@ -69,7 +69,7 @@ export function TickerDetail({ ticker, universe = "sp500", name, compact = false
               <p className="mt-1 text-sm text-muted-foreground">{displayName || "종목을 조회했습니다."}</p>
             </div>
             <Button type="button" onClick={hydrate} disabled={isHydrating}>
-              {isHydrating ? "보강 중" : "가격 데이터 보강"}
+              {isHydrating ? "보강 중" : "데이터 보강"}
             </Button>
           </div>
         </header>
@@ -82,7 +82,7 @@ export function TickerDetail({ ticker, universe = "sp500", name, compact = false
             <p className="text-xs text-muted-foreground">{displayName}</p>
           </div>
           <Button type="button" variant="outline" onClick={hydrate} disabled={isHydrating}>
-            {isHydrating ? "보강 중" : "가격 데이터 보강"}
+            {isHydrating ? "보강 중" : "데이터 보강"}
           </Button>
         </div>
       )}
@@ -97,7 +97,7 @@ export function TickerDetail({ ticker, universe = "sp500", name, compact = false
         <div className="mb-3 flex items-center justify-between">
           <div>
             <p className="font-data text-[10px] tracking-[0.2em] text-primary">PRICE CHART</p>
-            <p className="mt-1 text-xs text-muted-foreground">공통 캐시에 저장된 OHLCV로 그리는 Terminal 차트입니다.</p>
+            <p className="mt-1 text-xs text-muted-foreground">공통 캐시에 저장된 OHLCV로 그리는 가격 차트입니다.</p>
           </div>
         </div>
         <TickerCandleChart

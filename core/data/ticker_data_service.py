@@ -8,6 +8,7 @@ import pandas as pd
 from core import repository as repo
 from core.data.normalization import normalize_finite_numbers
 from core.data.ohlcv_cache import fetch_ohlcv
+from core.prices.selection import prefer_toss_market_data
 
 
 def get_price_history(ticker: str, start: date, end: date) -> dict:
@@ -88,6 +89,12 @@ def hydrate_ticker_data(ticker: str, scopes: list[str] | None = None) -> dict:
         prices, fetch_warnings = fetch_ohlcv([ticker], start, today, force=True)
         warnings.extend(fetch_warnings)
         _update_ohlcv_status(ticker, prices, fetch_warnings)
+    if "fundamental" in scopes:
+        from core.data.fundamental_backfill import hydrate_fundamental_snapshots
+
+        result = hydrate_fundamental_snapshots([ticker])
+        warnings.extend(result["errors"])
+        _update_fundamental_status(ticker, result)
     return {"ticker": ticker, "scopes": scopes, "warnings": warnings, "status": get_data_status(ticker)}
 
 
@@ -105,11 +112,31 @@ def _update_ohlcv_status(ticker: str, prices: pd.DataFrame, warnings: list[str])
     repo.upsert_ticker_data_status({
         "ticker": ticker,
         "data_type": "ohlcv",
-        "source": "kis",
+        "source": "toss" if prefer_toss_market_data() else "kis",
         "min_date": min_date,
         "max_date": max_date,
         "last_fetched_at": now,
         "last_success_at": now if rows else None,
         "last_error": "; ".join(warnings) if warnings else None,
         "coverage_json": {"rows": rows},
+    })
+
+
+def _update_fundamental_status(ticker: str, result: dict) -> None:
+    now = datetime.now()
+    updated = int(result.get("updated") or 0)
+    repo.upsert_ticker_data_status({
+        "ticker": ticker,
+        "data_type": "fundamental",
+        "source": "finviz_stockanalysis",
+        "min_date": date.today() if updated else None,
+        "max_date": date.today() if updated else None,
+        "last_fetched_at": now,
+        "last_success_at": now if updated else None,
+        "last_error": "; ".join(result.get("errors") or []) or None,
+        "coverage_json": {
+            "requested": result.get("requested", 0),
+            "updated": updated,
+            "skipped": result.get("skipped", 0),
+        },
     })

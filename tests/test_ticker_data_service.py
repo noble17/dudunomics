@@ -90,3 +90,38 @@ def test_hydrate_ohlcv_updates_status():
     statuses = repo.get_ticker_data_status("BE")
     assert statuses[0]["data_type"] == "ohlcv"
     assert statuses[0]["coverage_json"]["rows"] == 3
+
+
+def test_hydrate_fundamental_updates_status(monkeypatch):
+    from core.data import ticker_data_service as svc
+    import core.repository as repo
+
+    monkeypatch.setattr(
+        "core.data.fundamental_backfill.hydrate_fundamental_snapshots",
+        lambda tickers: {"requested": 1, "updated": 1, "skipped": 0, "errors": []},
+    )
+
+    result = svc.hydrate_ticker_data("BE", scopes=["fundamental"])
+
+    assert result["ticker"] == "BE"
+    assert result["warnings"] == []
+    statuses = repo.get_ticker_data_status("BE")
+    assert statuses[0]["data_type"] == "fundamental"
+    assert statuses[0]["source"] == "finviz_stockanalysis"
+    assert statuses[0]["coverage_json"] == {"requested": 1, "updated": 1, "skipped": 0}
+
+
+def test_hydrate_fundamental_records_errors(monkeypatch):
+    from core.data import ticker_data_service as svc
+    import core.repository as repo
+
+    monkeypatch.setattr(
+        "core.data.fundamental_backfill.hydrate_fundamental_snapshots",
+        lambda tickers: {"requested": 1, "updated": 0, "skipped": 1, "errors": ["ZZZ: fundamentals 없음"]},
+    )
+
+    result = svc.hydrate_ticker_data("ZZZ", scopes=["fundamental"])
+
+    assert result["warnings"] == ["ZZZ: fundamentals 없음"]
+    statuses = repo.get_ticker_data_status("ZZZ")
+    assert statuses[0]["last_error"] == "ZZZ: fundamentals 없음"

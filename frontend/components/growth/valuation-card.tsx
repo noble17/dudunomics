@@ -16,8 +16,10 @@ function priceRange(low: number | null, high: number | null) {
 }
 
 function sourceName(source: string) {
+  if (source === "BATCH") return "Growth Batch";
   if (source === "FINVIZ") return "Finviz";
   if (source === "STOCKANALYSIS") return "StockAnalysis";
+  if (source === "finviz_stockanalysis") return "Finviz + StockAnalysis";
   return source;
 }
 
@@ -123,6 +125,10 @@ function ConsensusContent({ data, error }: { data?: GrowthValuation; error?: unk
     return <ConsensusMessage data={data} fallback="최근 6개월 내 목표주가 데이터가 없습니다." />;
   }
 
+  if (data.consensus_status === "missing") {
+    return <ConsensusMessage data={data} fallback="목표주가 데이터가 아직 적재되지 않았습니다." />;
+  }
+
   if (data.consensus_status === "rate_limited") {
     return (
       <div className="space-y-2">
@@ -163,17 +169,13 @@ export function ValuationCard({ data, error }: { data?: GrowthValuation; error?:
   return (
     <section className="rounded-xl border border-border bg-card p-4">
       <h3 className="text-[11px] font-medium tracking-[0.18em] text-primary">VALUATION CHECK</h3>
+      <ValuationStatus data={data} />
       {data?.score_status === "missing" && (
         <div className="mt-4 rounded-lg border border-primary/30 bg-primary/5 p-3">
           <p className="text-xs font-medium text-primary">성장주 배치 데이터 없음</p>
           <p className="mt-1 text-xs text-muted-foreground">
             {data.score_message ?? "이 종목은 아직 성장주 배치 점수에 포함되지 않았습니다."}
           </p>
-          {data.valuation_source && (
-            <p className="mt-2 font-data text-[10px] text-muted-foreground">
-              임시 밸류에이션 출처: {sourceName(data.valuation_source)}
-            </p>
-          )}
         </div>
       )}
       <div className="mt-4 space-y-2">
@@ -200,5 +202,35 @@ export function ValuationCard({ data, error }: { data?: GrowthValuation; error?:
         <ConsensusContent data={data} error={error} />
       </div>
     </section>
+  );
+}
+
+function ValuationStatus({ data }: { data?: GrowthValuation }) {
+  if (!data) {
+    return (
+      <div className="mt-3 rounded-lg border border-border bg-muted/30 p-3 text-xs text-muted-foreground">
+        펀더멘털 snapshot 상태를 불러오는 중입니다.
+      </div>
+    );
+  }
+
+  const hasValuation = Boolean(data.valuation_source);
+  return (
+    <div className={`mt-3 rounded-lg border p-3 text-xs ${
+      hasValuation ? "border-border bg-muted/30" : "border-amber-500/30 bg-amber-500/10"
+    }`}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="font-medium text-foreground">펀더멘털 snapshot</span>
+        <span className={`border px-2 py-0.5 font-data text-[10px] ${
+          hasValuation ? "border-primary/40 bg-primary/10 text-primary" : "border-amber-500/30 text-amber-700 dark:text-amber-200"
+        }`}>
+          {hasValuation ? sourceName(data.valuation_source!) : "보강 필요"}
+        </span>
+      </div>
+      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-muted-foreground">
+        <span>기준일: <span className="font-data text-foreground">{data.valuation_as_of ?? "-"}</span></span>
+        <span>상태: {data.valuation_stale ? "오래됨" : hasValuation ? "사용 가능" : "없음"}</span>
+      </div>
+    </div>
   );
 }

@@ -72,9 +72,10 @@ def _make_fake_single_ticker_df(ticker: str, n: int = 10) -> pd.DataFrame:
     }, index=idx)
 
 
-def test_fetch_ohlcv_cache_miss_calls_kis():
+def test_fetch_ohlcv_cache_miss_calls_kis(monkeypatch):
     """캐시 없으면 해외 OHLCV도 KIS로 조회한다."""
     from core.data import ohlcv_cache
+    monkeypatch.setenv("MARKET_DATA_PROVIDER", "kis")
     fake = _make_fake_single_ticker_df("AAPL")
     with patch("core.prices.kis.fetch_ohlcv_overseas", return_value=fake) as mock_kis, \
          patch("yfinance.download") as mock_dl:
@@ -109,10 +110,11 @@ def test_fetch_ohlcv_cache_hit_skips_yfinance():
     assert not prices.empty
 
 
-def test_fetch_ohlcv_stores_data_in_cache():
+def test_fetch_ohlcv_stores_data_in_cache(monkeypatch):
     """fetch 후 같은 요청은 DB에서 읽음."""
     import core.repository as repo
     from core.data import ohlcv_cache
+    monkeypatch.setenv("MARKET_DATA_PROVIDER", "kis")
 
     fake = _make_fake_single_ticker_df("TSLA", n=5)
     call_count = {"n": 0}
@@ -131,9 +133,10 @@ def test_fetch_ohlcv_stores_data_in_cache():
     assert not prices.empty
 
 
-def test_fetch_ohlcv_overseas_warns_when_kis_partial():
+def test_fetch_ohlcv_overseas_warns_when_kis_partial(monkeypatch):
     """KIS가 일부 구간만 주면 yfinance를 호출하지 않고 부족 경고를 반환한다."""
     from core.data import ohlcv_cache
+    monkeypatch.setenv("MARKET_DATA_PROVIDER", "kis")
 
     kis_partial = _make_fake_single_ticker_df("BE", n=10)
     kis_partial.index = pd.date_range("2023-07-03", periods=10, freq="B")
@@ -150,9 +153,10 @@ def test_fetch_ohlcv_overseas_warns_when_kis_partial():
     assert any("KIS 데이터가 요청 구간보다 짧습니다" in warning for warning in warns)
 
 
-def test_fetch_index_cache_miss_calls_kis():
+def test_fetch_index_cache_miss_calls_kis(monkeypatch):
     """인덱스 캐시 없으면 KIS로 조회한다."""
     from core.data import ohlcv_cache
+    monkeypatch.setenv("MARKET_DATA_PROVIDER", "kis")
     fake = _make_fake_single_ticker_df("SPY", n=5)
 
     with patch("core.prices.kis.fetch_ohlcv_overseas", return_value=fake) as mock_kis, \
@@ -180,3 +184,23 @@ def test_fetch_index_cache_hit_skips_yfinance():
     assert not mock_dl.called
     assert not series.empty
     assert series.name == "SPY"
+
+
+def test_fetch_and_store_uses_toss_when_selected(fresh_db, monkeypatch):
+    """MARKET_DATA_PROVIDER=toss이면 OHLCV fetch도 Toss provider를 사용한다."""
+    from core.data import ohlcv_cache
+
+    monkeypatch.setenv("MARKET_DATA_PROVIDER", "toss")
+    fake_df = pd.DataFrame({
+        "Open": [100.0],
+        "High": [110.0],
+        "Low": [90.0],
+        "Close": [105.0],
+        "Volume": [1000],
+    }, index=pd.to_datetime(["2026-01-02"]))
+
+    with patch("core.prices.toss.fetch_ohlcv_daily", return_value=fake_df) as mock_toss:
+        warns = ohlcv_cache._fetch_and_store(["AAPL"], date(2026, 1, 1), date(2026, 1, 31))
+
+    assert mock_toss.call_count == 1
+    assert warns == []

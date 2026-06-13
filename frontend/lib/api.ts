@@ -1,6 +1,6 @@
 import type {
-  BacktestRunIn, BacktestRunOut, CandlesOut, CashUpdate, EventOut,
-  HoldingIn, HoldingOut, PortfolioAnalyticsRow, PortfolioSnapshot,
+  BacktestRunIn, BacktestRunOut, CandlesOut, CashOut, CashUpdate, EventOut,
+  HoldingIn, HoldingOut, HoldingSourceMetaUpdate, PortfolioAnalyticsRow, PortfolioSnapshot,
   SnapshotHistory, StrategyDef,
   TickerLookupOut, TickerSearchHit,
   QuantScore, TickerNote,
@@ -8,15 +8,19 @@ import type {
   QuotesOut,
   NewsOut, AISummaryOut, ChatMessage,
   AlertCondition, AlertEvent, AlertIn,
-  TradeIn, TradeOut, PerformanceData, RebalancingRow,
+  TradeImportPreview, TradeIn, TradeOut, PerformanceData, RebalancingRow,
   FinancialsData, PriceChartData, Watchlist, WatchlistItem, WatchlistMembership,
   GrowthScore, GrowthTiming, GrowthValuation, GrowthWatchlistStatus,
   GrowthHydrate, TickerHydrate, TickerOverview,
+  JobOut, JobRun, GoldenCrossOut,
 } from "./types";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const headers = init?.body instanceof FormData
+    ? init?.headers
+    : { "Content-Type": "application/json", ...init?.headers };
   const res = await fetch(path, {
-    headers: { "Content-Type": "application/json", ...init?.headers },
+    headers,
     credentials: "include",
     ...init,
   });
@@ -37,7 +41,9 @@ export const holdingsApi = {
     request<HoldingOut>(`/api/holdings/${ticker}`, { method: "PUT", body: JSON.stringify(body) }),
   delete: (ticker: string) =>
     request<{ ok: boolean }>(`/api/holdings/${ticker}`, { method: "DELETE" }),
-  getCash: () => request<{ cash_krw: number; cash_usd: number }>("/api/holdings/cash"),
+  updateSourceMeta: (ticker: string, body: HoldingSourceMetaUpdate) =>
+    request<HoldingOut>(`/api/holdings/${ticker}/source-meta`, { method: "PATCH", body: JSON.stringify(body) }),
+  getCash: () => request<CashOut>("/api/holdings/cash"),
   updateCash: (body: CashUpdate) =>
     request<{ ok: boolean }>("/api/holdings/cash", { method: "PUT", body: JSON.stringify(body) }),
   lookup: (ticker: string, market?: string) => {
@@ -51,13 +57,39 @@ export const holdingsApi = {
       "/api/holdings/sync-from-kis",
       { method: "POST" }
     ),
+  syncFromToss: () =>
+    request<{ added: number; updated: number; errors: string[] }>(
+      "/api/holdings/sync-from-toss",
+      { method: "POST" }
+    ),
+};
+
+export const jobsApi = {
+  list: () => request<JobOut[]>("/api/jobs"),
+  runs: (jobId: string, limit = 50) =>
+    request<JobRun[]>(`/api/jobs/${encodeURIComponent(jobId)}/runs?limit=${limit}`),
+  run: (jobId: string) =>
+    request<{ status: string; job_id: string }>(
+      `/api/jobs/${encodeURIComponent(jobId)}/run`,
+      { method: "POST" },
+    ),
+  runBootstrap: () =>
+    request<{ status: string; job_ids: string[] }>("/api/jobs/bootstrap/run", { method: "POST" }),
+};
+
+export const goldenCrossApi = {
+  list: (group = "all", limit = 200) => {
+    const params = new URLSearchParams({ limit: String(limit) });
+    if (group === "KOSPI" || group === "KOSDAQ" || group === "US") params.set("group_name", group);
+    return request<GoldenCrossOut>(`/api/golden-cross?${params.toString()}`);
+  },
 };
 
 export const portfolioApi = {
   current: () => request<PortfolioSnapshot>("/api/portfolio/current"),
   analytics: () => request<PortfolioAnalyticsRow[]>("/api/portfolio/analytics"),
-  history: (limit = 8640) =>
-    request<SnapshotHistory[]>(`/api/portfolio/history?limit=${limit}`),
+  history: (bucket = "10m", limit = 400) =>
+    request<SnapshotHistory[]>(`/api/portfolio/history?bucket=${bucket}&limit=${limit}`),
   events: () => request<EventOut[]>("/api/portfolio/events"),
   addEvent: (body: Omit<EventOut, "id">) =>
     request<EventOut>("/api/portfolio/events", { method: "POST", body: JSON.stringify(body) }),
@@ -232,6 +264,15 @@ export const tradesApi = {
     request<TradeOut[]>(`/api/trades${ticker ? `?ticker=${encodeURIComponent(ticker)}` : ""}`),
   create: (body: TradeIn): Promise<TradeOut> =>
     request<TradeOut>("/api/trades", { method: "POST", body: JSON.stringify(body) }),
+  previewTossPdf: (file: File): Promise<TradeImportPreview> => {
+    const body = new FormData();
+    body.append("file", file);
+    return request<TradeImportPreview>("/api/trades/import-toss-pdf/preview", { method: "POST", body });
+  },
+  commitTossPdf: (body: TradeImportPreview): Promise<{ added: number; updated: number; errors: string[] }> =>
+    request<{ added: number; updated: number; errors: string[] }>("/api/trades/import-toss-pdf/commit", { method: "POST", body: JSON.stringify(body) }),
+  syncFromToss: (): Promise<{ added: number; updated: number; errors: string[] }> =>
+    request<{ added: number; updated: number; errors: string[] }>("/api/trades/sync-from-toss", { method: "POST" }),
   delete: (id: number): Promise<{ ok: boolean }> =>
     request<{ ok: boolean }>(`/api/trades/${id}`, { method: "DELETE" }),
 };

@@ -94,11 +94,15 @@
   --chart-3: #4391ff;
   --chart-4: rgba(242,242,255,0.47);
   --chart-5: rgba(214,224,239,0.4);
+  --portfolio-total: rgba(242,246,255,0.9);
+  --portfolio-total-fill: rgba(242,246,255,0.12);
+  --portfolio-equity: #ff8a00;
 
-  /* ─── 터미널 전용 서피스 변수 (--color-bg-* 참조 컴포넌트 호환) ─── */
+  /* ─── 레거시 서피스 별칭 (--color-bg-* 참조 컴포넌트 호환) ─── */
   --color-bg-primary:    #101013;
   --color-bg-secondary:  rgb(23,23,28);
   --color-bg-tertiary:   rgb(28,28,33);
+  --color-bg:            rgb(23,23,28);
   --color-text-primary:  rgba(242,246,255,0.9);
   --color-text-secondary: rgba(253,253,254,0.89);
   --color-text-muted:    rgba(242,242,255,0.47);
@@ -123,6 +127,71 @@
   --text-muted:    rgba(242,242,255,0.47);
   --text-subtle:   rgba(242,242,255,0.47);
   --text-disabled: rgba(214,224,239,0.3);
+}
+
+.light {
+  /* ─── Toss 라이트 팔레트 → shadcn semantic 변수 ─── */
+  --background:           #f7f8fa;
+  --foreground:           #191f28;
+  --card:                 #ffffff;
+  --card-foreground:      #191f28;
+  --popover:              #ffffff;
+  --popover-foreground:   #191f28;
+  --primary:              #3182f6;
+  --primary-foreground:   #ffffff;
+  --secondary:            #f2f4f6;
+  --secondary-foreground: #333d4b;
+  --muted:                #f2f4f6;
+  --muted-foreground:     #6b7684;
+  --accent:               #eef6ff;
+  --accent-foreground:    #191f28;
+  --destructive:          #dc2e47;
+  --border:               rgba(2,32,71,0.1);
+  --input:                rgba(2,32,71,0.16);
+  --ring:                 #3182f6;
+
+  --rise:      #dc2e47;
+  --fall:      #3182f6;
+  --rise-soft: rgba(220,46,71,0.1);
+  --fall-soft: rgba(49,130,246,0.1);
+  --error:     #dc2e47;
+  --gain: var(--rise);
+  --loss: var(--fall);
+
+  --chart-1: #3182f6;
+  --chart-2: #dc2e47;
+  --chart-3: #0f5bd7;
+  --chart-4: #8b95a1;
+  --chart-5: rgba(107,118,132,0.35);
+  --portfolio-total: #191f28;
+  --portfolio-total-fill: rgba(25,31,40,0.08);
+  --portfolio-equity: #ff8a00;
+
+  --color-bg-primary:    #ffffff;
+  --color-bg-secondary:  #f7f8fa;
+  --color-bg-tertiary:   #f2f4f6;
+  --color-bg:            #f7f8fa;
+  --color-text-primary:  #191f28;
+  --color-text-secondary: #333d4b;
+  --color-text-muted:    #6b7684;
+  --color-connected:     #3182f6;
+  --color-placeholder:   rgba(107,118,132,0.22);
+  --color-primary-dim:   #0f5bd7;
+
+  --surface-body:         #f7f8fa;
+  --surface-card:         #ffffff;
+  --surface-table-header: #f2f4f6;
+  --surface-table-alt:    #f9fafb;
+  --surface-neutral:      #ffffff;
+
+  --border-line:   rgba(2,32,71,0.1);
+  --border-strong: rgba(2,32,71,0.18);
+
+  --text-primary:  #191f28;
+  --text-body:     #333d4b;
+  --text-muted:    #6b7684;
+  --text-subtle:   #8b95a1;
+  --text-disabled: #b0b8c1;
 }
 
 @layer base {
@@ -162,6 +231,22 @@
     opacity: 0.5;
     cursor: pointer;
     filter: invert(1);
+  }
+
+  .light input[type="date"]::-webkit-calendar-picker-indicator {
+    filter: none;
+  }
+
+  .theme-icon-moon {
+    display: none;
+  }
+
+  .light .theme-icon-sun {
+    display: none;
+  }
+
+  .light .theme-icon-moon {
+    display: block;
   }
 }
 

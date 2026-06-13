@@ -51,6 +51,19 @@ export interface TickerHydrate {
 export interface HoldingOut extends HoldingIn {
   ticker: string;
   updated_at: string;
+  sources: Array<{
+    source: string;
+    account_id: string;
+    ticker: string;
+    name: string;
+    currency: string;
+    quantity: number;
+    avg_price: number;
+    sector?: string | null;
+    market?: string | null;
+    excluded_from_portfolio?: boolean | null;
+    updated_at: string;
+  }>;
 }
 
 export interface EventOut {
@@ -66,6 +79,83 @@ export interface CashUpdate {
   cash_usd: number;
 }
 
+export interface HoldingSourceMetaUpdate {
+  source: string;
+  account_id?: string;
+  name?: string;
+  sector?: string;
+  excluded_from_portfolio?: boolean;
+}
+
+export interface CashOut {
+  cash_krw: number;
+  cash_usd: number;
+  total_cash_krw?: number;
+  total_cash_usd?: number;
+  sources?: Array<{
+    source: string;
+    cash_krw: number;
+    cash_usd: number;
+  }>;
+}
+
+export interface JobRun {
+  id: number;
+  job_id: string;
+  status: "running" | "success" | "failed" | "skipped" | string;
+  trigger_type: "schedule" | "manual" | string;
+  started_at: string;
+  finished_at: string | null;
+  duration_ms: number | null;
+  message: string | null;
+  error: string | null;
+  meta_json: Record<string, unknown>;
+}
+
+export interface JobOut {
+  id: string;
+  name: string;
+  category: string;
+  schedule: string;
+  description: string;
+  bootstrap: boolean;
+  bootstrap_description: string | null;
+  latest_run: JobRun | null;
+}
+
+export interface GoldenCrossActive {
+  ticker: string;
+  market: "KR" | "US" | string;
+  group_name: "KOSPI" | "KOSDAQ" | "US" | string | null;
+  name: string | null;
+  first_detected_at: string;
+  last_sent_at: string | null;
+  day_count: number;
+  already_sent_today: boolean;
+}
+
+export interface GoldenCrossHistory {
+  id: number;
+  ticker: string;
+  market: "KR" | "US" | string;
+  group_name: "KOSPI" | "KOSDAQ" | "US" | string | null;
+  name: string | null;
+  status: "NEW" | "MAINTAINED" | "EXPIRED" | "BROKEN" | string;
+  day_count: number | null;
+  cross_start_date: string | null;
+  checked_at: string;
+  close: number | null;
+  ema5: number | null;
+  ema20: number | null;
+  ema60: number | null;
+  reason: string | null;
+}
+
+export interface GoldenCrossOut {
+  active: GoldenCrossActive[];
+  history: GoldenCrossHistory[];
+}
+
 export interface PortfolioRow {
   ticker: string;
   name: string;
@@ -77,6 +167,7 @@ export interface PortfolioRow {
   return_pct: number;
   weight_pct: number;
   sector?: string;
+  market?: string;
 }
 
 export interface TickerPerformance {
@@ -153,8 +244,11 @@ export interface SnapshotHistory {
   ts: string;
   total_equity_krw: number;
   total_with_cash_krw: number;
+  cash_krw: number;
   total_equity_usd: number;
   total_with_cash_usd: number;
+  cash_usd: number;
+  usdkrw: number;
 }
 
 export interface StrategyDef {
@@ -296,6 +390,8 @@ export interface GrowthValuation {
   score_status: "ok" | "missing" | string | null;
   score_message: string | null;
   valuation_source: "BATCH" | "FINVIZ" | string | null;
+  valuation_as_of: string | null;
+  valuation_stale: boolean;
   missing_reasons: string[];
   peg: number | null;
   forward_pe: number | null;
@@ -303,7 +399,7 @@ export interface GrowthValuation {
   forward_eps: number | null;
   forward_revenue_growth: number | null;
   forward_eps_growth: number | null;
-  consensus_status: "ok" | "no_data" | "rate_limited" | "subscription_limited" | "temporary_error" | "missing_key";
+  consensus_status: "ok" | "missing" | "no_data" | "rate_limited" | "subscription_limited" | "temporary_error" | "missing_key";
   consensus_message: string | null;
   consensus_source: "FMP" | "FINVIZ" | "STOCKANALYSIS" | "KIS" | null;
   retry_after: string | null;
@@ -413,6 +509,7 @@ export interface QuoteItem {
 }
 
 export interface QuotesOut {
+  updated_at: string
   SPY: QuoteItem | null
   QQQ: QuoteItem | null
   USDKRW: QuoteItem | null
@@ -527,7 +624,21 @@ export interface TradeIn {
 
 export interface TradeOut extends TradeIn {
   id: number;
+  source: string;
+  external_id?: string | null;
   created_at: string;
+}
+
+export interface TradeImportRow extends TradeIn {
+  row_id: string;
+  name?: string | null;
+  raw_symbol?: string | null;
+  needs_mapping: boolean;
+}
+
+export interface TradeImportPreview {
+  rows: TradeImportRow[];
+  errors: string[];
 }
 
 // ── M8 Performance ─────────────────────────────────────────────────────────

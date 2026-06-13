@@ -7,6 +7,8 @@ from __future__ import annotations
 import hashlib
 import logging
 import time
+from datetime import datetime, timedelta, timezone
+from email.utils import parsedate_to_datetime
 from typing import Optional
 
 import feedparser
@@ -78,3 +80,23 @@ def fetch_news(ticker: str, limit: int = 10) -> list[dict]:
         items = _yahoo_rss(ticker, limit)
     _CACHE[key] = (items, time.time())
     return items
+
+
+def filter_recent_news(items: list[dict], days: int = 7, *, now: datetime | None = None) -> list[dict]:
+    """Keep only items with parseable publish dates inside the recent window."""
+    base = now or datetime.now(timezone.utc)
+    if base.tzinfo is None:
+        base = base.replace(tzinfo=timezone.utc)
+    cutoff = base - timedelta(days=days)
+    recent: list[dict] = []
+    for item in items:
+        published = item.get("published_utc") or item.get("published_date")
+        try:
+            dt = parsedate_to_datetime(str(published))
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+        except Exception:
+            continue
+        if dt >= cutoff:
+            recent.append(item)
+    return recent

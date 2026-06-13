@@ -13,7 +13,7 @@ from core.ema_scan import run_ema_scan, _detect_golden_cross
 # ── 헬퍼 ──────────────────────────────────────────────────────────────
 
 def _make_close(n: int, values: list[float] | None = None) -> pd.Series:
-    idx = pd.date_range("2025-01-01", periods=n, freq="B")
+    idx = pd.bdate_range(end=date.today(), periods=n)
     vals = values if values is not None else [100.0 + i * 0.1 for i in range(n)]
     return pd.Series(vals, index=idx, name="Close")
 
@@ -75,15 +75,25 @@ def test_detect_maintained_cross():
 
 # ── run_ema_scan 통합 테스트 ───────────────────────────────────────────
 
-def _mock_maintained_ohlcv(tickers, start, end):
-    """꾸준한 상승 추세 OHLCV 반환 (EMA5 > EMA20 유지, is_new_cross=False)."""
+def _mock_maintained_ohlcv(tickers, start, end, **kwargs):
+    """최근 4일차 유지 중인 OHLCV 반환."""
+    closes = {}
+    for ticker in tickers:
+        down = [100.0 - i * 0.2 for i in range(86)]
+        base = down[-1]
+        closes[ticker] = _make_close(90, down + [base + 8, base + 14, base + 18, base + 20])
+    return _make_multiindex_df(closes), []
+
+
+def _mock_old_maintained_ohlcv(tickers, start, end, **kwargs):
+    """5일 이상 오래 유지 중인 OHLCV 반환."""
     closes = {}
     for ticker in tickers:
         closes[ticker] = _make_close(90, [80.0 + i * 0.5 for i in range(90)])
     return _make_multiindex_df(closes), []
 
 
-def _mock_new_cross_ohlcv(tickers, start, end):
+def _mock_new_cross_ohlcv(tickers, start, end, **kwargs):
     """EMA5가 EMA20을 방금 상향 돌파하는 OHLCV 반환 (is_new_cross=True)."""
     closes = {}
     for ticker in tickers:
@@ -110,8 +120,33 @@ def test_run_ema_scan_detects_new_cross(fresh_db, monkeypatch, tmp_path):
     mock_tg.assert_called_once()
     msg = mock_tg.call_args[0][0]
     assert "골든크로스" in msg
-    assert "국장" in msg
+    assert "코스피" in msg
     assert "1일차" in msg
+    history = repo.list_golden_cross_history(group_name="KOSPI")
+    assert history[0]["ticker"] == "005930.KS"
+    assert history[0]["status"] == "NEW"
+
+
+def test_run_ema_scan_sends_kospi_and_kosdaq_separately(fresh_db, monkeypatch, tmp_path):
+    """국장은 코스피/코스닥을 별도 메시지로 발송."""
+    ticker_file = tmp_path / "kospi200_tickers.json"
+    ticker_file.write_text(json.dumps(["005930.KS"]))
+    monkeypatch.setenv("KOSPI200_PATH", str(ticker_file))
+    kosdaq_file = tmp_path / "kosdaq150_tickers.json"
+    kosdaq_file.write_text(json.dumps(["035720.KQ"]))
+    monkeypatch.setenv("KOSDAQ150_PATH", str(kosdaq_file))
+
+    with patch("core.ema_scan.fetch_ohlcv", side_effect=_mock_new_cross_ohlcv), \
+         patch("core.ema_scan.send_telegram", return_value=True) as mock_tg:
+        result = run_ema_scan("KR")
+
+    assert result["new"] == 2
+    assert mock_tg.call_count == 2
+    messages = [call.args[0] for call in mock_tg.call_args_list]
+    assert "코스피" in messages[0]
+    assert "005930.KS" in messages[0]
+    assert "코스닥" in messages[1]
+    assert "035720.KQ" in messages[1]
 
 
 def test_run_ema_scan_maintained(fresh_db, monkeypatch, tmp_path):
@@ -142,10 +177,13 @@ def test_run_ema_scan_maintained(fresh_db, monkeypatch, tmp_path):
     mock_tg.assert_called_once()
     msg = mock_tg.call_args[0][0]
     assert "4일차" in msg
+    history = repo.list_golden_cross_history(group_name="US")
+    assert history[0]["ticker"] == "AAPL"
+    assert history[0]["status"] == "MAINTAINED"
 
 
 def test_run_ema_scan_expires_after_7_days(fresh_db, monkeypatch, tmp_path):
-    """day_count=7인 티커 → 전송 후 DB에서 삭제."""
+    """5일 이상 유지 중인 티커 → 발송하지 않고 DB에서 삭제."""
     ticker_file = tmp_path / "sp500_tickers.json"
     ticker_file.write_text(json.dumps(["AAPL"]))
     monkeypatch.setenv("SP500_PATH", str(ticker_file))
@@ -161,11 +199,15 @@ def test_run_ema_scan_expires_after_7_days(fresh_db, monkeypatch, tmp_path):
         s.execute(_text("UPDATE golden_cross_events SET last_sent_at = current_timestamp - INTERVAL '1 day' WHERE ticker = 'AAPL'"))
         s.commit()
 
-    with patch("core.ema_scan.fetch_ohlcv", side_effect=_mock_maintained_ohlcv), \
-         patch("core.ema_scan.send_telegram", return_value=True):
+    with patch("core.ema_scan.fetch_ohlcv", side_effect=_mock_old_maintained_ohlcv), \
+         patch("core.ema_scan.send_telegram", return_value=True) as mock_tg:
         run_ema_scan("US")
 
     assert repo.get_active_golden_crosses("US") == []
+    assert "7일차" not in mock_tg.call_args[0][0]
+    history = repo.list_golden_cross_history(group_name="US")
+    assert history[0]["ticker"] == "AAPL"
+    assert history[0]["status"] == "EXPIRED"
 
 
 def test_run_ema_scan_no_cross_sends_empty_message(fresh_db, monkeypatch, tmp_path):
@@ -177,7 +219,7 @@ def test_run_ema_scan_no_cross_sends_empty_message(fresh_db, monkeypatch, tmp_pa
     nasdaq_file.write_text(json.dumps([]))
     monkeypatch.setenv("NASDAQ100_PATH", str(nasdaq_file))
 
-    def _mock_no_cross(tickers, start, end):
+    def _mock_no_cross(tickers, start, end, **kwargs):
         closes = {}
         for t in tickers:
             closes[t] = _make_close(90, [100.0 - i * 0.3 for i in range(90)])
@@ -189,3 +231,27 @@ def test_run_ema_scan_no_cross_sends_empty_message(fresh_db, monkeypatch, tmp_pa
 
     mock_tg.assert_called_once()
     assert "해당 없음" in mock_tg.call_args[0][0]
+
+
+def test_run_ema_scan_records_broken_history(fresh_db, monkeypatch, tmp_path):
+    ticker_file = tmp_path / "sp500_tickers.json"
+    ticker_file.write_text(json.dumps(["AAPL"]))
+    monkeypatch.setenv("SP500_PATH", str(ticker_file))
+    nasdaq_file = tmp_path / "nasdaq100_tickers.json"
+    nasdaq_file.write_text(json.dumps([]))
+    monkeypatch.setenv("NASDAQ100_PATH", str(nasdaq_file))
+
+    repo.insert_golden_cross("AAPL", "US", "Apple", date.today() - timedelta(days=2), "US")
+
+    def _mock_no_cross(tickers, start, end, **kwargs):
+        closes = {t: _make_close(90, [100.0 - i * 0.3 for i in range(90)]) for t in tickers}
+        return _make_multiindex_df(closes), []
+
+    with patch("core.ema_scan.fetch_ohlcv", side_effect=_mock_no_cross), \
+         patch("core.ema_scan.send_telegram"):
+        run_ema_scan("US")
+
+    assert repo.get_active_golden_crosses("US") == []
+    history = repo.list_golden_cross_history(group_name="US")
+    assert history[0]["ticker"] == "AAPL"
+    assert history[0]["status"] == "BROKEN"

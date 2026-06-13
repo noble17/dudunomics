@@ -255,7 +255,7 @@ def test_growth_valuation_returns_consensus_metrics(client):
         return_value=_consensus(),
         create=True,
     ) as fetch_consensus:
-        response = client.get("/api/growth/ticker/aapl/valuation?universe=sp500")
+        response = client.get("/api/growth/ticker/aapl/valuation?universe=sp500&refresh_consensus=true")
 
     assert response.status_code == 200
     body = response.json()
@@ -282,9 +282,6 @@ def test_growth_valuation_returns_empty_metrics_when_quant_row_is_missing(client
     with patch(
         "api.routers.growth.fetch_price_target_consensus",
         return_value=_consensus(consensus_status="no_data", consensus_message="목표주가 없음"),
-    ), patch("api.routers.growth.fetch_fundamentals", return_value=None), patch(
-        "api.routers.growth.compute_consensus_growth",
-        return_value={"rev_fwd_cagr": None, "eps_fwd_cagr": None, "fwd_years": 0},
     ):
         response = client.get("/api/growth/ticker/BE/valuation?universe=sp500")
 
@@ -297,45 +294,23 @@ def test_growth_valuation_returns_empty_metrics_when_quant_row_is_missing(client
     assert body["score_status"] == "missing"
     assert body["score_message"] == "BE는 sp500 성장주 배치 데이터에 아직 없습니다."
     assert body["missing_reasons"] == [
-        "Finviz fundamentals 미제공",
-        "StockAnalysis 매출 CAGR 미제공",
-        "StockAnalysis EPS CAGR 미제공",
+        "BE 펀더멘털 snapshot이 없습니다.",
+        "데이터 보강 작업 또는 종목 hydrate를 먼저 실행해 주세요.",
     ]
-    assert body["consensus_status"] == "no_data"
+    assert body["consensus_status"] == "missing"
 
 
-def test_growth_valuation_uses_on_demand_fundamentals_when_quant_row_is_missing(client):
-    snap = SimpleNamespace(
-        peg=1.2,
-        forward_pe=18.5,
-        price_to_sales=6.7,
-        forward_eps=2.3,
-    )
-
-    with (
-        patch("api.routers.growth.fetch_fundamentals", return_value=snap) as fetch_fundamentals,
-        patch("api.routers.growth.compute_consensus_growth", return_value={
-            "rev_fwd_cagr": 0.22,
-            "eps_fwd_cagr": 0.31,
-            "fwd_years": 2,
-        }) as compute_growth,
-        patch("api.routers.growth.fetch_price_target_consensus", return_value=_consensus()),
-    ):
+def test_growth_valuation_does_not_fetch_fundamentals_on_page_read(client):
+    with patch("api.routers.growth.fetch_price_target_consensus") as fetch_consensus:
         response = client.get("/api/growth/ticker/BE/valuation?universe=sp500")
 
     assert response.status_code == 200
     body = response.json()
     assert body["score_status"] == "missing"
-    assert body["valuation_source"] == "FINVIZ"
-    assert body["peg"] == 1.2
-    assert body["forward_pe"] == 18.5
-    assert body["psr"] == 6.7
-    assert body["forward_eps"] == 2.3
-    assert body["forward_revenue_growth"] == 0.22
-    assert body["forward_eps_growth"] == 0.31
-    assert body["missing_reasons"] == []
-    fetch_fundamentals.assert_called_once_with("BE")
-    compute_growth.assert_called_once_with("BE")
+    assert body["valuation_source"] is None
+    assert body["peg"] is None
+    assert body["consensus_status"] == "missing"
+    fetch_consensus.assert_not_called()
 
 
 def test_growth_valuation_uses_common_fundamental_snapshot(client):
@@ -364,7 +339,7 @@ def test_growth_valuation_uses_common_fundamental_snapshot(client):
     })
 
     with patch("api.routers.growth.fetch_price_target_consensus", return_value=_consensus()):
-        response = client.get("/api/growth/ticker/BE/valuation?universe=sp500")
+        response = client.get("/api/growth/ticker/BE/valuation?universe=sp500&refresh_consensus=true")
 
     assert response.status_code == 200
     body = response.json()
@@ -386,7 +361,7 @@ def test_growth_valuation_uses_live_price_for_fmp_upside(client, stub_growth_pri
         "api.routers.growth.fetch_price_target_consensus",
         return_value=_consensus(current_price=None, target_mean=240.0, upside_pct=None),
     ):
-        response = client.get("/api/growth/ticker/AAPL/valuation?universe=sp500")
+        response = client.get("/api/growth/ticker/AAPL/valuation?universe=sp500&refresh_consensus=true")
 
     assert response.status_code == 200
     assert response.json()["current_price"] == 200.0
@@ -409,7 +384,7 @@ def test_growth_valuation_overrides_kis_report_price_with_live_price(
             upside_pct=26.18,
         ),
     ):
-        response = client.get("/api/growth/ticker/005930.KS/valuation?universe=kospi200")
+        response = client.get("/api/growth/ticker/005930.KS/valuation?universe=kospi200&refresh_consensus=true")
 
     assert response.status_code == 200
     assert response.json()["current_price"] == 360_500.0
@@ -430,7 +405,7 @@ def test_growth_valuation_keeps_consensus_price_when_live_quote_raises(
             upside_pct=26.18,
         ),
     ), caplog.at_level("WARNING", logger="api.routers.growth"):
-        response = client.get("/api/growth/ticker/005930.KS/valuation?universe=kospi200")
+        response = client.get("/api/growth/ticker/005930.KS/valuation?universe=kospi200&refresh_consensus=true")
 
     assert response.status_code == 200
     assert response.json()["current_price"] == 317_000.0
@@ -455,7 +430,7 @@ def test_growth_valuation_keeps_consensus_price_when_live_quote_is_invalid(
             upside_pct=26.18,
         ),
     ):
-        response = client.get("/api/growth/ticker/005930.KS/valuation?universe=kospi200")
+        response = client.get("/api/growth/ticker/005930.KS/valuation?universe=kospi200&refresh_consensus=true")
 
     assert response.status_code == 200
     assert response.json()["current_price"] == 317_000.0
@@ -481,7 +456,7 @@ def test_growth_valuation_keeps_peg_when_consensus_is_rate_limited(client):
         ),
         create=True,
     ):
-        response = client.get("/api/growth/ticker/AAPL/valuation?universe=sp500")
+        response = client.get("/api/growth/ticker/AAPL/valuation?universe=sp500&refresh_consensus=true")
 
     assert response.status_code == 200
     body = response.json()
@@ -503,7 +478,7 @@ def test_growth_valuation_keeps_peg_when_consensus_fetch_raises(
         "api.routers.growth.fetch_price_target_consensus",
         side_effect=RuntimeError("upstream failed"),
     ), caplog.at_level("WARNING", logger="api.routers.growth"):
-        response = client.get(f"/api/growth/ticker/{ticker}/valuation?universe={universe}")
+        response = client.get(f"/api/growth/ticker/{ticker}/valuation?universe={universe}&refresh_consensus=true")
 
     assert response.status_code == 200
     body = response.json()
@@ -527,7 +502,7 @@ def test_growth_valuation_converts_non_finite_numbers_to_null(client):
         "api.routers.growth.fetch_price_target_consensus",
         return_value=_consensus(target_mean=float("inf"), upside_pct=float("nan")),
     ):
-        response = client.get("/api/growth/ticker/AAPL/valuation?universe=sp500")
+        response = client.get("/api/growth/ticker/AAPL/valuation?universe=sp500&refresh_consensus=true")
 
     assert response.status_code == 200
     body = response.json()

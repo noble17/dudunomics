@@ -41,11 +41,20 @@ class TickerSearchHit(BaseModel):
 class HoldingOut(HoldingIn):
     ticker: str
     updated_at: datetime
+    sources: list[dict] = Field(default_factory=list)
 
 
 class CashUpdate(BaseModel):
     cash_krw: float = 0.0
     cash_usd: float = 0.0
+
+
+class HoldingSourceMetaUpdate(BaseModel):
+    source: str
+    account_id: str = ""
+    name: str | None = None
+    sector: str | None = None
+    excluded_from_portfolio: bool | None = None
 
 
 class PortfolioRow(BaseModel):
@@ -59,6 +68,7 @@ class PortfolioRow(BaseModel):
     return_pct: float
     weight_pct: float
     sector: str | None = None
+    market: str | None = None
 
 
 class PortfolioSnapshot(BaseModel):
@@ -109,8 +119,11 @@ class SnapshotHistory(BaseModel):
     ts: datetime
     total_equity_krw: float
     total_with_cash_krw: float
+    cash_krw: float = 0.0
     total_equity_usd: float
     total_with_cash_usd: float
+    cash_usd: float = 0.0
+    usdkrw: float = 0.0
 
 
 class RiskOptions(BaseModel):
@@ -338,6 +351,8 @@ class GrowthValuationOut(BaseModel):
     score_status: str | None = None
     score_message: str | None = None
     valuation_source: str | None = None
+    valuation_as_of: str | None = None
+    valuation_stale: bool = False
     missing_reasons: list[str] = Field(default_factory=list)
     peg: float | None = None
     forward_pe: float | None = None
@@ -452,6 +467,7 @@ class QuoteItem(BaseModel):
 
 
 class QuotesOut(BaseModel):
+    updated_at: datetime = Field(default_factory=datetime.now)
     SPY: QuoteItem | None = None
     QQQ: QuoteItem | None = None
     USDKRW: QuoteItem | None = None
@@ -562,7 +578,21 @@ class TradeIn(BaseModel):
 
 class TradeOut(TradeIn):
     id: int
+    source: str = "manual"
+    external_id: str | None = None
     created_at: datetime
+
+
+class TradeImportRow(TradeIn):
+    row_id: str
+    name: str | None = None
+    raw_symbol: str | None = None
+    needs_mapping: bool = False
+
+
+class TradeImportPreview(BaseModel):
+    rows: list[TradeImportRow]
+    errors: list[str] = Field(default_factory=list)
 
 
 # ── M8 Performance ────────────────────────────────────────────────────────────
@@ -608,3 +638,60 @@ class SyncResult(BaseModel):
     added: int
     updated: int
     errors: list[str]
+
+
+class JobRunOut(BaseModel):
+    id: int
+    job_id: str
+    status: str
+    trigger_type: str
+    started_at: datetime
+    finished_at: datetime | None = None
+    duration_ms: int | None = None
+    message: str | None = None
+    error: str | None = None
+    meta_json: dict = Field(default_factory=dict)
+
+
+class GoldenCrossActiveOut(BaseModel):
+    ticker: str
+    market: str
+    group_name: str | None = None
+    name: str | None = None
+    first_detected_at: date
+    last_sent_at: datetime | None = None
+    day_count: int
+    already_sent_today: bool = False
+
+
+class GoldenCrossHistoryOut(BaseModel):
+    id: int
+    ticker: str
+    market: str
+    group_name: str | None = None
+    name: str | None = None
+    status: str
+    day_count: int | None = None
+    cross_start_date: date | None = None
+    checked_at: datetime
+    close: float | None = None
+    ema5: float | None = None
+    ema20: float | None = None
+    ema60: float | None = None
+    reason: str | None = None
+
+
+class GoldenCrossOut(BaseModel):
+    active: list[GoldenCrossActiveOut]
+    history: list[GoldenCrossHistoryOut]
+
+
+class JobOut(BaseModel):
+    id: str
+    name: str
+    category: str
+    schedule: str
+    description: str
+    bootstrap: bool = False
+    bootstrap_description: str | None = None
+    latest_run: JobRunOut | None = None

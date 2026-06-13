@@ -1,16 +1,18 @@
 from datetime import datetime, date, timedelta
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from core.auth.deps import current_user, CurrentUser
 from api.models import PortfolioAnalyticsRow, PortfolioRow, PortfolioSnapshot, SnapshotHistory, EventIn, EventOut, PerformanceOut, BenchmarkStats, PerformanceChartPoint, RebalancingRow
 import core.repository as repo
 from core.fx import get_fx_provider
+from core.prices.selection import prefer_toss_market_data
 from core.prices.kis import KISPriceProvider
+from core.prices.toss import TossPriceProvider
 from core.data.ohlcv_cache import fetch_index
 from core.analytics.ticker_performance import build_ticker_performance
 
 router = APIRouter(prefix="/api/portfolio", tags=["portfolio"])
 
-_price_provider = KISPriceProvider()
+_price_provider = TossPriceProvider() if prefer_toss_market_data() else KISPriceProvider()
 _fx_provider = get_fx_provider()
 
 
@@ -29,8 +31,9 @@ def get_current(user: CurrentUser = Depends(current_user)):
     prices = _price_provider.get_current_prices(tickers, markets=markets)
     usdkrw = _get_usdkrw()
 
-    cash_krw = float(repo.get_meta(user.id, "cash_krw") or 0)
-    cash_usd = float(repo.get_meta(user.id, "cash_usd") or 0)
+    cash = repo.get_cash_total(user.id)
+    cash_krw = cash["cash_krw"]
+    cash_usd = cash["cash_usd"]
     cash_total_krw = cash_krw + cash_usd * usdkrw
     cash_total_usd = cash_krw / usdkrw + cash_usd
 
@@ -40,21 +43,22 @@ def get_current(user: CurrentUser = Depends(current_user)):
 
     for h in holdings:
         ticker = h["ticker"]
-        if ticker not in prices:
-            continue
-        p = prices[ticker]
-        mv = p.current * h["quantity"]
-        mv_krw = mv if p.currency == "KRW" else mv * usdkrw
-        mv_usd = mv / usdkrw if p.currency == "KRW" else mv
+        p = prices.get(ticker)
+        current = p.current if p else h["avg_price"]
+        currency = p.currency if p else h["currency"]
+        mv = current * h["quantity"]
+        mv_krw = mv if currency == "KRW" else mv * usdkrw
+        mv_usd = mv / usdkrw if currency == "KRW" else mv
         total_equity_krw += mv_krw
         total_equity_usd += mv_usd
-        ret_pct = (p.current - h["avg_price"]) / h["avg_price"] * 100 if h["avg_price"] else 0
+        ret_pct = (current - h["avg_price"]) / h["avg_price"] * 100 if h["avg_price"] else 0
         rows.append(PortfolioRow(
             ticker=ticker, name=h["name"], quantity=h["quantity"],
-            avg_price=h["avg_price"], current_price=p.current,
-            currency=p.currency, market_value_krw=mv_krw,
+            avg_price=h["avg_price"], current_price=current,
+            currency=currency, market_value_krw=mv_krw,
             return_pct=round(ret_pct, 2), weight_pct=0,
             sector=h.get("sector"),
+            market=h.get("market"),
         ))
 
     denom = total_equity_krw or 1
@@ -75,15 +79,22 @@ def get_current(user: CurrentUser = Depends(current_user)):
 
 
 @router.get("/history", response_model=list[SnapshotHistory])
-def get_history(limit: int = 400, user: CurrentUser = Depends(current_user)):
-    rows = repo.get_snapshots(user.id, limit=limit)
+def get_history(
+    limit: int = 400,
+    bucket: str = Query(default="10m", pattern="^(10m|1h|1d|1w|1mo|raw)$"),
+    user: CurrentUser = Depends(current_user),
+):
+    rows = repo.get_snapshots(user.id, limit=limit) if bucket == "raw" else repo.get_snapshot_rollups(user.id, bucket=bucket, limit=limit)
     return [
         SnapshotHistory(
             ts=r["ts"],
             total_equity_krw=r["total_equity_krw"],
             total_with_cash_krw=r["total_with_cash_krw"],
+            cash_krw=r.get("cash_krw") or 0,
             total_equity_usd=r["total_equity_usd"],
             total_with_cash_usd=r["total_with_cash_usd"],
+            cash_usd=r.get("cash_usd") or 0,
+            usdkrw=r.get("usdkrw") or 0,
         )
         for r in rows
     ]
@@ -159,7 +170,15 @@ def get_performance(
     metrics = repo.calc_performance(equity_series)
 
     benchmark: dict[str, BenchmarkStats] = {}
-    chart: list[PerformanceChartPoint] = []
+    port_map: dict[str, float] = {}
+    if equity_series:
+        base = equity_series[0]["equity"]
+        for e in equity_series:
+            if base > 0:
+                port_map[e["date"]] = round((e["equity"] - base) / base * 100, 2)
+
+    kospi_map: dict[str, float] = {}
+    sp500_map: dict[str, float] = {}
 
     try:
         days = {"1m": 30, "3m": 90, "6m": 180, "1y": 365, "all": 1825}[period]
@@ -179,24 +198,6 @@ def get_performance(
         kospi_map = to_cum_return(kospi_series)
         sp500_map = to_cum_return(sp500_series)
 
-        port_map: dict[str, float] = {}
-        if equity_series:
-            base = equity_series[0]["equity"]
-            for e in equity_series:
-                if base > 0:
-                    port_map[e["date"]] = round((e["equity"] - base) / base * 100, 2)
-
-        all_dates = sorted(set(port_map) | set(kospi_map) | set(sp500_map))
-        chart = [
-            PerformanceChartPoint(
-                date=d,
-                portfolio=port_map.get(d, 0.0),
-                kospi=kospi_map.get(d, 0.0),
-                sp500=sp500_map.get(d, 0.0),
-            )
-            for d in all_dates
-        ]
-
         def bench_total(m: dict) -> float:
             vals = list(m.values())
             return vals[-1] if vals else 0.0
@@ -207,6 +208,17 @@ def get_performance(
         }
     except Exception:
         pass
+
+    all_dates = sorted(set(port_map) | set(kospi_map) | set(sp500_map))
+    chart = [
+        PerformanceChartPoint(
+            date=d,
+            portfolio=port_map.get(d, 0.0),
+            kospi=kospi_map.get(d, 0.0),
+            sp500=sp500_map.get(d, 0.0),
+        )
+        for d in all_dates
+    ]
 
     return PerformanceOut(
         sharpe=metrics["sharpe"],

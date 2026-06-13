@@ -1,15 +1,33 @@
 import time
+from datetime import datetime, timedelta, timezone
+from email.utils import parsedate_to_datetime
 from fastapi import APIRouter, Depends, Query
 from core.auth.deps import current_user, CurrentUser
 from api.models import NewsItem, NewsOut
 from core.data.yf_session import get_session
 from core.data.news_provider import fetch_news as _fetch_news_native
+from core.data.news_provider import filter_recent_news
 
 router = APIRouter(prefix="/api/news", tags=["news"])
 
 # (ticker, limit) → (items, expires_at)
 _cache: dict[tuple[str, int], tuple[list, float]] = {}
 _TTL = 300.0  # 5분
+
+
+def _recent_items(items: list[NewsItem], days: int = 7) -> list[NewsItem]:
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    recent: list[NewsItem] = []
+    for item in items:
+        try:
+            dt = parsedate_to_datetime(item.published_date)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+        except Exception:
+            continue
+        if dt >= cutoff:
+            recent.append(item)
+    return recent
 
 
 def _native_to_items(raw_list: list[dict], limit: int) -> list[NewsItem]:
@@ -22,7 +40,7 @@ def _native_to_items(raw_list: list[dict], limit: int) -> list[NewsItem]:
             site=r.get("publisher", ""),
             image=r.get("thumbnail"),
         ))
-    return items
+    return _recent_items(items, days=7)[:limit]
 
 
 def _yf_to_items(raw_list: list, limit: int) -> list[NewsItem]:
@@ -53,7 +71,7 @@ def _fetch_news(ticker: str, limit: int) -> list[NewsItem]:
             return items
 
     # 1차: native RSS provider (Google News → Yahoo RSS)
-    native_raw = _fetch_news_native(ticker.upper(), limit)
+    native_raw = filter_recent_news(_fetch_news_native(ticker.upper(), limit * 3), days=7)
     if native_raw:
         items = _native_to_items(native_raw, limit)
         _cache[cache_key] = (items, now + _TTL)

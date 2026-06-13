@@ -1,7 +1,9 @@
 import logging
 from fastapi import APIRouter, Depends
 from core.auth.deps import current_user, CurrentUser
+from core.prices.selection import prefer_toss_market_data
 from core.prices.kis import KISPriceProvider
+from core.prices.toss import TossPriceProvider
 from core.prices.upbit import UpbitProvider
 from core.fx import get_fx_provider
 from core.data.market_indices import get_market_indices
@@ -10,7 +12,8 @@ from api.models import QuoteItem, QuotesOut
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/quotes", tags=["quotes"])
 
-_kis = KISPriceProvider()
+_price_provider = TossPriceProvider() if prefer_toss_market_data() else KISPriceProvider()
+_kis = _price_provider
 _fx = get_fx_provider()
 _upbit = UpbitProvider()
 
@@ -29,7 +32,7 @@ def get_quotes(user: CurrentUser = Depends(current_user)):
 
     # SPY / QQQ
     try:
-        prices = _kis.get_current_prices(["SPY", "QQQ"])
+        prices = _price_provider.get_current_prices(["SPY", "QQQ"])
         if "SPY" in prices:
             p = prices["SPY"]
             result.SPY = _make_item(p.current, p.change_pct or 0.0)

@@ -1,7 +1,10 @@
 // frontend/components/portfolio/dashboard.tsx
 "use client";
 
-import type { PortfolioRow, PortfolioSnapshot, SnapshotHistory } from "@/lib/types";
+import Link from "next/link";
+import { Settings } from "lucide-react";
+import type { ReactNode } from "react";
+import type { PortfolioAnalyticsRow, PortfolioRow, PortfolioSnapshot, SnapshotHistory } from "@/lib/types";
 import { KpiCard, type KpiCardProps } from "@/components/common/kpi-card";
 import { WeightPie } from "./weight-pie";
 import { ReturnBar } from "./return-bar";
@@ -10,6 +13,7 @@ import { EquityCurve } from "./equity-curve";
 interface Props {
   snapshot: PortfolioSnapshot;
   history: SnapshotHistory[];
+  analytics?: PortfolioAnalyticsRow[];
 }
 
 const LABEL = "text-[11px] font-medium text-muted-foreground";
@@ -27,11 +31,24 @@ function fmtPct(n: number) {
 }
 
 
-function SectionHeader({ title }: { title: string }) {
+function SectionHeader({ title, action }: { title: string; action?: ReactNode }) {
   return (
-    <div className="border-b border-border px-5 py-3">
+    <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-3">
       <p className={LABEL}>{title}</p>
+      {action}
     </div>
+  );
+}
+
+function HoldingsManageLink() {
+  return (
+    <Link
+      href="/portfolio/holdings"
+      className="inline-flex h-8 w-8 items-center justify-center border border-border bg-background text-muted-foreground transition-colors hover:border-primary hover:text-primary"
+      title="보유종목 관리"
+    >
+      <Settings className="h-4 w-4" />
+    </Link>
   );
 }
 
@@ -50,15 +67,29 @@ function MarketBadge({ label }: { label: string }) {
   );
 }
 
-function HoldingsTable({ rows, usdkrw }: { rows: PortfolioRow[]; usdkrw: number }) {
+function fmtMaybePct(value: number | null | undefined) {
+  if (value == null) return "—";
+  return `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`;
+}
+
+function tone(value: number | null | undefined) {
+  if (value == null) return "text-muted-foreground";
+  return value >= 0 ? "text-gain" : "text-loss";
+}
+
+function HoldingsTable({ rows, usdkrw, analyticsByTicker }: {
+  rows: PortfolioRow[];
+  usdkrw: number;
+  analyticsByTicker: Map<string, PortfolioAnalyticsRow>;
+}) {
   const isKrw = rows[0]?.currency === "KRW";
 
   return (
     <div className="overflow-x-auto">
-      <table className="w-full text-sm">
+      <table className="w-full min-w-[1500px] text-sm">
         <thead className="border-b border-border bg-[var(--card)]">
           <tr>
-            {["종목명", "시장", "섹터", "보유", "평균단가", "현재가", "매입액", "평가액", "평가손익", "수익률"].map((h) => (
+            {["종목명", "시장", "섹터", "보유", "평균단가", "현재가", "매입액", "평가액", "평가손익", "수익률", "1W", "1M", "YTD", "MA20", "MA50", "MA200"].map((h) => (
               <th
                 key={h}
                 className={`px-4 py-3 font-normal ${LABEL} text-right first:text-left`}
@@ -77,7 +108,8 @@ function HoldingsTable({ rows, usdkrw }: { rows: PortfolioRow[]; usdkrw: number 
             const marketValueOrig = isKrw ? row.market_value_krw : row.market_value_krw / usdkrw;
             const pnlClass = pnlKrw >= 0 ? "text-gain" : "text-loss";
             const retClass = row.return_pct >= 0 ? "text-gain" : "text-loss";
-            const market = inferMarket(row.ticker);
+            const market = row.market || inferMarket(row.ticker);
+            const perf = analyticsByTicker.get(row.ticker);
 
             return (
               <tr key={row.ticker} className="border-b border-border last:border-0 hover:bg-[var(--secondary)]">
@@ -127,6 +159,24 @@ function HoldingsTable({ rows, usdkrw }: { rows: PortfolioRow[]; usdkrw: number 
                 <td className={`px-4 py-2 font-data text-right ${retClass}`}>
                   {fmtPct(row.return_pct)}
                 </td>
+                <td className={`px-4 py-2 font-data text-right ${tone(perf?.perf_1w)}`}>
+                  {fmtMaybePct(perf?.perf_1w)}
+                </td>
+                <td className={`px-4 py-2 font-data text-right ${tone(perf?.perf_1m)}`}>
+                  {fmtMaybePct(perf?.perf_1m)}
+                </td>
+                <td className={`px-4 py-2 font-data text-right ${tone(perf?.perf_ytd)}`}>
+                  {fmtMaybePct(perf?.perf_ytd)}
+                </td>
+                <td className={`px-4 py-2 font-data text-right ${tone(perf?.price_vs_ma20)}`}>
+                  {fmtMaybePct(perf?.price_vs_ma20)}
+                </td>
+                <td className={`px-4 py-2 font-data text-right ${tone(perf?.price_vs_ma50)}`}>
+                  {fmtMaybePct(perf?.price_vs_ma50)}
+                </td>
+                <td className={`px-4 py-2 font-data text-right ${tone(perf?.price_vs_ma200)}`}>
+                  {fmtMaybePct(perf?.price_vs_ma200)}
+                </td>
               </tr>
             );
           })}
@@ -136,11 +186,12 @@ function HoldingsTable({ rows, usdkrw }: { rows: PortfolioRow[]; usdkrw: number 
   );
 }
 
-export function PortfolioDashboard({ snapshot, history }: Props) {
+export function PortfolioDashboard({ snapshot, history, analytics = [] }: Props) {
   const { rows, total_equity_krw, total_with_cash_krw, cash_krw, cash_usd, usdkrw, updated_at } = snapshot;
 
   const krRows = rows.filter((r) => r.currency === "KRW");
   const usRows = rows.filter((r) => r.currency === "USD");
+  const analyticsByTicker = new Map(analytics.map((row) => [row.ticker, row]));
 
   const krEquity = krRows.reduce((s, r) => s + r.market_value_krw, 0);
   const usEquity = usRows.reduce((s, r) => s + r.market_value_krw, 0);
@@ -199,29 +250,29 @@ export function PortfolioDashboard({ snapshot, history }: Props) {
       {/* 자산 추이 (2 라인) */}
       <div className="border border-border bg-card p-5">
         <p className={`${LABEL} mb-3`}>자산 추이</p>
-        <EquityCurve history={history} />
+          <EquityCurve snapshot={snapshot} history={history} />
       </div>
 
       {/* 국내 종목 테이블 */}
       <div className="border border-border bg-card">
-        <SectionHeader title="국내 종목" />
+        <SectionHeader title="국내 종목" action={<HoldingsManageLink />} />
         {krRows.length > 0 ? (
-          <HoldingsTable rows={krRows} usdkrw={usdkrw} />
+          <HoldingsTable rows={krRows} usdkrw={usdkrw} analyticsByTicker={analyticsByTicker} />
         ) : (
           <div className="flex h-24 items-center justify-center text-xs text-muted-foreground">
-            보유 종목 없음 — 보유종목 페이지에서 추가하세요
+            보유 종목 없음 — 우측 관리 아이콘에서 추가하세요
           </div>
         )}
       </div>
 
       {/* 해외 종목 테이블 */}
       <div className="border border-border bg-card">
-        <SectionHeader title="해외 종목" />
+        <SectionHeader title="해외 종목" action={<HoldingsManageLink />} />
         {usRows.length > 0 ? (
-          <HoldingsTable rows={usRows} usdkrw={usdkrw} />
+          <HoldingsTable rows={usRows} usdkrw={usdkrw} analyticsByTicker={analyticsByTicker} />
         ) : (
           <div className="flex h-24 items-center justify-center text-xs text-muted-foreground">
-            보유 종목 없음 — 보유종목 페이지에서 추가하세요
+            보유 종목 없음 — 우측 관리 아이콘에서 추가하세요
           </div>
         )}
       </div>

@@ -5,6 +5,7 @@ import useSWR from "swr";
 
 import { TickerDetail } from "@/components/stocks/ticker-detail";
 import { Button } from "@/components/ui/button";
+import { MarketStrip } from "@/components/market/market-strip";
 import { holdingsApi, watchlistsApi } from "@/lib/api";
 import type { TickerSearchHit } from "@/lib/types";
 
@@ -62,6 +63,7 @@ export default function StocksPage() {
           여기서 Watchlist, 좋은종목찾기, 백테스트로 자연스럽게 이어지는 허브로 키울 예정입니다.
         </p>
       </header>
+      <MarketStrip />
 
       <section className="rounded-xl border border-border bg-card p-4">
         <div className="flex flex-wrap items-end gap-3">
@@ -170,7 +172,7 @@ export default function StocksPage() {
       ) : (
         <section className="rounded-xl border border-dashed border-border bg-card/60 p-8 text-center">
           <p className="text-sm text-muted-foreground">
-            관심 있는 종목을 검색하면 Terminal 차트와 매수 검증 카드가 이곳에 표시됩니다.
+            관심 있는 종목을 검색하면 가격 차트와 매수 검증 카드가 이곳에 표시됩니다.
           </p>
         </section>
       )}

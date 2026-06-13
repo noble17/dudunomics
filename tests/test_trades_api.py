@@ -37,6 +37,7 @@ def test_create_buy_trade(trades_client):
     data = res.json()
     assert data["ticker"] == "AAPL"
     assert data["trade_type"] == "BUY"
+    assert data["source"] == "manual"
     assert "id" in data
 
 
@@ -103,3 +104,33 @@ def test_buy_updates_holding_avg_price(trades_client):
     aapl = next(h for h in holdings if h["ticker"] == "AAPL")
     # 두 BUY 합산 → quantity=15
     assert aapl["quantity"] >= 15
+
+
+def test_sync_from_toss_adds_readonly_trades_without_duplicates(trades_client, monkeypatch):
+    monkeypatch.setattr("api.routers.trades.fetch_toss_orders", lambda start_date=None, end_date=None, status="OPEN": [{
+        "external_id": "toss-order-1",
+        "ticker": "AAPL",
+        "market": "NASDAQ",
+        "trade_type": "BUY",
+        "quantity": 2,
+        "price": 200,
+        "currency": "USD",
+        "traded_at": "2026-06-01",
+        "fee": 0,
+        "note": "Toss OpenAPI 주문/체결 동기화",
+    }])
+
+    res = trades_client.post("/api/trades/sync-from-toss")
+    assert res.status_code == 200
+    assert res.json() == {"added": 1, "updated": 0, "errors": []}
+
+    res = trades_client.post("/api/trades/sync-from-toss")
+    assert res.status_code == 200
+    assert res.json() == {"added": 0, "updated": 0, "errors": []}
+
+    trades = trades_client.get("/api/trades").json()
+    toss_trade = next(t for t in trades if t["external_id"] == "toss-order-1")
+    assert toss_trade["source"] == "toss"
+
+    delete_res = trades_client.delete(f"/api/trades/{toss_trade['id']}")
+    assert delete_res.status_code == 422

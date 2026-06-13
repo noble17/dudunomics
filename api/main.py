@@ -27,6 +27,8 @@ from api.routers.ema_scan import router as ema_scan_router
 from api.routers.growth import router as growth_router
 from api.routers.watchlists import router as watchlists_router
 from api.routers.tickers import router as tickers_router
+from api.routers.jobs import router as jobs_router
+from api.routers.golden_cross import router as golden_cross_router
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
@@ -71,6 +73,8 @@ app.include_router(ema_scan_router)
 app.include_router(growth_router)
 app.include_router(watchlists_router)
 app.include_router(tickers_router)
+app.include_router(jobs_router)
+app.include_router(golden_cross_router)
 
 @app.get("/health")
 def health():

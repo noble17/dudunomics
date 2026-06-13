@@ -301,6 +301,8 @@ def _init_schema(engine):
     CREATE TABLE IF NOT EXISTS trades (
         id          INTEGER DEFAULT nextval('trades_id_seq') PRIMARY KEY,
         user_id     INTEGER NOT NULL,
+        source      TEXT DEFAULT 'manual',
+        external_id TEXT,
         ticker      VARCHAR NOT NULL,
         market      VARCHAR,
         trade_type  VARCHAR NOT NULL,
@@ -330,11 +332,30 @@ def _init_schema(engine):
         id                 INTEGER DEFAULT nextval('golden_cross_events_id_seq') PRIMARY KEY,
         ticker             VARCHAR NOT NULL,
         market             VARCHAR NOT NULL,
+        group_name         VARCHAR,
         name               VARCHAR,
         first_detected_at  DATE NOT NULL,
         last_sent_at       TIMESTAMP,
         day_count          INTEGER DEFAULT 1,
         UNIQUE(ticker)
+    );
+
+    CREATE SEQUENCE IF NOT EXISTS golden_cross_history_id_seq START 1;
+    CREATE TABLE IF NOT EXISTS golden_cross_history (
+        id                 INTEGER DEFAULT nextval('golden_cross_history_id_seq') PRIMARY KEY,
+        ticker             VARCHAR NOT NULL,
+        market             VARCHAR NOT NULL,
+        group_name         VARCHAR,
+        name               VARCHAR,
+        status             VARCHAR NOT NULL,
+        day_count          INTEGER,
+        cross_start_date   DATE,
+        checked_at         TIMESTAMP DEFAULT current_timestamp,
+        close              DOUBLE,
+        ema5               DOUBLE,
+        ema20              DOUBLE,
+        ema60              DOUBLE,
+        reason             VARCHAR
     );
     """
     with engine.connect() as conn:
@@ -388,6 +409,16 @@ def _init_schema(engine):
             "CREATE TABLE IF NOT EXISTS ticker_profiles (ticker TEXT PRIMARY KEY, name TEXT, market TEXT, country TEXT, currency TEXT, sector TEXT, industry TEXT, exchange TEXT, source TEXT, updated_at TIMESTAMP DEFAULT current_timestamp)",
             "CREATE TABLE IF NOT EXISTS fundamental_snapshots (ticker TEXT NOT NULL, as_of DATE NOT NULL, source TEXT NOT NULL, per DOUBLE, pbr DOUBLE, psr DOUBLE, peg DOUBLE, forward_pe DOUBLE, trailing_pe DOUBLE, forward_eps DOUBLE, eps_ttm DOUBLE, roe DOUBLE, roic DOUBLE, debt_ratio DOUBLE, current_ratio DOUBLE, gross_margin DOUBLE, operating_margin DOUBLE, revenue_growth DOUBLE, eps_growth DOUBLE, market_cap DOUBLE, raw_json JSON, fetched_at TIMESTAMP DEFAULT current_timestamp, PRIMARY KEY (ticker, as_of, source))",
             "CREATE TABLE IF NOT EXISTS ticker_data_status (ticker TEXT NOT NULL, data_type TEXT NOT NULL, source TEXT NOT NULL, min_date DATE, max_date DATE, last_fetched_at TIMESTAMP, last_success_at TIMESTAMP, last_error TEXT, coverage_json JSON, PRIMARY KEY (ticker, data_type, source))",
+            "CREATE TABLE IF NOT EXISTS holding_sources (user_id INTEGER NOT NULL, source TEXT NOT NULL, account_id TEXT NOT NULL DEFAULT '', ticker TEXT NOT NULL, name TEXT NOT NULL, currency TEXT NOT NULL, quantity DOUBLE NOT NULL, avg_price DOUBLE NOT NULL, sector TEXT, market TEXT, excluded_from_portfolio BOOLEAN DEFAULT FALSE, updated_at TIMESTAMP DEFAULT current_timestamp, PRIMARY KEY (user_id, source, account_id, ticker))",
+            "CREATE TABLE IF NOT EXISTS portfolio_snapshot_rollups (user_id INTEGER NOT NULL, bucket TEXT NOT NULL, ts TIMESTAMP NOT NULL, total_equity_krw DOUBLE, total_with_cash_krw DOUBLE, cash_krw DOUBLE, total_equity_usd DOUBLE, total_with_cash_usd DOUBLE, cash_usd DOUBLE, usdkrw DOUBLE, PRIMARY KEY (user_id, bucket, ts))",
+            "CREATE SEQUENCE IF NOT EXISTS job_runs_id_seq START 1",
+            "CREATE TABLE IF NOT EXISTS job_runs (id INTEGER DEFAULT nextval('job_runs_id_seq') PRIMARY KEY, job_id TEXT NOT NULL, status TEXT NOT NULL, trigger_type TEXT NOT NULL, started_at TIMESTAMP NOT NULL, finished_at TIMESTAMP, duration_ms INTEGER, message TEXT, error TEXT, meta_json JSON)",
+            "CREATE INDEX IF NOT EXISTS idx_job_runs_job_started ON job_runs (job_id, started_at)",
+            "ALTER TABLE golden_cross_events ADD COLUMN IF NOT EXISTS group_name VARCHAR",
+            "CREATE SEQUENCE IF NOT EXISTS golden_cross_history_id_seq START 1",
+            "CREATE TABLE IF NOT EXISTS golden_cross_history (id INTEGER DEFAULT nextval('golden_cross_history_id_seq') PRIMARY KEY, ticker VARCHAR NOT NULL, market VARCHAR NOT NULL, group_name VARCHAR, name VARCHAR, status VARCHAR NOT NULL, day_count INTEGER, cross_start_date DATE, checked_at TIMESTAMP DEFAULT current_timestamp, close DOUBLE, ema5 DOUBLE, ema20 DOUBLE, ema60 DOUBLE, reason VARCHAR)",
+            "CREATE INDEX IF NOT EXISTS idx_golden_cross_history_checked ON golden_cross_history (checked_at)",
+            "CREATE INDEX IF NOT EXISTS idx_golden_cross_history_ticker ON golden_cross_history (ticker, checked_at)",
         ]:
             try:
                 conn.execute(text(migration))
@@ -499,6 +530,84 @@ def _run_migrations(conn):
             "ALTER TABLE holdings ADD COLUMN target_weight DOUBLE DEFAULT NULL"
         ))
 
+    if not _has_column(conn, "trades", "source"):
+        conn.execute(text("ALTER TABLE trades ADD COLUMN source TEXT DEFAULT 'manual'"))
+        conn.execute(text("UPDATE trades SET source = 'manual' WHERE source IS NULL"))
+    if not _has_column(conn, "trades", "external_id"):
+        conn.execute(text("ALTER TABLE trades ADD COLUMN external_id TEXT"))
+    try:
+        conn.execute(text(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_trades_source_external "
+            "ON trades (user_id, source, external_id)"
+        ))
+    except Exception:
+        pass
+
+    conn.execute(text("CREATE SEQUENCE IF NOT EXISTS job_runs_id_seq START 1"))
+    conn.execute(text("""
+        CREATE TABLE IF NOT EXISTS job_runs (
+            id           INTEGER DEFAULT nextval('job_runs_id_seq') PRIMARY KEY,
+            job_id       TEXT NOT NULL,
+            status       TEXT NOT NULL,
+            trigger_type TEXT NOT NULL,
+            started_at   TIMESTAMP NOT NULL,
+            finished_at  TIMESTAMP,
+            duration_ms  INTEGER,
+            message      TEXT,
+            error        TEXT,
+            meta_json    JSON
+        )
+    """))
+    conn.execute(text(
+        "CREATE INDEX IF NOT EXISTS idx_job_runs_job_started ON job_runs (job_id, started_at)"
+    ))
+    conn.execute(text("""
+        CREATE TABLE IF NOT EXISTS portfolio_snapshot_rollups (
+            user_id              INTEGER NOT NULL,
+            bucket               TEXT NOT NULL,
+            ts                   TIMESTAMP NOT NULL,
+            total_equity_krw     DOUBLE,
+            total_with_cash_krw  DOUBLE,
+            cash_krw             DOUBLE,
+            total_equity_usd     DOUBLE,
+            total_with_cash_usd  DOUBLE,
+            cash_usd             DOUBLE,
+            usdkrw               DOUBLE,
+            PRIMARY KEY (user_id, bucket, ts)
+        )
+    """))
+
+    conn.execute(text("""
+        CREATE TABLE IF NOT EXISTS holding_sources (
+            user_id    INTEGER NOT NULL,
+            source     TEXT NOT NULL,
+            account_id TEXT NOT NULL DEFAULT '',
+            ticker     TEXT NOT NULL,
+            name       TEXT NOT NULL,
+            currency   TEXT NOT NULL,
+            quantity   DOUBLE NOT NULL,
+            avg_price  DOUBLE NOT NULL,
+            sector     TEXT,
+            market     TEXT,
+            excluded_from_portfolio BOOLEAN DEFAULT FALSE,
+            updated_at TIMESTAMP DEFAULT current_timestamp,
+            PRIMARY KEY (user_id, source, account_id, ticker)
+        )
+    """))
+    if not _has_column(conn, "holding_sources", "excluded_from_portfolio"):
+        conn.execute(text(
+            "ALTER TABLE holding_sources ADD COLUMN excluded_from_portfolio BOOLEAN DEFAULT FALSE"
+        ))
+    existing_sources = conn.execute(text("SELECT COUNT(*) FROM holding_sources")).fetchone()[0]
+    if existing_sources == 0:
+        conn.execute(text("""
+            INSERT INTO holding_sources
+              (user_id, source, account_id, ticker, name, currency, quantity, avg_price, sector, market, excluded_from_portfolio, updated_at)
+            SELECT user_id, 'manual', '', ticker, name, currency, quantity, avg_price, sector, market, false, updated_at
+            FROM holdings
+            WHERE quantity > 0
+        """))
+
     # trades: 기존 holdings를 Day 0 BUY로 시딩 (최초 1회)
     seeded = conn.execute(text("SELECT COUNT(*) FROM trades")).fetchone()[0]
     if seeded == 0:
@@ -600,15 +709,54 @@ def get_active_user_ids_with_holdings() -> list[int]:
         return [r[0] for r in rows]
 
 
+def get_active_user_ids() -> list[int]:
+    with session() as s:
+        rows = s.execute(text(
+            "SELECT id FROM users WHERE is_active = true ORDER BY id"
+        )).fetchall()
+        return [r[0] for r in rows]
+
+
 # ── Holdings ──────────────────────────────────────────────────────────────────
 
-def get_holdings(user_id: int) -> list[dict]:
+def get_holdings(user_id: int, include_excluded: bool = False) -> list[dict]:
     with session() as s:
-        rows = s.execute(
-            text("SELECT * FROM holdings WHERE user_id = :uid ORDER BY ticker"),
-            {"uid": user_id},
-        ).mappings().all()
-        return [dict(r) for r in rows]
+        if include_excluded:
+            rows = s.execute(text("""
+                SELECT
+                  user_id, ticker,
+                  any_value(name) AS name,
+                  any_value(currency) AS currency,
+                  sum(quantity) AS quantity,
+                  sum(quantity * avg_price) / nullif(sum(quantity), 0) AS avg_price,
+                  any_value(sector) AS sector,
+                  any_value(market) AS market,
+                  max(updated_at) AS updated_at
+                FROM holding_sources
+                WHERE user_id = :uid AND quantity > 0
+                GROUP BY user_id, ticker
+                ORDER BY ticker
+            """), {"uid": user_id}).mappings().all()
+        else:
+            rows = s.execute(
+                text("SELECT * FROM holdings WHERE user_id = :uid ORDER BY ticker"),
+                {"uid": user_id},
+            ).mappings().all()
+        result = [dict(r) for r in rows]
+        if not result:
+            return result
+        sources = s.execute(text("""
+            SELECT source, account_id, ticker, name, currency, quantity, avg_price, sector, market, excluded_from_portfolio, updated_at
+            FROM holding_sources
+            WHERE user_id = :uid
+            ORDER BY ticker, source, account_id
+        """), {"uid": user_id}).mappings().all()
+        by_ticker: dict[str, list[dict]] = {}
+        for row in sources:
+            by_ticker.setdefault(row["ticker"], []).append(dict(row))
+        for row in result:
+            row["sources"] = by_ticker.get(row["ticker"], [])
+        return result
 
 
 def upsert_holding(
@@ -620,33 +768,128 @@ def upsert_holding(
     avg_price: float,
     sector: str | None = None,
     market: str | None = None,
+    source: str = "manual",
+    account_id: str = "",
+    preserve_display_fields: bool = False,
 ):
     now = datetime.now()
     with session() as s:
         s.execute(text("""
-            INSERT INTO holdings (user_id, ticker, name, currency, quantity, avg_price, sector, market, updated_at)
-            VALUES (:uid, :ticker, :name, :currency, :quantity, :avg_price, :sector, :market, :now)
-            ON CONFLICT (user_id, ticker) DO UPDATE SET
-                name       = excluded.name,
+            INSERT INTO holding_sources
+              (user_id, source, account_id, ticker, name, currency, quantity, avg_price, sector, market, updated_at)
+            VALUES (:uid, :source, :account_id, :ticker, :name, :currency, :quantity, :avg_price, :sector, :market, :now)
+            ON CONFLICT (user_id, source, account_id, ticker) DO UPDATE SET
+                name       = CASE WHEN :preserve_display_fields THEN holding_sources.name ELSE excluded.name END,
                 currency   = excluded.currency,
                 quantity   = excluded.quantity,
                 avg_price  = excluded.avg_price,
-                sector     = excluded.sector,
+                sector     = CASE WHEN :preserve_display_fields THEN holding_sources.sector ELSE excluded.sector END,
                 market     = excluded.market,
                 updated_at = :now
-        """), {"uid": user_id, "ticker": ticker, "name": name, "currency": currency,
+        """), {"uid": user_id, "source": source, "account_id": account_id, "ticker": ticker, "name": name, "currency": currency,
                "quantity": quantity, "avg_price": avg_price,
-               "sector": sector, "market": market, "now": now})
+               "sector": sector, "market": market, "preserve_display_fields": preserve_display_fields, "now": now})
+        _rebuild_holding_aggregate(s, user_id, ticker)
         s.commit()
 
 
-def delete_holding(user_id: int, ticker: str):
+def delete_holding(user_id: int, ticker: str, source: str = "manual", account_id: str = ""):
     with session() as s:
         s.execute(
-            text("DELETE FROM holdings WHERE user_id = :uid AND ticker = :ticker"),
-            {"uid": user_id, "ticker": ticker},
+            text("DELETE FROM holding_sources WHERE user_id = :uid AND ticker = :ticker AND source = :source AND account_id = :account_id"),
+            {"uid": user_id, "ticker": ticker, "source": source, "account_id": account_id},
         )
+        _rebuild_holding_aggregate(s, user_id, ticker)
         s.commit()
+
+
+def update_holding_source_meta(
+    user_id: int,
+    ticker: str,
+    source: str,
+    account_id: str = "",
+    name: str | None = None,
+    sector: str | None = None,
+    excluded_from_portfolio: bool | None = None,
+) -> bool:
+    set_name = name is not None
+    set_sector = sector is not None
+    set_excluded = excluded_from_portfolio is not None
+    with session() as s:
+        s.execute(text("""
+            UPDATE holding_sources
+            SET name = CASE WHEN :set_name THEN :name ELSE name END,
+                sector = CASE WHEN :set_sector THEN :sector ELSE sector END,
+                excluded_from_portfolio = CASE WHEN :set_excluded THEN :excluded ELSE excluded_from_portfolio END,
+                updated_at = :now
+            WHERE user_id = :uid
+              AND ticker = :ticker
+              AND source = :source
+              AND account_id = :account_id
+        """), {
+            "uid": user_id,
+            "ticker": ticker,
+            "source": source,
+            "account_id": account_id,
+            "name": name,
+            "set_name": set_name,
+            "sector": sector,
+            "set_sector": set_sector,
+            "set_excluded": set_excluded,
+            "excluded": bool(excluded_from_portfolio) if excluded_from_portfolio is not None else False,
+            "now": datetime.now(),
+        })
+        exists = s.execute(text("""
+            SELECT 1 FROM holding_sources
+            WHERE user_id = :uid
+              AND ticker = :ticker
+              AND source = :source
+              AND account_id = :account_id
+        """), {
+            "uid": user_id,
+            "ticker": ticker,
+            "source": source,
+            "account_id": account_id,
+        }).fetchone() is not None
+        if exists:
+            _rebuild_holding_aggregate(s, user_id, ticker)
+        s.commit()
+        return exists
+
+
+def _rebuild_holding_aggregate(s, user_id: int, ticker: str) -> None:
+    rows = s.execute(text("""
+        SELECT * FROM holding_sources
+        WHERE user_id = :uid AND ticker = :ticker AND quantity > 0 AND coalesce(excluded_from_portfolio, false) = false
+    """), {"uid": user_id, "ticker": ticker}).mappings().all()
+    if not rows:
+        s.execute(text("DELETE FROM holdings WHERE user_id = :uid AND ticker = :ticker"), {"uid": user_id, "ticker": ticker})
+        return
+
+    quantity = sum(float(r["quantity"] or 0) for r in rows)
+    total_cost = sum(float(r["quantity"] or 0) * float(r["avg_price"] or 0) for r in rows)
+    avg_price = total_cost / quantity if quantity else 0.0
+    first = dict(rows[0])
+    now = datetime.now()
+    target = s.execute(text("""
+        SELECT target_weight FROM holdings WHERE user_id = :uid AND ticker = :ticker
+    """), {"uid": user_id, "ticker": ticker}).fetchone()
+    target_weight = target[0] if target else None
+    s.execute(text("""
+        INSERT INTO holdings (user_id, ticker, name, currency, quantity, avg_price, sector, market, target_weight, updated_at)
+        VALUES (:uid, :ticker, :name, :currency, :quantity, :avg_price, :sector, :market, :target_weight, :now)
+        ON CONFLICT (user_id, ticker) DO UPDATE SET
+            name = excluded.name,
+            currency = excluded.currency,
+            quantity = excluded.quantity,
+            avg_price = excluded.avg_price,
+            sector = excluded.sector,
+            market = excluded.market,
+            target_weight = excluded.target_weight,
+            updated_at = :now
+    """), {"uid": user_id, "ticker": ticker, "name": first["name"], "currency": first["currency"],
+           "quantity": quantity, "avg_price": avg_price, "sector": first.get("sector"),
+           "market": first.get("market"), "target_weight": target_weight, "now": now})
 
 
 # ── Meta (현금 등) ─────────────────────────────────────────────────────────────
@@ -667,6 +910,172 @@ def set_meta(user_id: int, key: str, value: str):
             ON CONFLICT (user_id, key) DO UPDATE SET value = excluded.value
         """), {"uid": user_id, "key": key, "value": value})
         s.commit()
+
+
+def get_cash_sources(user_id: int) -> list[dict]:
+    sources = []
+    for source in ("manual", "toss", "kis"):
+        krw = get_meta(user_id, f"cash_krw_{source}")
+        usd = get_meta(user_id, f"cash_usd_{source}")
+        if krw is None and usd is None:
+            continue
+        sources.append({
+            "source": source,
+            "cash_krw": float(krw or 0),
+            "cash_usd": float(usd or 0),
+        })
+    return sources
+
+
+def get_cash_source(user_id: int, source: str) -> dict:
+    krw = get_meta(user_id, f"cash_krw_{source}")
+    usd = get_meta(user_id, f"cash_usd_{source}")
+    if source == "manual" and krw is None and usd is None:
+        has_source_cash = any(
+            get_meta(user_id, f"cash_krw_{s}") is not None or get_meta(user_id, f"cash_usd_{s}") is not None
+            for s in ("toss", "kis")
+        )
+        if not has_source_cash:
+            krw = get_meta(user_id, "cash_krw")
+            usd = get_meta(user_id, "cash_usd")
+    return {"cash_krw": float(krw or 0), "cash_usd": float(usd or 0)}
+
+
+def get_cash_total(user_id: int) -> dict:
+    sources = get_cash_sources(user_id)
+    if not sources:
+        return {
+            "cash_krw": float(get_meta(user_id, "cash_krw") or 0),
+            "cash_usd": float(get_meta(user_id, "cash_usd") or 0),
+        }
+    return {
+        "cash_krw": sum(s["cash_krw"] for s in sources),
+        "cash_usd": sum(s["cash_usd"] for s in sources),
+    }
+
+
+def set_cash_source(user_id: int, source: str, cash_krw: float, cash_usd: float):
+    set_meta(user_id, f"cash_krw_{source}", str(cash_krw))
+    set_meta(user_id, f"cash_usd_{source}", str(cash_usd))
+    total = get_cash_total(user_id)
+    set_meta(user_id, "cash_krw", str(total["cash_krw"]))
+    set_meta(user_id, "cash_usd", str(total["cash_usd"]))
+
+
+# ── Job Runs ─────────────────────────────────────────────────────────────────
+
+def start_job_run(job_id: str, trigger_type: str) -> tuple[int, bool]:
+    now = datetime.now()
+    with session() as s:
+        running = s.execute(text("""
+            SELECT id FROM job_runs
+            WHERE job_id = :job_id AND status = 'running'
+            ORDER BY started_at DESC
+            LIMIT 1
+        """), {"job_id": job_id}).fetchone()
+        if running:
+            row = s.execute(text("""
+                INSERT INTO job_runs
+                  (job_id, status, trigger_type, started_at, finished_at, duration_ms, message)
+                VALUES (:job_id, 'skipped', :trigger_type, :now, :now, 0, :message)
+                RETURNING id
+            """), {
+                "job_id": job_id,
+                "trigger_type": trigger_type,
+                "now": now,
+                "message": "이미 실행 중인 작업이 있어 건너뜀",
+            }).fetchone()
+            s.commit()
+            return int(row[0]), False
+
+        row = s.execute(text("""
+            INSERT INTO job_runs (job_id, status, trigger_type, started_at)
+            VALUES (:job_id, 'running', :trigger_type, :now)
+            RETURNING id
+        """), {"job_id": job_id, "trigger_type": trigger_type, "now": now}).fetchone()
+        s.commit()
+        return int(row[0]), True
+
+
+def finish_job_run(
+    run_id: int,
+    status: str,
+    *,
+    message: str | None = None,
+    error: str | None = None,
+    meta: dict | None = None,
+) -> None:
+    finished_at = datetime.now()
+    with session() as s:
+        started = s.execute(
+            text("SELECT started_at FROM job_runs WHERE id = :id"),
+            {"id": run_id},
+        ).fetchone()
+        started_at = started[0] if started else finished_at
+        duration_ms = int((finished_at - started_at).total_seconds() * 1000)
+        s.execute(text("""
+            UPDATE job_runs
+            SET status = :status,
+                finished_at = :finished_at,
+                duration_ms = :duration_ms,
+                message = :message,
+                error = :error,
+                meta_json = :meta_json
+            WHERE id = :id
+        """), {
+            "id": run_id,
+            "status": status,
+            "finished_at": finished_at,
+            "duration_ms": duration_ms,
+            "message": message,
+            "error": error,
+            "meta_json": json.dumps(meta or {}, ensure_ascii=False),
+        })
+        s.commit()
+
+
+def get_latest_job_runs() -> dict[str, dict]:
+    with session() as s:
+        rows = s.execute(text("""
+            SELECT *
+            FROM (
+                SELECT *, row_number() OVER (PARTITION BY job_id ORDER BY started_at DESC) AS rn
+                FROM job_runs
+            )
+            WHERE rn = 1
+        """)).mappings().all()
+        return {row["job_id"]: _job_run_row(row) for row in rows}
+
+
+def list_job_runs(job_id: str | None = None, limit: int = 50) -> list[dict]:
+    sql = """
+        SELECT * FROM job_runs
+        {where}
+        ORDER BY started_at DESC
+        LIMIT :limit
+    """
+    params: dict[str, object] = {"limit": limit}
+    where = ""
+    if job_id:
+        where = "WHERE job_id = :job_id"
+        params["job_id"] = job_id
+    with session() as s:
+        rows = s.execute(text(sql.format(where=where)), params).mappings().all()
+        return [_job_run_row(row) for row in rows]
+
+
+def _job_run_row(row) -> dict:
+    out = dict(row)
+    out.pop("rn", None)
+    raw = out.get("meta_json")
+    if isinstance(raw, str) and raw:
+        try:
+            out["meta_json"] = json.loads(raw)
+        except Exception:
+            out["meta_json"] = {}
+    elif raw is None:
+        out["meta_json"] = {}
+    return out
 
 
 # ── Portfolio Snapshots ───────────────────────────────────────────────────────
@@ -709,6 +1118,108 @@ def get_snapshots(user_id: int, limit: int = 400) -> list[dict]:
             "ORDER BY ts DESC LIMIT :limit"
         ), {"uid": user_id, "limit": limit}).mappings().all()
         return [dict(r) for r in rows]
+
+
+SNAPSHOT_BUCKETS = ("10m", "1h", "1d", "1w", "1mo")
+
+
+def _snapshot_bucket_ts(ts: datetime, bucket: str) -> datetime:
+    if bucket == "10m":
+        return ts.replace(minute=(ts.minute // 10) * 10, second=0, microsecond=0)
+    if bucket == "1h":
+        return ts.replace(minute=0, second=0, microsecond=0)
+    if bucket == "1d":
+        return ts.replace(hour=0, minute=0, second=0, microsecond=0)
+    if bucket == "1w":
+        start = ts - timedelta(days=ts.weekday())
+        return start.replace(hour=0, minute=0, second=0, microsecond=0)
+    if bucket == "1mo":
+        return ts.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    raise ValueError(f"unsupported snapshot bucket: {bucket}")
+
+
+def refresh_snapshot_rollups(user_id: int | None = None, buckets: tuple[str, ...] = SNAPSHOT_BUCKETS) -> dict:
+    for bucket in buckets:
+        if bucket not in SNAPSHOT_BUCKETS:
+            raise ValueError(f"unsupported snapshot bucket: {bucket}")
+
+    with session() as s:
+        if user_id is None:
+            rows = s.execute(text("""
+                SELECT user_id, ts, total_equity_krw, total_with_cash_krw, cash_krw,
+                       total_equity_usd, total_with_cash_usd, cash_usd, usdkrw
+                FROM portfolio_snapshots
+                ORDER BY user_id, ts
+            """)).mappings().all()
+        else:
+            rows = s.execute(text("""
+                SELECT user_id, ts, total_equity_krw, total_with_cash_krw, cash_krw,
+                       total_equity_usd, total_with_cash_usd, cash_usd, usdkrw
+                FROM portfolio_snapshots
+                WHERE user_id = :uid
+                ORDER BY user_id, ts
+            """), {"uid": user_id}).mappings().all()
+
+        latest: dict[tuple[int, str, datetime], dict] = {}
+        for row in rows:
+            for bucket in buckets:
+                key = (int(row["user_id"]), bucket, _snapshot_bucket_ts(row["ts"], bucket))
+                latest[key] = dict(row)
+
+        for (uid, bucket, bucket_ts), row in latest.items():
+            s.execute(text("""
+                INSERT INTO portfolio_snapshot_rollups
+                  (user_id, bucket, ts, total_equity_krw, total_with_cash_krw, cash_krw,
+                   total_equity_usd, total_with_cash_usd, cash_usd, usdkrw)
+                VALUES
+                  (:uid, :bucket, :ts, :total_equity_krw, :total_with_cash_krw, :cash_krw,
+                   :total_equity_usd, :total_with_cash_usd, :cash_usd, :usdkrw)
+                ON CONFLICT (user_id, bucket, ts) DO UPDATE SET
+                  total_equity_krw = excluded.total_equity_krw,
+                  total_with_cash_krw = excluded.total_with_cash_krw,
+                  cash_krw = excluded.cash_krw,
+                  total_equity_usd = excluded.total_equity_usd,
+                  total_with_cash_usd = excluded.total_with_cash_usd,
+                  cash_usd = excluded.cash_usd,
+                  usdkrw = excluded.usdkrw
+            """), {
+                "uid": uid,
+                "bucket": bucket,
+                "ts": bucket_ts,
+                "total_equity_krw": row["total_equity_krw"],
+                "total_with_cash_krw": row["total_with_cash_krw"],
+                "cash_krw": row.get("cash_krw") or 0,
+                "total_equity_usd": row["total_equity_usd"],
+                "total_with_cash_usd": row["total_with_cash_usd"],
+                "cash_usd": row.get("cash_usd") or 0,
+                "usdkrw": row.get("usdkrw") or 0,
+            })
+        s.commit()
+        return {"buckets": list(buckets), "rows": len(latest)}
+
+
+def get_snapshot_rollups(user_id: int, bucket: str = "10m", limit: int = 400) -> list[dict]:
+    if bucket not in SNAPSHOT_BUCKETS:
+        raise ValueError(f"unsupported snapshot bucket: {bucket}")
+    with session() as s:
+        rows = s.execute(text("""
+            SELECT ts, total_equity_krw, total_with_cash_krw, cash_krw,
+                   total_equity_usd, total_with_cash_usd, cash_usd, usdkrw
+            FROM portfolio_snapshot_rollups
+            WHERE user_id = :uid AND bucket = :bucket
+            ORDER BY ts DESC LIMIT :limit
+        """), {"uid": user_id, "bucket": bucket, "limit": limit}).mappings().all()
+    if not rows:
+        refresh_snapshot_rollups(user_id=user_id, buckets=(bucket,))
+        with session() as s:
+            rows = s.execute(text("""
+                SELECT ts, total_equity_krw, total_with_cash_krw, cash_krw,
+                       total_equity_usd, total_with_cash_usd, cash_usd, usdkrw
+                FROM portfolio_snapshot_rollups
+                WHERE user_id = :uid AND bucket = :bucket
+                ORDER BY ts DESC LIMIT :limit
+            """), {"uid": user_id, "bucket": bucket, "limit": limit}).mappings().all()
+    return [dict(r) for r in rows]
 
 
 # ── FX Rates (공유, user_id 불필요) ──────────────────────────────────────────
@@ -893,6 +1404,28 @@ def get_latest_fundamental_snapshot(ticker: str) -> dict | None:
     if isinstance(raw, str):
         result["raw_json"] = json.loads(raw)
     return result
+
+
+def list_fundamental_hydration_tickers() -> list[str]:
+    """관심종목/보유종목에서 미국/해외 펀더멘털 수집 후보 티커를 반환."""
+    with session() as s:
+        rows = s.execute(text("""
+            SELECT DISTINCT upper(ticker) AS ticker
+            FROM (
+                SELECT ticker
+                FROM watchlist_items
+                UNION ALL
+                SELECT ticker
+                FROM growth_watchlist
+                UNION ALL
+                SELECT ticker
+                FROM holdings
+                WHERE quantity > 0
+            )
+            WHERE ticker IS NOT NULL AND ticker != ''
+            ORDER BY ticker
+        """)).fetchall()
+        return [row[0] for row in rows]
 
 
 def upsert_ticker_data_status(row: dict) -> None:
@@ -1602,22 +2135,31 @@ def mark_all_alert_events_read(user_id: int) -> None:
 def create_trade(
     user_id: int, ticker: str, market: str | None,
     trade_type: str, quantity: float, price: float,
-    currency: str, traded_at: str, fee: float = 0, note: str | None = None
+    currency: str, traded_at: str, fee: float = 0, note: str | None = None,
+    source: str = "manual", external_id: str | None = None, sync_holdings: bool = True,
 ) -> int:
     with session() as s:
+        if external_id:
+            existing = s.execute(text("""
+                SELECT id FROM trades
+                WHERE user_id = :uid AND source = :source AND external_id = :external_id
+            """), {"uid": user_id, "source": source, "external_id": external_id}).fetchone()
+            if existing:
+                return int(existing[0])
         row = s.execute(text("SELECT nextval('trades_id_seq')")).fetchone()
         trade_id = row[0]
         s.execute(text("""
             INSERT INTO trades
-              (id, user_id, ticker, market, trade_type, quantity, price, currency, traded_at, fee, note)
+              (id, user_id, source, external_id, ticker, market, trade_type, quantity, price, currency, traded_at, fee, note)
             VALUES
-              (:id, :uid, :ticker, :market, :type, :qty, :price, :cur, :date, :fee, :note)
-        """), {"id": trade_id, "uid": user_id, "ticker": ticker, "market": market,
+              (:id, :uid, :source, :external_id, :ticker, :market, :type, :qty, :price, :cur, :date, :fee, :note)
+        """), {"id": trade_id, "uid": user_id, "source": source, "external_id": external_id, "ticker": ticker, "market": market,
                "type": trade_type, "qty": quantity, "price": price, "cur": currency,
                "date": traded_at, "fee": fee, "note": note})
         s.commit()
-        _sync_holding_from_trades(s, user_id, ticker)
-        s.commit()
+        if sync_holdings and source == "manual":
+            _sync_holding_from_trades(s, user_id, ticker)
+            s.commit()
     return trade_id
 
 
@@ -1625,19 +2167,19 @@ def get_trades(user_id: int, ticker: str | None = None) -> list[dict]:
     with session() as s:
         if ticker:
             rows = s.execute(text("""
-                SELECT id, ticker, market, trade_type, quantity, price, currency,
+                SELECT id, source, external_id, ticker, market, trade_type, quantity, price, currency,
                        traded_at, fee, note, created_at
                 FROM trades WHERE user_id = :uid AND ticker = :ticker
                 ORDER BY traded_at DESC, created_at DESC
             """), {"uid": user_id, "ticker": ticker}).fetchall()
         else:
             rows = s.execute(text("""
-                SELECT id, ticker, market, trade_type, quantity, price, currency,
+                SELECT id, source, external_id, ticker, market, trade_type, quantity, price, currency,
                        traded_at, fee, note, created_at
                 FROM trades WHERE user_id = :uid
                 ORDER BY traded_at DESC, created_at DESC
             """), {"uid": user_id}).fetchall()
-    cols = ["id", "ticker", "market", "trade_type", "quantity", "price", "currency",
+    cols = ["id", "source", "external_id", "ticker", "market", "trade_type", "quantity", "price", "currency",
             "traded_at", "fee", "note", "created_at"]
     return [dict(zip(cols, r)) for r in rows]
 
@@ -1645,11 +2187,14 @@ def get_trades(user_id: int, ticker: str | None = None) -> list[dict]:
 def delete_trade(user_id: int, trade_id: int) -> bool:
     with session() as s:
         row = s.execute(text(
-            "SELECT ticker FROM trades WHERE id = :id AND user_id = :uid"
+            "SELECT ticker, source FROM trades WHERE id = :id AND user_id = :uid"
         ), {"id": trade_id, "uid": user_id}).fetchone()
         if not row:
             return False
         ticker = row[0]
+        source = row[1] or "manual"
+        if source != "manual":
+            raise ValueError("동기화된 거래는 삭제할 수 없습니다.")
         s.execute(text(
             "DELETE FROM trades WHERE id = :id AND user_id = :uid"
         ), {"id": trade_id, "uid": user_id})
@@ -1664,7 +2209,7 @@ def _sync_holding_from_trades(s, user_id: int, ticker: str) -> None:
     rows = s.execute(text("""
         SELECT trade_type, quantity, price
         FROM trades
-        WHERE user_id = :uid AND ticker = :ticker
+        WHERE user_id = :uid AND ticker = :ticker AND COALESCE(source, 'manual') = 'manual'
         ORDER BY traded_at ASC, created_at ASC
     """), {"uid": user_id, "ticker": ticker}).fetchall()
 
@@ -1678,23 +2223,60 @@ def _sync_holding_from_trades(s, user_id: int, ticker: str) -> None:
             total_qty -= qty
 
     if total_qty <= 0:
-        s.execute(text(
-            "DELETE FROM holdings WHERE user_id = :uid AND ticker = :ticker"
-        ), {"uid": user_id, "ticker": ticker})
+        s.execute(text("""
+            DELETE FROM holding_sources
+            WHERE user_id = :uid AND ticker = :ticker AND source = 'manual' AND account_id = ''
+        """), {"uid": user_id, "ticker": ticker})
+        _rebuild_holding_aggregate(s, user_id, ticker)
         return
 
     buy_qty = sum(qty for tt, qty, _ in rows if tt == "BUY")
     avg_price = total_cost / buy_qty if buy_qty > 0 else 0.0
 
-    existing = s.execute(text(
-        "SELECT ticker FROM holdings WHERE user_id = :uid AND ticker = :ticker"
-    ), {"uid": user_id, "ticker": ticker}).fetchone()
-
-    if existing:
-        s.execute(text("""
-            UPDATE holdings SET quantity = :qty, avg_price = :avg, updated_at = current_timestamp
+    existing = s.execute(text("""
+        SELECT name, currency, sector, market, excluded_from_portfolio
+        FROM holding_sources
+        WHERE user_id = :uid AND ticker = :ticker AND source = 'manual' AND account_id = ''
+    """), {"uid": user_id, "ticker": ticker}).fetchone()
+    if not existing:
+        existing = s.execute(text("""
+            SELECT name, currency, sector, market, false AS excluded_from_portfolio
+            FROM holdings
             WHERE user_id = :uid AND ticker = :ticker
-        """), {"qty": total_qty, "avg": avg_price, "uid": user_id, "ticker": ticker})
+        """), {"uid": user_id, "ticker": ticker}).fetchone()
+
+    name = existing[0] if existing else ticker
+    currency = existing[1] if existing else "USD"
+    sector = existing[2] if existing else None
+    market = existing[3] if existing else None
+    excluded = bool(existing[4]) if existing else False
+    now = datetime.now()
+    s.execute(text("""
+        INSERT INTO holding_sources
+          (user_id, source, account_id, ticker, name, currency, quantity, avg_price, sector, market, excluded_from_portfolio, updated_at)
+        VALUES (:uid, 'manual', '', :ticker, :name, :currency, :qty, :avg, :sector, :market, :excluded, :now)
+        ON CONFLICT (user_id, source, account_id, ticker) DO UPDATE SET
+          name = excluded.name,
+          currency = excluded.currency,
+          quantity = excluded.quantity,
+          avg_price = excluded.avg_price,
+          sector = excluded.sector,
+          market = excluded.market,
+          excluded_from_portfolio = excluded.excluded_from_portfolio,
+          updated_at = :now
+    """), {
+        "uid": user_id,
+        "ticker": ticker,
+        "name": name,
+        "currency": currency,
+        "qty": total_qty,
+        "avg": avg_price,
+        "sector": sector,
+        "market": market,
+        "excluded": excluded,
+        "now": now,
+    })
+    _rebuild_holding_aggregate(s, user_id, ticker)
 
 
 def get_realized_pnl(user_id: int) -> float:
@@ -1865,14 +2447,24 @@ def get_quarterly_bulk(tickers: list[str], n: int = 8) -> dict[str, list[dict]]:
 
 # ── Golden Cross Events ───────────────────────────────────────────────────────
 
-def insert_golden_cross(ticker: str, market: str, name: str | None, first_date: date) -> None:
+def _infer_golden_cross_group(market: str, ticker: str, group_name: str | None = None) -> str:
+    if group_name:
+        return group_name
+    if market == "US":
+        return "US"
+    if ticker.endswith(".KQ"):
+        return "KOSDAQ"
+    return "KOSPI"
+
+
+def insert_golden_cross(ticker: str, market: str, name: str | None, first_date: date, group_name: str | None = None) -> None:
     """신규 골든크로스 등록. 이미 있으면 무시 (INSERT OR IGNORE)."""
     with session() as s:
         s.execute(text("""
             INSERT OR IGNORE INTO golden_cross_events
-              (ticker, market, name, first_detected_at, last_sent_at, day_count)
-            VALUES (:t, :m, :n, :fd, current_timestamp, 1)
-        """), {"t": ticker, "m": market, "n": name, "fd": str(first_date)})
+              (ticker, market, group_name, name, first_detected_at, last_sent_at, day_count)
+            VALUES (:t, :m, :g, :n, :fd, current_timestamp, 1)
+        """), {"t": ticker, "m": market, "g": group_name, "n": name, "fd": str(first_date)})
         s.commit()
 
 
@@ -1880,14 +2472,14 @@ def get_active_golden_crosses(market: str) -> list[dict]:
     """시장별 활성 골든크로스 전체 조회."""
     with session() as s:
         rows = s.execute(text("""
-            SELECT ticker, market, name, first_detected_at, last_sent_at, day_count,
+            SELECT ticker, market, group_name, name, first_detected_at, last_sent_at, day_count,
                 (CAST(last_sent_at AS DATE) = CURRENT_DATE) AS already_sent_today
             FROM golden_cross_events WHERE market = :m
         """), {"m": market}).fetchall()
         return [
-            {"ticker": r[0], "market": r[1], "name": r[2],
-             "first_detected_at": r[3], "last_sent_at": r[4], "day_count": r[5],
-             "already_sent_today": bool(r[6])}
+            {"ticker": r[0], "market": r[1], "group_name": _infer_golden_cross_group(r[1], r[0], r[2]), "name": r[3],
+             "first_detected_at": r[4], "last_sent_at": r[5], "day_count": r[6],
+             "already_sent_today": bool(r[7])}
             for r in rows
         ]
 
@@ -1908,6 +2500,67 @@ def delete_golden_cross(ticker: str) -> None:
     with session() as s:
         s.execute(text("DELETE FROM golden_cross_events WHERE ticker = :t"), {"t": ticker})
         s.commit()
+
+
+def insert_golden_cross_history(
+    ticker: str,
+    market: str,
+    group_name: str | None,
+    name: str | None,
+    status: str,
+    day_count: int | None = None,
+    cross_start_date: date | None = None,
+    close: float | None = None,
+    ema5: float | None = None,
+    ema20: float | None = None,
+    ema60: float | None = None,
+    reason: str | None = None,
+) -> None:
+    with session() as s:
+        s.execute(text("""
+            INSERT INTO golden_cross_history
+              (ticker, market, group_name, name, status, day_count, cross_start_date,
+               close, ema5, ema20, ema60, reason)
+            VALUES
+              (:ticker, :market, :group_name, :name, :status, :day_count, :cross_start_date,
+               :close, :ema5, :ema20, :ema60, :reason)
+        """), {
+            "ticker": ticker,
+            "market": market,
+            "group_name": group_name,
+            "name": name,
+            "status": status,
+            "day_count": day_count,
+            "cross_start_date": str(cross_start_date) if cross_start_date else None,
+            "close": close,
+            "ema5": ema5,
+            "ema20": ema20,
+            "ema60": ema60,
+            "reason": reason,
+        })
+        s.commit()
+
+
+def list_golden_cross_history(market: str | None = None, group_name: str | None = None, limit: int = 200) -> list[dict]:
+    clauses = []
+    params: dict[str, Any] = {"limit": limit}
+    if market:
+        clauses.append("market = :market")
+        params["market"] = market
+    if group_name:
+        clauses.append("group_name = :group_name")
+        params["group_name"] = group_name
+    where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+    with session() as s:
+        rows = s.execute(text(f"""
+            SELECT id, ticker, market, group_name, name, status, day_count, cross_start_date,
+                   checked_at, close, ema5, ema20, ema60, reason
+            FROM golden_cross_history
+            {where}
+            ORDER BY checked_at DESC, id DESC
+            LIMIT :limit
+        """), params).mappings().all()
+        return [dict(r) for r in rows]
 
 
 def get_company_names(tickers: list[str]) -> dict[str, str]:
