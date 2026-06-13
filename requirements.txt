@@ -26,6 +26,8 @@ backtesting==0.3.3
 # 유틸
 python-dotenv==1.0.1
 requests==2.32.3
+requests-cache==1.2.1
+requests-ratelimiter==0.7.0
 pyyaml==6.0.2
 selectolax>=0.4.10
 httpx[http2]>=0.28.1

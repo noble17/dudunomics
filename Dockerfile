@@ -11,7 +11,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy only backend source code
 COPY api/ ./api/
 COPY core/ ./core/
-COPY main.py . 2>/dev/null || true
 
 # Initialize data directory
 RUN mkdir -p data
