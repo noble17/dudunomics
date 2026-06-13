@@ -13,6 +13,7 @@ def test_financials_endpoint_returns_data(client):
         "market_cap_m": 3_000_000.0,
         "trailing_pe": 30.0,
         "forward_pe": 28.0,
+        "forward_eps": 7.5,
         "peg": 2.5,
         "price_to_sales": 8.0,
     })()
@@ -25,6 +26,7 @@ def test_financials_endpoint_returns_data(client):
     assert body["latest_report_date"] == "2026.05.26"
     assert "metrics" in body
     assert body["metrics"]["market_cap_m"] == 3_000_000.0
+    assert body["metrics"]["forward_eps"] == 7.5
 
 
 def test_financials_404_for_korean(client):

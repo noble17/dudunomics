@@ -24,8 +24,9 @@ interface Props {
 type EmaMode = "short" | "middle";
 
 const EMA_CONFIG = {
+  close: { label: "주가", color: "var(--foreground)" },
   e5: { label: "5일", color: "#22c55e" },
-  e20: { label: "20일", color: "#a8b2c1" },
+  e20: { label: "20일", color: "#f59e0b" },
   e60: { label: "60일", color: "#4f7cff" },
   e120: { label: "120일", color: "#16b8d9" },
 } as const;
@@ -61,14 +62,17 @@ function toTs(date: string) {
 function mergeEmaData(data: PriceChartData | undefined, mode: EmaMode) {
   if (!data) return [];
   const activeKeys = EMA_BY_MODE[mode];
-  const baseKey = activeKeys[0];
   const maps = Object.fromEntries(
     activeKeys.map((key) => [key, new Map(data.ema[key].map((point) => [point.date, point.value]))]),
   ) as Record<keyof PriceChartData["ema"], Map<string, number>>;
 
-  return data.ema[baseKey].map((point) => {
-    const row: Record<string, number | string> = { date: point.date, ts: toTs(point.date) };
-    for (const key of activeKeys) row[key] = maps[key].get(point.date) ?? point.value;
+  return data.ohlcv.map((point) => {
+    const row: Record<string, number | string | null> = {
+      date: point.date,
+      ts: toTs(point.date),
+      close: point.close,
+    };
+    for (const key of activeKeys) row[key] = maps[key].get(point.date) ?? null;
     return row;
   });
 }
@@ -79,7 +83,11 @@ function annualPointDate(point: FinancialDataPoint) {
   return `${year}-12-31`;
 }
 
-function buildPriceEpsData(priceData: PriceChartData | undefined, epsPoints: FinancialDataPoint[] | undefined) {
+function buildPriceEpsData(
+  priceData: PriceChartData | undefined,
+  epsPoints: FinancialDataPoint[] | undefined,
+  forwardEps: number | null | undefined,
+) {
   if (!priceData) return [];
   const actualEps = (epsPoints ?? [])
     .filter((point) => !point.is_estimate)
@@ -104,6 +112,7 @@ function buildPriceEpsData(priceData: PriceChartData | undefined, epsPoints: Fin
     price: number | null;
     eps: number | null;
     epsEstimate: number | null;
+    forwardEps: number | null;
   }[] = priceData.ohlcv.map((point) => {
     const matched = sourceActual.filter((eps) => eps.date <= point.date).at(-1);
     return {
@@ -112,6 +121,7 @@ function buildPriceEpsData(priceData: PriceChartData | undefined, epsPoints: Fin
       price: point.close,
       eps: matched?.value ?? null,
       epsEstimate: null as number | null,
+      forwardEps: point.date === lastPriceDate && forwardEps != null ? forwardEps : null,
     };
   });
 
@@ -122,6 +132,7 @@ function buildPriceEpsData(priceData: PriceChartData | undefined, epsPoints: Fin
       price: null,
       eps: null,
       epsEstimate: point.value,
+      forwardEps: null,
     });
   }
 
@@ -139,9 +150,13 @@ export function WatchlistInsightCharts({ ticker, universe }: Props) {
     () => screenerApi.financials(ticker, universe),
   );
   const emaData = useMemo(() => mergeEmaData(priceData, emaMode), [priceData, emaMode]);
-  const priceEpsData = useMemo(() => buildPriceEpsData(priceData, financials?.eps), [priceData, financials?.eps]);
+  const priceEpsData = useMemo(
+    () => buildPriceEpsData(priceData, financials?.eps, financials?.metrics.forward_eps),
+    [priceData, financials?.eps, financials?.metrics.forward_eps],
+  );
   const activeEmaKeys = EMA_BY_MODE[emaMode];
   const hasEstimate = priceEpsData.some((point) => point.epsEstimate != null);
+  const hasForwardEps = priceEpsData.some((point) => point.forwardEps != null);
   const epsUnavailable = Boolean(financialsError);
 
   return (
@@ -204,20 +219,30 @@ export function WatchlistInsightCharts({ ticker, universe }: Props) {
                     EMA_CONFIG[name as keyof typeof EMA_CONFIG]?.label ?? String(name),
                   ]}
                 />
+                <Line
+                  type="monotone"
+                  dataKey="close"
+                  stroke={EMA_CONFIG.close.color}
+                  strokeWidth={3}
+                  dot={false}
+                  name="close"
+                  connectNulls={false}
+                />
                 {activeEmaKeys.map((key) => (
                   <Line
                     key={key}
                     type="monotone"
                     dataKey={key}
                     stroke={EMA_CONFIG[key].color}
-                    strokeWidth={2.4}
+                    strokeWidth={2}
                     dot={false}
                     name={key}
+                    connectNulls={false}
                   />
                 ))}
               </LineChart>
             </ResponsiveContainer>
-            <LegendRow items={activeEmaKeys.map((key) => EMA_CONFIG[key])} />
+            <LegendRow items={[EMA_CONFIG.close, ...activeEmaKeys.map((key) => EMA_CONFIG[key])]} />
           </>
         ) : (
           <ChartEmpty label="EMA 데이터가 없습니다. 데이터 보강 후 다시 확인해 주세요." />
@@ -280,12 +305,23 @@ export function WatchlistInsightCharts({ ticker, universe }: Props) {
                   labelFormatter={(value) => formatDate(new Date(value as number).toISOString())}
                   formatter={(value, name) => [
                     formatNumber(value),
-                    name === "price" ? "주가" : name === "epsEstimate" ? "예상 EPS" : "EPS",
+                    name === "price" ? "주가" : name === "epsEstimate" ? "예상 EPS" : name === "forwardEps" ? "Fwd EPS" : "EPS",
                   ]}
                 />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
                 <Line yAxisId="price" type="monotone" dataKey="price" stroke="#4f7cff" strokeWidth={2} dot={false} name="주가" connectNulls={false} />
                 <Line yAxisId="eps" type="stepAfter" dataKey="eps" stroke="#22c55e" strokeWidth={2.2} dot={false} name="EPS" connectNulls />
+                {hasForwardEps && (
+                  <Line
+                    yAxisId="eps"
+                    type="monotone"
+                    dataKey="forwardEps"
+                    stroke="#f59e0b"
+                    strokeWidth={0}
+                    dot={{ r: 4, strokeWidth: 2, fill: "var(--card)" }}
+                    name="Fwd EPS"
+                  />
+                )}
                 {hasEstimate && (
                   <Line
                     yAxisId="eps"

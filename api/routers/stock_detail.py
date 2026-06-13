@@ -31,6 +31,7 @@ def get_financials(
         "market_cap_m": snap.market_cap_m if snap else None,
         "trailing_pe": snap.trailing_pe if snap else None,
         "forward_pe": snap.forward_pe if snap else None,
+        "forward_eps": snap.forward_eps if snap else None,
         "peg": snap.peg if snap else None,
         "price_to_sales": snap.price_to_sales if snap else None,
     }

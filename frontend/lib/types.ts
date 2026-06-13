@@ -698,6 +698,7 @@ export interface FinancialMetrics {
   market_cap_m: number | null;
   trailing_pe: number | null;
   forward_pe: number | null;
+  forward_eps: number | null;
   peg: number | null;
   price_to_sales: number | null;
 }
