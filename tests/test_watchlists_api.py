@@ -91,6 +91,31 @@ def test_watchlist_memberships_for_ticker(client):
 
     assert [row["name"] for row in memberships] == ["기본 Watchlist", "TEST"]
     assert all(row["universe"] == "sp500" for row in memberships)
+    assert all(row["timing_alert_enabled"] is False for row in memberships)
+
+
+def test_watchlist_item_can_toggle_timing_alert(client):
+    target = client.post("/api/watchlists", json={"name": "알림"}).json()
+
+    client.put(
+        f"/api/watchlists/{target['id']}/items/MU",
+        json={"name": "Micron", "universe": "sp500", "timing_alert_enabled": True},
+    )
+
+    with patch("api.routers.watchlists.build_ticker_performance", return_value=[_perf_row("MU", "Micron")]):
+        items = client.get(f"/api/watchlists/{target['id']}/items").json()
+
+    assert items[0]["timing_alert_enabled"] is True
+
+    client.put(
+        f"/api/watchlists/{target['id']}/items/MU",
+        json={"name": "Micron", "universe": "sp500", "timing_alert_enabled": False},
+    )
+
+    with patch("api.routers.watchlists.build_ticker_performance", return_value=[_perf_row("MU", "Micron")]):
+        items = client.get(f"/api/watchlists/{target['id']}/items").json()
+
+    assert items[0]["timing_alert_enabled"] is False
 
 
 def test_watchlist_can_rename_and_return_growth_timing_fields(client):

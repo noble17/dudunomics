@@ -73,10 +73,23 @@ def add_item(
 ):
     ticker = ticker.upper()
     try:
-        repo.upsert_watchlist_item(user.id, watchlist_id, ticker, body.universe, name=body.name, memo=body.memo)
+        repo.upsert_watchlist_item(
+            user.id,
+            watchlist_id,
+            ticker,
+            body.universe,
+            name=body.name,
+            memo=body.memo,
+            timing_alert_enabled=body.timing_alert_enabled,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=404, detail="Watchlist를 찾을 수 없습니다.") from exc
-    return {"ok": True, "watchlist_id": watchlist_id, "ticker": ticker, "universe": body.universe}
+    return {
+        "ok": True,
+        "watchlist_id": watchlist_id,
+        "ticker": ticker,
+        "universe": body.universe,
+    }
 
 
 @router.delete("/{watchlist_id}/items/{ticker}")
@@ -103,6 +116,7 @@ def _watchlist_item_meta(ticker: str, items: list[dict], item_by_key: dict[tuple
     return {
         "universe": item.get("universe", universe),
         "memo": item.get("memo"),
+        "timing_alert_enabled": bool(item.get("timing_alert_enabled")),
     }
 
 

@@ -322,17 +322,20 @@ class WatchlistItemIn(BaseModel):
     name: str | None = None
     universe: str = "sp500"
     memo: str | None = None
+    timing_alert_enabled: bool | None = None
 
 
 class WatchlistMembershipOut(WatchlistOut):
     universe: str
     memo: str | None = None
+    timing_alert_enabled: bool = False
 
 
 class WatchlistItemOut(TickerPerformanceOut):
     watchlist_id: int
     universe: str
     memo: str | None = None
+    timing_alert_enabled: bool = False
     growth_composite: float | None = None
     timing_status: str | None = None
     timing_aligned: bool | None = None

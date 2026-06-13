@@ -96,6 +96,17 @@ export default function WatchlistPage() {
     await Promise.all([mutateItems(), mutateLists()]);
   };
 
+  const toggleTimingAlert = async (row: WatchlistItem, enabled: boolean) => {
+    await watchlistsApi.updateItem(row.watchlist_id, row.ticker, {
+      name: row.name,
+      universe: row.universe,
+      memo: row.memo ?? undefined,
+      timing_alert_enabled: enabled,
+    });
+    setMessage(`${row.ticker} TIMING CHECK Telegram 알림을 ${enabled ? "켰습니다" : "껐습니다"}.`);
+    await mutateItems();
+  };
+
   const selectTicker = (ticker: string) => {
     setSelectedTicker(ticker);
     window.setTimeout(() => {
@@ -232,6 +243,7 @@ export default function WatchlistPage() {
                 selectedTicker={detailTicker}
                 onSelect={selectTicker}
                 onRemove={removeTicker}
+                onToggleTimingAlert={toggleTimingAlert}
               />
             ) : (
               <div className="flex h-24 items-center justify-center text-xs text-muted-foreground">

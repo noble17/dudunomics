@@ -289,6 +289,7 @@ def _init_schema(engine):
         universe     TEXT NOT NULL DEFAULT 'sp500',
         name         TEXT,
         memo         TEXT,
+        timing_alert_enabled BOOLEAN DEFAULT FALSE,
         created_at   TIMESTAMP DEFAULT current_timestamp,
         PRIMARY KEY (watchlist_id, ticker, universe)
     );
@@ -425,7 +426,8 @@ def _init_schema(engine):
             "CREATE TABLE IF NOT EXISTS growth_watchlist (user_id INTEGER NOT NULL, universe TEXT NOT NULL, ticker TEXT NOT NULL, created_at TIMESTAMP DEFAULT current_timestamp, PRIMARY KEY (user_id, universe, ticker))",
             "CREATE SEQUENCE IF NOT EXISTS watchlists_id_seq START 1",
             "CREATE TABLE IF NOT EXISTS watchlists (id INTEGER DEFAULT nextval('watchlists_id_seq') PRIMARY KEY, user_id INTEGER NOT NULL, name TEXT NOT NULL, description TEXT, created_at TIMESTAMP DEFAULT current_timestamp, updated_at TIMESTAMP DEFAULT current_timestamp)",
-            "CREATE TABLE IF NOT EXISTS watchlist_items (watchlist_id INTEGER NOT NULL, ticker TEXT NOT NULL, universe TEXT NOT NULL DEFAULT 'sp500', name TEXT, memo TEXT, created_at TIMESTAMP DEFAULT current_timestamp, PRIMARY KEY (watchlist_id, ticker, universe))",
+            "CREATE TABLE IF NOT EXISTS watchlist_items (watchlist_id INTEGER NOT NULL, ticker TEXT NOT NULL, universe TEXT NOT NULL DEFAULT 'sp500', name TEXT, memo TEXT, timing_alert_enabled BOOLEAN DEFAULT FALSE, created_at TIMESTAMP DEFAULT current_timestamp, PRIMARY KEY (watchlist_id, ticker, universe))",
+            "ALTER TABLE watchlist_items ADD COLUMN IF NOT EXISTS timing_alert_enabled BOOLEAN DEFAULT FALSE",
             "CREATE TABLE IF NOT EXISTS ticker_profiles (ticker TEXT PRIMARY KEY, name TEXT, market TEXT, country TEXT, currency TEXT, sector TEXT, industry TEXT, exchange TEXT, source TEXT, updated_at TIMESTAMP DEFAULT current_timestamp)",
             "CREATE TABLE IF NOT EXISTS fundamental_snapshots (ticker TEXT NOT NULL, as_of DATE NOT NULL, source TEXT NOT NULL, per DOUBLE, pbr DOUBLE, psr DOUBLE, peg DOUBLE, forward_pe DOUBLE, trailing_pe DOUBLE, forward_eps DOUBLE, eps_ttm DOUBLE, roe DOUBLE, roic DOUBLE, debt_ratio DOUBLE, current_ratio DOUBLE, gross_margin DOUBLE, operating_margin DOUBLE, revenue_growth DOUBLE, eps_growth DOUBLE, market_cap DOUBLE, raw_json JSON, fetched_at TIMESTAMP DEFAULT current_timestamp, PRIMARY KEY (ticker, as_of, source))",
             "CREATE TABLE IF NOT EXISTS price_target_consensus_snapshots (ticker TEXT NOT NULL, as_of DATE NOT NULL, source TEXT NOT NULL, consensus_status TEXT, consensus_message TEXT, current_price DOUBLE, target_mean DOUBLE, target_median DOUBLE, target_low DOUBLE, target_high DOUBLE, upside_pct DOUBLE, analyst_count INTEGER, consensus_as_of TEXT, fallback_used BOOLEAN DEFAULT FALSE, attempts_json JSON, fetched_at TIMESTAMP DEFAULT current_timestamp, PRIMARY KEY (ticker, as_of, source))",
@@ -1939,6 +1941,7 @@ def upsert_watchlist_item(
     universe: str,
     name: str | None = None,
     memo: str | None = None,
+    timing_alert_enabled: bool | None = None,
 ) -> None:
     with session() as s:
         exists = s.execute(text("""
@@ -1947,17 +1950,33 @@ def upsert_watchlist_item(
         if not exists:
             raise ValueError("watchlist not found")
         s.execute(text("""
-            INSERT INTO watchlist_items (watchlist_id, ticker, universe, name, memo, created_at)
-            VALUES (:watchlist_id, :ticker, :universe, :name, :memo, current_timestamp)
+            INSERT INTO watchlist_items (
+                watchlist_id, ticker, universe, name, memo, timing_alert_enabled, created_at
+            )
+            VALUES (
+                :watchlist_id,
+                :ticker,
+                :universe,
+                :name,
+                :memo,
+                CASE WHEN :timing_alert_provided THEN :timing_alert_enabled ELSE FALSE END,
+                current_timestamp
+            )
             ON CONFLICT (watchlist_id, ticker, universe) DO UPDATE SET
                 name = excluded.name,
-                memo = excluded.memo
+                memo = excluded.memo,
+                timing_alert_enabled = CASE
+                    WHEN :timing_alert_provided THEN excluded.timing_alert_enabled
+                    ELSE watchlist_items.timing_alert_enabled
+                END
         """), {
             "watchlist_id": watchlist_id,
             "ticker": ticker,
             "universe": universe,
             "name": name,
             "memo": memo,
+            "timing_alert_provided": timing_alert_enabled is not None,
+            "timing_alert_enabled": bool(timing_alert_enabled),
         })
         s.commit()
 
@@ -1996,16 +2015,36 @@ def list_watchlist_memberships(user_id: int, ticker: str) -> list[dict]:
                 w.created_at,
                 w.updated_at,
                 i.universe,
-                i.memo
+                i.memo,
+                COALESCE(i.timing_alert_enabled, FALSE) AS timing_alert_enabled
             FROM watchlists w
             JOIN watchlist_items i ON i.watchlist_id = w.id
             LEFT JOIN watchlist_items all_items ON all_items.watchlist_id = w.id
             WHERE w.user_id = :uid AND i.ticker = :ticker
             GROUP BY
                 w.id, w.name, w.description, w.created_at, w.updated_at,
-                i.universe, i.memo
+                i.universe, i.memo, i.timing_alert_enabled
             ORDER BY w.id
         """), {"uid": user_id, "ticker": ticker.upper()}).mappings().all()
+        return [dict(row) for row in rows]
+
+
+def list_timing_alert_watchlist_items() -> list[dict]:
+    with session() as s:
+        rows = s.execute(text("""
+            SELECT
+                w.user_id,
+                w.id AS watchlist_id,
+                w.name AS watchlist_name,
+                i.ticker,
+                i.universe,
+                i.name,
+                i.memo
+            FROM watchlist_items i
+            JOIN watchlists w ON w.id = i.watchlist_id
+            WHERE COALESCE(i.timing_alert_enabled, FALSE)
+            ORDER BY w.user_id, w.id, i.ticker
+        """)).mappings().all()
         return [dict(row) for row in rows]
 
 

@@ -215,6 +215,7 @@ export interface WatchlistItem extends TickerPerformance {
   watchlist_id: number;
   universe: string;
   memo: string | null;
+  timing_alert_enabled: boolean;
   growth_composite: number | null;
   timing_status: GrowthTiming["status"] | null;
   timing_aligned: boolean | null;
@@ -228,6 +229,7 @@ export interface WatchlistItem extends TickerPerformance {
 export interface WatchlistMembership extends Watchlist {
   universe: string;
   memo: string | null;
+  timing_alert_enabled: boolean;
 }
 
 export interface PortfolioSnapshot {

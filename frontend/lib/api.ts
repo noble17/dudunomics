@@ -108,7 +108,12 @@ export const watchlistsApi = {
   items: (id: number) => request<WatchlistItem[]>(`/api/watchlists/${id}/items`),
   memberships: (ticker: string) =>
     request<WatchlistMembership[]>(`/api/watchlists/memberships/${encodeURIComponent(ticker)}`),
-  addItem: (id: number, ticker: string, body: { name?: string; universe?: string; memo?: string }) =>
+  addItem: (id: number, ticker: string, body: { name?: string; universe?: string; memo?: string; timing_alert_enabled?: boolean }) =>
+    request<{ ok: boolean; watchlist_id: number; ticker: string; universe: string }>(
+      `/api/watchlists/${id}/items/${encodeURIComponent(ticker)}`,
+      { method: "PUT", body: JSON.stringify(body) },
+    ),
+  updateItem: (id: number, ticker: string, body: { name?: string; universe?: string; memo?: string; timing_alert_enabled?: boolean }) =>
     request<{ ok: boolean; watchlist_id: number; ticker: string; universe: string }>(
       `/api/watchlists/${id}/items/${encodeURIComponent(ticker)}`,
       { method: "PUT", body: JSON.stringify(body) },

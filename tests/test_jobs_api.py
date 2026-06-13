@@ -10,6 +10,7 @@ def test_jobs_list_includes_registered_jobs(client):
     assert "snapshot" in ids
     assert "toss_holdings_sync" in ids
     assert "fundamental_snapshots_hydrate" in ids
+    assert "daily_watchlist_timing_alert" in ids
     toss = next(job for job in payload if job["id"] == "toss_holdings_sync")
     assert toss["bootstrap"] is True
     assert "Toss" in toss["bootstrap_description"]
@@ -66,3 +67,43 @@ def test_unknown_job_returns_404(client):
     res = client.post("/api/jobs/not-found/run")
 
     assert res.status_code == 404
+
+
+def test_daily_watchlist_timing_alert_sends_checked_items(client, monkeypatch):
+    from core.scheduler import daily_watchlist_timing_alert_job
+
+    target = client.post("/api/watchlists", json={"name": "반도체"}).json()
+    client.put(
+        f"/api/watchlists/{target['id']}/items/MU",
+        json={"name": "Micron", "universe": "sp500", "timing_alert_enabled": True},
+    )
+    client.put(
+        f"/api/watchlists/{target['id']}/items/NVDA",
+        json={"name": "Nvidia", "universe": "sp500", "timing_alert_enabled": False},
+    )
+
+    sent = []
+    monkeypatch.setattr("core.scheduler.send_telegram", lambda text: sent.append(text) or True)
+    monkeypatch.setattr("core.scheduler.analyze_timing", lambda ticker: {
+        "status": "watch",
+        "aligned": True,
+        "pullback_stage": "approach",
+        "volume_direction": "bullish",
+        "volume_level": "normal",
+        "volume_ratio": 1.2,
+        "rsi14": 54.2,
+        "rsi_level": "neutral",
+        "close": 100.0,
+        "ema20": 95.0,
+        "ema50": 90.0,
+        "ema200": 80.0,
+        "positive_reasons": ["정배열입니다."],
+    })
+
+    result = daily_watchlist_timing_alert_job()
+
+    assert result == {"items": 1, "success": 1, "failed": 0, "sent": True}
+    assert len(sent) == 1
+    assert "관심종목 TIMING CHECK" in sent[0]
+    assert "[반도체] MU Micron" in sent[0]
+    assert "NVDA" not in sent[0]

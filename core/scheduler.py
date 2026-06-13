@@ -21,6 +21,7 @@ from core.prices.kis import KISPriceProvider
 from core.prices.toss import fetch_buying_power as fetch_toss_buying_power
 from core.prices.toss import fetch_holdings as fetch_toss_holdings
 from core.prices.toss import TossPriceProvider
+from core.scoring.technical_timing import analyze_timing
 from core.telegram import send_telegram
 
 log = logging.getLogger(__name__)
@@ -406,6 +407,128 @@ def daily_holdings_news_job():
     return {"tickers": len(tickers), "news": count, "sent": sent}
 
 
+def daily_watchlist_timing_alert_job():
+    """알림 체크된 관심종목의 TIMING CHECK를 Telegram으로 발송."""
+    items = repo.list_timing_alert_watchlist_items()
+    if not items:
+        return {"items": 0, "sent": False}
+
+    today = datetime.now().date().isoformat()
+    lines = [f"관심종목 TIMING CHECK ({today})"]
+    success = 0
+    failed = 0
+    for item in items:
+        ticker = item["ticker"]
+        try:
+            timing = analyze_timing(ticker)
+            lines.extend(_format_watchlist_timing_alert(item, timing))
+            success += 1
+        except Exception as exc:
+            failed += 1
+            log.error("watchlist timing alert 오류 (%s): %s", ticker, exc)
+            lines.append(f"\n[{item['watchlist_name']}] {ticker}\n상태: 분석 실패")
+
+    sent = send_telegram("\n".join(lines))
+    return {"items": len(items), "success": success, "failed": failed, "sent": sent}
+
+
+def _format_watchlist_timing_alert(item: dict, timing: dict) -> list[str]:
+    label = _timing_status_label(timing)
+    name = item.get("name") or item["ticker"]
+    reasons = (
+        timing.get("downgrade_reasons")
+        or timing.get("warning_reasons")
+        or timing.get("positive_reasons")
+        or []
+    )
+    reason_text = " / ".join(str(reason) for reason in reasons[:2]) if reasons else "특이 사유 없음"
+    return [
+        "",
+        f"[{item['watchlist_name']}] {item['ticker']} {name}",
+        f"상태: {label}",
+        (
+            "현재가/EMA20/50/200: "
+            f"{_fmt_number(timing.get('close'))} / "
+            f"{_fmt_number(timing.get('ema20'))} / "
+            f"{_fmt_number(timing.get('ema50'))} / "
+            f"{_fmt_number(timing.get('ema200'))}"
+        ),
+        (
+            "눌림/거래량/RSI: "
+            f"{_PULLBACK_LABEL.get(str(timing.get('pullback_stage')), timing.get('pullback_stage') or '-')} / "
+            f"{_VOLUME_DIRECTION_LABEL.get(str(timing.get('volume_direction')), timing.get('volume_direction') or '-')} "
+            f"{_VOLUME_LABEL.get(str(timing.get('volume_level')), timing.get('volume_level') or '-')}"
+            f" {_fmt_ratio(timing.get('volume_ratio'))} / "
+            f"{_fmt_number(timing.get('rsi14'))} "
+            f"{_RSI_LABEL.get(str(timing.get('rsi_level')), timing.get('rsi_level') or '-')}"
+        ),
+        f"사유: {reason_text}",
+    ]
+
+
+def _timing_status_label(timing: dict) -> str:
+    status = timing.get("status") or "unknown"
+    if status == "watch" and timing.get("aligned") and timing.get("pullback_stage") != "none":
+        return "진입대기"
+    if status == "watch" and timing.get("aligned"):
+        return "추세확인"
+    return _TIMING_STATUS_LABEL.get(str(status), str(status))
+
+
+def _fmt_number(value) -> str:
+    if value is None:
+        return "-"
+    try:
+        return f"{float(value):,.2f}"
+    except (TypeError, ValueError):
+        return str(value)
+
+
+def _fmt_ratio(value) -> str:
+    if value is None:
+        return "-"
+    try:
+        return f"{float(value):.2f}x"
+    except (TypeError, ValueError):
+        return str(value)
+
+
+_TIMING_STATUS_LABEL = {
+    "suitable": "진입후보",
+    "watch": "추세확인",
+    "unsuitable": "대기",
+    "unknown": "부족",
+}
+
+_PULLBACK_LABEL = {
+    "approach": "눌림목 접근",
+    "lower": "눌림목 하단",
+    "breakdown": "이탈 주의",
+    "none": "눌림 없음",
+}
+
+_VOLUME_DIRECTION_LABEL = {
+    "bullish": "양봉",
+    "bearish": "음봉",
+    "flat": "보합",
+}
+
+_VOLUME_LABEL = {
+    "quiet": "낮음",
+    "normal": "보통",
+    "increased": "증가",
+    "strong": "강함",
+    "explosive": "폭발",
+}
+
+_RSI_LABEL = {
+    "oversold": "과매도",
+    "neutral": "중립",
+    "overheated": "과열 주의",
+    "extreme_overheated": "극단 과열",
+}
+
+
 def _job_registry() -> list[dict]:
     return [
         {
@@ -570,6 +693,14 @@ def _job_registry() -> list[dict]:
             "description": "보유종목의 오늘 발행 뉴스를 최근 7일 뉴스 provider에서 수집해 Telegram으로 발송합니다.",
             "func": daily_holdings_news_job,
         },
+        {
+            "id": "daily_watchlist_timing_alert",
+            "name": "관심종목 TIMING CHECK",
+            "category": "telegram",
+            "schedule": "매일 08:50 KST",
+            "description": "알림 체크된 관심종목의 TIMING CHECK 요약을 Telegram으로 발송합니다.",
+            "func": daily_watchlist_timing_alert_job,
+        },
     ]
 
 
@@ -677,4 +808,6 @@ def create_scheduler() -> BackgroundScheduler:
                       id="price_target_consensus_hydrate", timezone="Asia/Seoul")
     scheduler.add_job(lambda: run_registered_job("daily_holdings_news", "schedule"), "cron", hour=8, minute=40,
                       id="daily_holdings_news", timezone="Asia/Seoul")
+    scheduler.add_job(lambda: run_registered_job("daily_watchlist_timing_alert", "schedule"), "cron", hour=8, minute=50,
+                      id="daily_watchlist_timing_alert", timezone="Asia/Seoul")
     return scheduler
