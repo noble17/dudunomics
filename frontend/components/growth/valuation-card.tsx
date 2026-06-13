@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 import type { GrowthValuation } from "@/lib/types";
 
 function metric(value: number | null, suffix = "") {
@@ -10,9 +12,13 @@ function price(value: number | null) {
     : value.toLocaleString(undefined, { maximumFractionDigits: 2 });
 }
 
+function unavailable(label = "미제공") {
+  return <span className="text-xs text-muted-foreground">{label}</span>;
+}
+
 function priceRange(low: number | null, high: number | null) {
   if (low !== null && high !== null) return `${price(low)} - ${price(high)}`;
-  return price(low ?? high);
+  return low !== null || high !== null ? price(low ?? high) : null;
 }
 
 function sourceName(source: string) {
@@ -78,12 +84,13 @@ function ConsensusContent({ data, error }: { data?: GrowthValuation; error?: unk
         ? "text-gain"
         : "text-loss";
     const upsideLabel = data.upside_pct == null ? "-" : `${data.upside_pct.toFixed(1)}%`;
-    const rows = [
-      ["중앙값", price(data.target_median)],
-      ["범위", priceRange(data.target_low, data.target_high)],
-      ["참여기관", data.analyst_count == null ? "-" : `${data.analyst_count}곳`],
-      ["기준일", data.consensus_as_of ?? "-"],
+    const rows: Array<[string, ReactNode]> = [
+      ["중앙값", data.target_median == null ? unavailable() : price(data.target_median)],
+      ["범위", priceRange(data.target_low, data.target_high) ?? unavailable()],
+      ["참여기관", data.analyst_count == null ? unavailable() : `${data.analyst_count}곳`],
+      ["기준일", data.consensus_as_of ?? unavailable()],
     ];
+    const partialSource = data.consensus_source === "STOCKANALYSIS" || data.consensus_source === "FINVIZ";
 
     return (
       <div>
@@ -107,6 +114,11 @@ function ConsensusContent({ data, error }: { data?: GrowthValuation; error?: unk
             </div>
           </div>
         </div>
+        {partialSource && (data.target_median == null || data.target_low == null || data.target_high == null || data.analyst_count == null) && (
+          <p className="mt-3 rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+            {sourceName(data.consensus_source!)} fallback은 평균 목표주가만 제공하는 경우가 있어 중앙값, 범위, 참여기관, 기준일이 비어 있을 수 있습니다.
+          </p>
+        )}
         <div className="mt-4 space-y-2">
           {rows.map(([label, value]) => (
             <div key={label} className="flex items-center justify-between border-b border-border pb-2 text-sm last:border-0">
