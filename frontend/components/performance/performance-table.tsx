@@ -41,9 +41,9 @@ function tone(value: number | null | undefined) {
 }
 
 const TIMING_LABEL: Record<string, string> = {
-  suitable: "적합",
-  watch: "관망",
-  unsuitable: "부적합",
+  suitable: "매수검토",
+  watch: "관심",
+  unsuitable: "대기",
   unknown: "부족",
 };
 
@@ -97,33 +97,89 @@ function RangeCell({ price, low, high }: { price: number | null; low: number | n
   );
 }
 
-function GrowthCell({ value }: { value: number | null }) {
-  const label = value == null ? "—" : value.toFixed(1);
+function clamp(value: number, min = 0, max = 100) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function momentumProxy(row: Row) {
+  const inputs = [row.perf_6m, row.perf_ytd, row.perf_1m, row.price_vs_ma200]
+    .filter((value): value is number => value != null);
+  if (!inputs.length) return null;
+  const score = inputs.reduce((sum, value) => sum + clamp(50 + value / 2), 0) / inputs.length;
+  return Math.round(score);
+}
+
+function GrowthCell({ row }: { row: WatchlistItem }) {
+  const proxy = row.growth_composite == null ? momentumProxy(row) : null;
+  const label = row.growth_composite == null ? (proxy == null ? "—" : proxy.toFixed(0)) : row.growth_composite.toFixed(1);
+  const sub = row.growth_composite == null ? (proxy == null ? "배치전" : "모멘텀") : "성장";
   return (
     <td className={`${CELL} border-t border-border`}>
-      <span className="inline-flex min-w-[54px] justify-center rounded-full border border-primary/25 bg-primary/10 px-2 py-1 text-xs text-primary">
-        {label}
+      <span
+        className={`inline-flex min-w-[66px] flex-col items-center justify-center rounded-lg border px-2 py-1 ${
+          row.growth_composite == null
+            ? "border-border bg-muted/25 text-muted-foreground"
+            : "border-primary/25 bg-primary/10 text-primary"
+        }`}
+        title={row.growth_composite == null ? "성장 배치 점수가 아직 없어 가격 모멘텀으로 대체 표시합니다." : "성장 배치 종합 점수"}
+      >
+        <span className="text-xs leading-none">{label}</span>
+        <span className="mt-1 text-[9px] leading-none">{sub}</span>
       </span>
     </td>
   );
 }
 
+function timingDisplay(row: WatchlistItem) {
+  const raw = row.timing_status ?? "unknown";
+  if (raw === "watch" && row.timing_aligned && row.timing_pullback_stage === "none") {
+    return { status: "suitable", label: "추세양호" };
+  }
+  if (raw === "watch" && row.timing_aligned) {
+    return { status: "watch", label: "관심" };
+  }
+  return { status: raw, label: TIMING_LABEL[raw] ?? raw };
+}
+
+const PULLBACK_LABEL: Record<string, string> = {
+  approach: "눌림 접근",
+  lower: "눌림 하단",
+  breakdown: "이탈 주의",
+  none: "눌림 없음",
+};
+
+const VOLUME_LABEL: Record<string, string> = {
+  quiet: "거래량 낮음",
+  normal: "거래량 보통",
+  increased: "거래량 증가",
+  strong: "거래량 강함",
+  explosive: "거래량 폭발",
+};
+
+const RSI_LABEL: Record<string, string> = {
+  oversold: "RSI 과매도",
+  neutral: "RSI 중립",
+  warm: "RSI 상승",
+  hot: "RSI 과열",
+  extreme: "RSI 극과열",
+};
+
 function TimingCell({ row }: { row: WatchlistItem }) {
-  const status = row.timing_status ?? "unknown";
+  const display = timingDisplay(row);
   const details = [
     row.timing_aligned ? "정배열" : null,
-    row.timing_pullback_stage && row.timing_pullback_stage !== "none" ? "눌림목" : null,
-    row.timing_volume_level ? `거래량 ${row.timing_volume_level}` : null,
-    row.timing_rsi_level ? `RSI ${row.timing_rsi_level}` : null,
+    row.timing_pullback_stage ? PULLBACK_LABEL[row.timing_pullback_stage] ?? row.timing_pullback_stage : null,
+    row.timing_volume_level ? VOLUME_LABEL[row.timing_volume_level] ?? row.timing_volume_level : null,
+    row.timing_rsi_level ? RSI_LABEL[row.timing_rsi_level] ?? `RSI ${row.timing_rsi_level}` : null,
   ].filter(Boolean);
 
   return (
-    <td className={`${CELL} border-t border-border`}>
-      <div className="inline-flex min-w-[92px] flex-col items-end gap-1">
-        <span className={`rounded-full border px-2 py-1 text-[11px] ${TIMING_TONE[status] ?? TIMING_TONE.unknown}`}>
-          {TIMING_LABEL[status] ?? status}
+    <td className={`${CELL} min-w-[190px] border-t border-border`}>
+      <div className="inline-flex w-[176px] flex-col items-end gap-1">
+        <span className={`rounded-full border px-2 py-1 text-[11px] ${TIMING_TONE[display.status] ?? TIMING_TONE.unknown}`}>
+          {display.label}
         </span>
-        <span className="max-w-[110px] truncate text-[10px] text-muted-foreground" title={details.join(" · ")}>
+        <span className="whitespace-normal text-right text-[10px] leading-snug text-muted-foreground" title={details.join(" · ")}>
           {details.length ? details.join(" · ") : "신호 없음"}
         </span>
       </div>
@@ -206,8 +262,8 @@ export function PerformanceTable({ rows, mode, onSelect, onRemove }: Props) {
             <col className="w-[136px]" />
             {mode === "watchlist" && (
               <>
-                <col className="w-[86px]" />
-                <col className="w-[130px]" />
+                <col className="w-[96px]" />
+                <col className="w-[196px]" />
                 <col className="w-[72px]" />
               </>
             )}
@@ -282,7 +338,7 @@ export function PerformanceTable({ rows, mode, onSelect, onRemove }: Props) {
                 <RangeCell price={row.price} low={row.range_52w_low} high={row.range_52w_high} />
                 {mode === "watchlist" && isWatchlistRow(row) && (
                   <>
-                    <GrowthCell value={row.growth_composite} />
+                    <GrowthCell row={row} />
                     <TimingCell row={row} />
                     <td className="border-t border-border px-4 py-3 text-right">
                       <button
