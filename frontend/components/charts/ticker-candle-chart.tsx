@@ -290,7 +290,7 @@ export function TickerCandleChart({
 
     // 볼린저
     s.bbUpper?.setData(indicatorOptions.bollinger ? ind?.bollinger?.upper ?? [] : []);
-    s.bbMiddle?.setData(indicatorOptions.bollinger ? ind?.bollinger?.middle ?? [] : []);
+    s.bbMiddle?.setData(indicatorOptions.bollinger && !indicatorOptions.ma ? ind?.bollinger?.middle ?? [] : []);
     s.bbLower?.setData(indicatorOptions.bollinger ? ind?.bollinger?.lower ?? [] : []);
 
     // RSI
