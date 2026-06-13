@@ -12,6 +12,10 @@ import {
 
 const KIS_MARKETS = ["KRX", "NASDAQ", "NYSE", "AMEX"];
 
+function makeRowId(): string {
+  return globalThis.crypto?.randomUUID?.() ?? `row-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
 function marketToCurrency(market: string): "KRW" | "USD" {
   return market === "KRX" ? "KRW" : "USD";
 }
@@ -120,7 +124,7 @@ export function HoldingsEditor({
     setRows((prev) => [
       ...prev,
       {
-        id: crypto.randomUUID(),
+        id: makeRowId(),
         ticker: "", name: "", sector: "", market: "",
         currency: "KRW", quantity: "0", avg_price: "0",
         sourceSummary: "manual", source: "manual", accountId: "", hasManual: true,
