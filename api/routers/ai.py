@@ -1,11 +1,11 @@
 import os
 import time
-import requests
 from google import genai
 from google.genai import errors as genai_errors
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from core.auth.deps import current_user, CurrentUser
+from core.data.news_provider import fetch_news, filter_recent_news
 from api.models import AISummaryOut, ChatRequest
 
 router = APIRouter(prefix="/api/ai", tags=["ai"])
@@ -22,20 +22,11 @@ def _get_client() -> genai.Client:
 
 
 def _get_recent_news_titles(ticker: str, limit: int = 3) -> list[str]:
-    api_key = os.getenv("FMP_API_KEY", "")
-    if not api_key or api_key == "your_fmp_key_here":
-        return []
-    url = (
-        f"https://financialmodelingprep.com/api/v3/stock_news"
-        f"?tickers={ticker.upper()}&limit={limit}&apikey={api_key}"
-    )
     try:
-        resp = requests.get(url, timeout=8)
-        if resp.status_code == 200:
-            return [item.get("title", "") for item in resp.json()]
+        items = filter_recent_news(fetch_news(ticker.upper(), limit * 3), days=7)
     except Exception:
-        pass
-    return []
+        return []
+    return [str(item.get("title", "")) for item in items[:limit] if item.get("title")]
 
 
 @router.get("/summary", response_model=AISummaryOut)

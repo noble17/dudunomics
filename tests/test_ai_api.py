@@ -31,11 +31,10 @@ def _mock_gemini_client(text: str):
 
 def test_ai_summary_returns_text(ai_client):
     """summary 엔드포인트: Gemini mock → 요약 텍스트 반환"""
-    with patch("api.routers.ai.requests.get") as mock_news, \
+    with patch("api.routers.ai.fetch_news") as mock_news, \
          patch("api.routers.ai.genai.Client") as mock_cls:
-        mock_news.return_value.status_code = 200
-        mock_news.return_value.json.return_value = [
-            {"title": "SPY hits new high", "publishedDate": "2026-05-29", "url": "http://x.com", "site": "MW", "image": None}
+        mock_news.return_value = [
+            {"title": "SPY hits new high", "published_utc": "Sat, 13 Jun 2026 00:00:00 GMT"}
         ]
         mock_cls.return_value = _mock_gemini_client("SPY는 오늘 신고가를 기록했습니다.")
         res = ai_client.get("/api/ai/summary?ticker=SPY")
@@ -64,7 +63,8 @@ def test_ai_chat_streams_response(ai_client):
     chunk2 = MagicMock()
     chunk2.text = "결과입니다."
 
-    with patch("api.routers.ai.genai.Client") as mock_cls:
+    with patch("api.routers.ai.fetch_news", return_value=[]), \
+         patch("api.routers.ai.genai.Client") as mock_cls:
         mock_client = MagicMock()
         mock_client.models.generate_content_stream.return_value = iter([chunk1, chunk2])
         mock_cls.return_value = mock_client
