@@ -41,8 +41,8 @@ function tone(value: number | null | undefined) {
 }
 
 const TIMING_LABEL: Record<string, string> = {
-  suitable: "매수검토",
-  watch: "관심",
+  suitable: "진입후보",
+  watch: "추세확인",
   unsuitable: "대기",
   unknown: "부족",
 };
@@ -102,17 +102,22 @@ function clamp(value: number, min = 0, max = 100) {
 }
 
 function momentumProxy(row: Row) {
-  const inputs = [row.perf_6m, row.perf_ytd, row.perf_1m, row.price_vs_ma200]
-    .filter((value): value is number => value != null);
+  const inputs = [
+    row.perf_6m == null ? null : clamp(50 + row.perf_6m / 2),
+    row.perf_ytd == null ? null : clamp(50 + row.perf_ytd / 2),
+    row.perf_1m == null ? null : clamp(50 + row.perf_1m),
+    row.price_vs_ma200 == null ? null : clamp(50 + row.price_vs_ma200),
+  ].filter((value): value is number => value != null);
   if (!inputs.length) return null;
-  const score = inputs.reduce((sum, value) => sum + clamp(50 + value / 2), 0) / inputs.length;
-  return Math.round(score);
+  const score = inputs.reduce((sum, value) => sum + value, 0) / inputs.length;
+  const label = score >= 75 ? "강함" : score >= 60 ? "양호" : score >= 45 ? "보통" : "약함";
+  return { score: Math.round(score), label };
 }
 
 function GrowthCell({ row }: { row: WatchlistItem }) {
   const proxy = row.growth_composite == null ? momentumProxy(row) : null;
-  const label = row.growth_composite == null ? (proxy == null ? "—" : proxy.toFixed(0)) : row.growth_composite.toFixed(1);
-  const sub = row.growth_composite == null ? (proxy == null ? "배치전" : "모멘텀") : "성장";
+  const label = row.growth_composite == null ? (proxy == null ? "—" : proxy.label) : row.growth_composite.toFixed(1);
+  const sub = row.growth_composite == null ? (proxy == null ? "배치전" : `모멘텀 ${proxy.score}`) : "성장";
   return (
     <td className={`${CELL} border-t border-border`}>
       <span
@@ -121,7 +126,7 @@ function GrowthCell({ row }: { row: WatchlistItem }) {
             ? "border-border bg-muted/25 text-muted-foreground"
             : "border-primary/25 bg-primary/10 text-primary"
         }`}
-        title={row.growth_composite == null ? "성장 배치 점수가 아직 없어 가격 모멘텀으로 대체 표시합니다." : "성장 배치 종합 점수"}
+        title={row.growth_composite == null ? "성장 배치 점수가 아직 없어 6M, YTD, 1M, 200D MA 괴리율 기반 모멘텀 구간으로 대체 표시합니다." : "성장 배치 종합 점수"}
       >
         <span className="text-xs leading-none">{label}</span>
         <span className="mt-1 text-[9px] leading-none">{sub}</span>
@@ -133,10 +138,10 @@ function GrowthCell({ row }: { row: WatchlistItem }) {
 function timingDisplay(row: WatchlistItem) {
   const raw = row.timing_status ?? "unknown";
   if (raw === "watch" && row.timing_aligned && row.timing_pullback_stage === "none") {
-    return { status: "suitable", label: "추세양호" };
+    return { status: "watch", label: "추세확인" };
   }
   if (raw === "watch" && row.timing_aligned) {
-    return { status: "watch", label: "관심" };
+    return { status: "watch", label: "진입대기" };
   }
   return { status: raw, label: TIMING_LABEL[raw] ?? raw };
 }
@@ -159,18 +164,27 @@ const VOLUME_LABEL: Record<string, string> = {
 const RSI_LABEL: Record<string, string> = {
   oversold: "RSI 과매도",
   neutral: "RSI 중립",
-  warm: "RSI 상승",
-  hot: "RSI 과열",
-  extreme: "RSI 극과열",
+  overheated: "RSI 과열",
+  extreme_overheated: "RSI 극과열",
 };
+
+function fmtRatio(value: number | null | undefined) {
+  if (value == null) return null;
+  return `${value.toFixed(1)}x`;
+}
+
+function fmtRsi(value: number | null | undefined) {
+  if (value == null) return null;
+  return value.toFixed(0);
+}
 
 function TimingCell({ row }: { row: WatchlistItem }) {
   const display = timingDisplay(row);
   const details = [
     row.timing_aligned ? "정배열" : null,
     row.timing_pullback_stage ? PULLBACK_LABEL[row.timing_pullback_stage] ?? row.timing_pullback_stage : null,
-    row.timing_volume_level ? VOLUME_LABEL[row.timing_volume_level] ?? row.timing_volume_level : null,
-    row.timing_rsi_level ? RSI_LABEL[row.timing_rsi_level] ?? `RSI ${row.timing_rsi_level}` : null,
+    row.timing_volume_level ? `${VOLUME_LABEL[row.timing_volume_level] ?? row.timing_volume_level}${fmtRatio(row.timing_volume_ratio) ? ` ${fmtRatio(row.timing_volume_ratio)}` : ""}` : null,
+    row.timing_rsi_level ? `${RSI_LABEL[row.timing_rsi_level] ?? `RSI ${row.timing_rsi_level}`}${fmtRsi(row.timing_rsi14) ? ` ${fmtRsi(row.timing_rsi14)}` : ""}` : null,
   ].filter(Boolean);
 
   return (

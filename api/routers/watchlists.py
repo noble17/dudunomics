@@ -123,5 +123,7 @@ def _timing_meta(ticker: str) -> dict:
         "timing_aligned": timing.get("aligned"),
         "timing_pullback_stage": timing.get("pullback_stage"),
         "timing_volume_level": timing.get("volume_level"),
+        "timing_volume_ratio": timing.get("volume_ratio"),
         "timing_rsi_level": timing.get("rsi_level"),
+        "timing_rsi14": timing.get("rsi14"),
     }

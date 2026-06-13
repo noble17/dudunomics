@@ -338,7 +338,9 @@ class WatchlistItemOut(TickerPerformanceOut):
     timing_aligned: bool | None = None
     timing_pullback_stage: str | None = None
     timing_volume_level: str | None = None
+    timing_volume_ratio: float | None = None
     timing_rsi_level: str | None = None
+    timing_rsi14: float | None = None
 
 
 class ConsensusAttemptOut(BaseModel):

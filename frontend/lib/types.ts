@@ -220,7 +220,9 @@ export interface WatchlistItem extends TickerPerformance {
   timing_aligned: boolean | null;
   timing_pullback_stage: GrowthTiming["pullback_stage"] | null;
   timing_volume_level: GrowthTiming["volume_level"] | null;
+  timing_volume_ratio: number | null;
   timing_rsi_level: GrowthTiming["rsi_level"] | null;
+  timing_rsi14: number | null;
 }
 
 export interface WatchlistMembership extends Watchlist {
