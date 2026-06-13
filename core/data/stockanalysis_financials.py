@@ -29,7 +29,7 @@ log = logging.getLogger(__name__)
 
 _DB_PATH = Path(__file__).parent.parent.parent / "data" / "fundamentals_cache.sqlite"
 _TTL = 86_400  # 24h
-_CACHE_VER = 3
+_CACHE_VER = 4
 _HEADERS = {
     "User-Agent": "Mozilla/5.0 (compatible; dudunomics/1.0; research use)",
     "Accept-Language": "en-US,en;q=0.9",
@@ -233,6 +233,56 @@ def _fetch_roe_annual(ticker: str) -> list[dict]:
     return result
 
 
+def _fetch_choicestock_eps(ticker: str) -> list[dict]:
+    """ChoiceStock 공개 summary HTML에서 연간 EPS/예상 EPS를 추출합니다."""
+    try:
+        resp = _CLIENT.get(f"https://www.choicestock.co.kr/search/summary/{ticker.upper()}")
+        resp.raise_for_status()
+    except Exception as e:
+        log.debug("ChoiceStock EPS fetch 실패 (%s): %s", ticker, e)
+        return []
+
+    match = re.search(
+        r"id=\"chart_eps_financial_wrapper\".*?<script>\s*var params = \[(?P<params>.*?)\];\s*var value = \[(?P<value>.*?)\];\s*newDetailChart1\('containerfinancials1_2'",
+        resp.text,
+        re.DOTALL,
+    )
+    if not match:
+        return []
+
+    rows: list[dict] = []
+    for item in re.finditer(r"\{(?P<body>.*?)}", match.group("value"), re.DOTALL):
+        body = item.group("body")
+        y_match = re.search(r"y\s*:\s*(?P<value>-?\d+(?:\.\d+)?)", body)
+        date_match = re.search(r"date\s*:\s*'(?P<date>[^']+)'", body)
+        if not y_match or not date_match:
+            continue
+        raw_date = date_match.group("date")
+        year = raw_date[:4]
+        if not year.isdigit():
+            continue
+        rows.append({
+            "year": year,
+            "period_end": year,
+            "value": float(y_match.group("value")),
+            "is_estimate": "예상" in raw_date,
+        })
+    return rows
+
+
+def _merge_eps_rows(primary: list[dict], supplement: list[dict]) -> list[dict]:
+    if not supplement:
+        return primary
+    by_year = {row["year"]: row for row in primary}
+    for row in supplement:
+        current = by_year.get(row["year"])
+        if current is None:
+            by_year[row["year"]] = row
+        elif current.get("is_estimate") and row.get("is_estimate"):
+            by_year[row["year"]] = row
+    return [by_year[year] for year in sorted(by_year)]
+
+
 # ── 공개 API ──────────────────────────────────────────────────────────────────
 
 def fetch_annual_financials(ticker: str) -> Optional[dict]:
@@ -261,6 +311,7 @@ def fetch_annual_financials(ticker: str) -> Optional[dict]:
         return None
 
     revenue, eps, latest_date = _parse_script(resp.text)
+    eps = _merge_eps_rows(eps, _fetch_choicestock_eps(ticker))
     roe = _fetch_roe_annual(ticker)
 
     data: dict = {

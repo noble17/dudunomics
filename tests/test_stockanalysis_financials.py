@@ -43,11 +43,40 @@ def _make_balance_sheet_html() -> str:
     </body></html>"""
 
 
+def _make_choicestock_html() -> str:
+    return """<html><body>
+    <div id="chart_eps_financial_wrapper">
+      <script>
+      var params = ['2024.06','2025.06','2026.06<br> <span style=\\"font-size:10px\\">(예상)</span>','2027.06<br> <span style=\\"font-size:10px\\">(예상)</span>','2028.06<br> <span style=\\"font-size:10px\\">(예상)</span>',];
+      var value = [{y:-8.12,className:'decrease_color',date: '2024.06', change: '적자지속'},{y:0.37,date: '2025.06', change: '흑자전환'},{y:4.93931,className:'point_color',date: '2026.06 (예상)', change: '+1234.95%'},{y:15.91647,className:'point_color',date: '2027.06 (예상)', change: '+222.24%'},{y:27.75827,className:'point_color',date: '2028.06 (예상)', change: '+74.40%'},];
+      newDetailChart1('containerfinancials1_2', value, params, 'EPS', '달러');
+      </script>
+    </div>
+    </body></html>"""
+
+
 def _make_mock_get():
     """URL에 따라 적절한 HTML을 반환하는 mock get 함수."""
     def side_effect(url, **kwargs):
         mock = MagicMock(raise_for_status=MagicMock())
-        if "/balance-sheet/" in url:
+        if "choicestock.co.kr" in url:
+            mock.text = "<html></html>"
+        elif "/balance-sheet/" in url:
+            mock.text = _make_balance_sheet_html()
+        elif "/financials/" in url:
+            mock.text = _make_financials_html()
+        else:
+            mock.text = _make_forecast_html()
+        return mock
+    return side_effect
+
+
+def _make_mock_get_with_choicestock():
+    def side_effect(url, **kwargs):
+        mock = MagicMock(raise_for_status=MagicMock())
+        if "choicestock.co.kr" in url:
+            mock.text = _make_choicestock_html()
+        elif "/balance-sheet/" in url:
             mock.text = _make_balance_sheet_html()
         elif "/financials/" in url:
             mock.text = _make_financials_html()
@@ -79,6 +108,17 @@ def test_fetch_annual_financials_eps(tmp_path, monkeypatch):
     assert result is not None
     fy2024 = next(r for r in result["eps"] if r["year"] == "2024")
     assert abs(fy2024["value"] - 6.09) < 0.01
+
+
+def test_fetch_annual_financials_merges_choicestock_eps_estimates(tmp_path, monkeypatch):
+    from core.data import stockanalysis_financials as sa
+    monkeypatch.setattr(sa, "_DB_PATH", tmp_path / "sa_cache.sqlite")
+    with patch.object(sa._CLIENT, "get", side_effect=_make_mock_get_with_choicestock()):
+        result = sa.fetch_annual_financials("LITE")
+    eps_by_year = {row["year"]: row for row in result["eps"]}
+    assert eps_by_year["2027"]["value"] == 15.91647
+    assert eps_by_year["2027"]["is_estimate"] is True
+    assert eps_by_year["2028"]["value"] == 27.75827
 
 
 def test_fetch_annual_financials_roe(tmp_path, monkeypatch):
