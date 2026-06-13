@@ -29,10 +29,10 @@ interface Props {
 }
 
 const MA_COLORS: Record<string, string> = {
-  "5":   "#ff9f0a",
-  "20":  "#ffd60a",
-  "60":  chartTheme.palette[0],   // brand blue
-  "120": "#22d3ee",
+  "20":  "#ff9f0a",
+  "50":  "#ffd60a",
+  "120": chartTheme.palette[0],
+  "200": "#22d3ee",
 };
 
 const TOGGLE_LABELS: Record<IndicatorKey, string> = {
@@ -46,10 +46,10 @@ const TOGGLE_LABELS: Record<IndicatorKey, string> = {
 const LEGEND_ITEMS = [
   { label: "일봉 캔들", color: chartTheme.up, note: "종가 기준" },
   { label: "거래량", color: "rgba(150,150,150,0.75)", note: "막대" },
-  { label: "SMA5", color: MA_COLORS["5"], group: "ma" },
   { label: "SMA20", color: MA_COLORS["20"], group: "ma" },
-  { label: "SMA60", color: MA_COLORS["60"], group: "ma" },
+  { label: "SMA50", color: MA_COLORS["50"], group: "ma" },
   { label: "SMA120", color: MA_COLORS["120"], group: "ma" },
+  { label: "SMA200", color: MA_COLORS["200"], group: "ma" },
   { label: "Bollinger", color: "rgba(100, 210, 255, 0.7)", group: "bollinger" },
   { label: "RSI 14", color: "#bf5af2", group: "rsi" },
   { label: "MACD", color: chartTheme.brand, group: "macd" },
@@ -243,7 +243,7 @@ export function TickerCandleChart({
 
     // MA
     const showMa = indicatorOptions.ma;
-    for (const p of ["5", "20", "60", "120"]) {
+    for (const p of ["20", "50", "120", "200"]) {
       const pts = ind?.ma?.[p] ?? [];
       s[`ma${p}`]?.setData(showMa ? pts : []);
     }
@@ -289,10 +289,10 @@ export function TickerCandleChart({
   const isUp = change >= 0;
   const indicators = data?.indicators;
   const latestSma = {
-    "5": valueAt(indicators?.ma?.["5"], displayTime),
     "20": valueAt(indicators?.ma?.["20"], displayTime),
-    "60": valueAt(indicators?.ma?.["60"], displayTime),
+    "50": valueAt(indicators?.ma?.["50"], displayTime),
     "120": valueAt(indicators?.ma?.["120"], displayTime),
+    "200": valueAt(indicators?.ma?.["200"], displayTime),
   };
   const latestRsi = valueAt(indicators?.rsi, displayTime);
   const latestMacd = valueAt(indicators?.macd?.macd, displayTime);

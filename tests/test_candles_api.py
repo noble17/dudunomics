@@ -94,9 +94,9 @@ def test_candles_with_indicators(candles_client):
     assert data["indicators"] is not None
     ind = data["indicators"]
     assert set(ind.keys()) == {"ma", "bollinger", "rsi", "macd", "volume_ma"}
-    assert set(ind["ma"].keys()) == {"5", "20", "60", "120"}
-    assert len(ind["ma"]["5"]) > 0
-    pt = ind["ma"]["5"][0]
+    assert set(ind["ma"].keys()) == {"20", "50", "120", "200"}
+    assert len(ind["ma"]["20"]) > 0
+    pt = ind["ma"]["20"][0]
     assert "time" in pt and "value" in pt
 
 

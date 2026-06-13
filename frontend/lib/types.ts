@@ -530,7 +530,7 @@ export interface IndicatorPoint {
 }
 
 export interface IndicatorsData {
-  ma: Record<string, IndicatorPoint[]>        // "5" | "20" | "60" | "120"
+  ma: Record<string, IndicatorPoint[]>        // "20" | "50" | "120" | "200"
   bollinger: Record<string, IndicatorPoint[]> // "upper" | "middle" | "lower"
   rsi: IndicatorPoint[]
   macd: Record<string, IndicatorPoint[]>      // "macd" | "signal" | "histogram"

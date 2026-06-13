@@ -22,21 +22,21 @@ def test_compute_indicators_keys():
     df = _make_df(200)
     result = compute_indicators(df)
     assert set(result.keys()) == {"ma", "bollinger", "rsi", "macd", "volume_ma"}
-    assert set(result["ma"].keys()) == {"5", "20", "60", "120"}
+    assert set(result["ma"].keys()) == {"20", "50", "120", "200"}
     assert set(result["bollinger"].keys()) == {"upper", "middle", "lower"}
     assert set(result["macd"].keys()) == {"macd", "signal", "histogram"}
 
 
-def test_ma5_length_and_format():
+def test_ma20_length_and_format():
     df = _make_df(200)
     result = compute_indicators(df)
-    ma5 = result["ma"]["5"]
-    # MA5는 처음 4개 NaN이므로 200-4=196개
-    assert len(ma5) == 196
-    assert "time" in ma5[0]
-    assert "value" in ma5[0]
-    assert isinstance(ma5[0]["time"], str)
-    assert isinstance(ma5[0]["value"], float)
+    ma20 = result["ma"]["20"]
+    # MA20은 처음 19개 NaN이므로 200-19=181개
+    assert len(ma20) == 181
+    assert "time" in ma20[0]
+    assert "value" in ma20[0]
+    assert isinstance(ma20[0]["time"], str)
+    assert isinstance(ma20[0]["value"], float)
 
 
 def test_ma120_requires_120_days():
@@ -45,6 +45,13 @@ def test_ma120_requires_120_days():
     ma120 = result["ma"]["120"]
     # MA120는 처음 119개 NaN → 200-119=81개
     assert len(ma120) == 81
+
+
+def test_ma200_requires_200_days():
+    df = _make_df(200)
+    result = compute_indicators(df)
+    ma200 = result["ma"]["200"]
+    assert len(ma200) == 1
 
 
 def test_bollinger_upper_ge_lower():
@@ -81,7 +88,8 @@ def test_volume_ma_length():
 
 
 def test_short_df_returns_empty_for_long_ma():
-    """데이터가 50개면 MA120은 빈 리스트."""
+    """데이터가 50개면 장기 MA는 빈 리스트."""
     df = _make_df(50)
     result = compute_indicators(df)
     assert result["ma"]["120"] == []
+    assert result["ma"]["200"] == []
