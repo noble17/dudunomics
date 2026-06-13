@@ -342,8 +342,165 @@ export function HoldingsEditor({
         </div>
       </div>
 
-      {/* 종목 테이블 */}
-      <div className="border border-border">
+      {/* 모바일 종목 카드 */}
+      <div className="space-y-3 md:hidden">
+        {rows.map((row) => (
+          <div key={row.id} className="border border-border bg-card p-3">
+            <div className="mb-3 flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="font-data text-xs text-muted-foreground">{row.sourceSummary}</p>
+                <p className="mt-1 truncate text-sm font-medium text-foreground">
+                  {row.name || row.ticker || "새 보유종목"}
+                </p>
+              </div>
+              <span className={`shrink-0 text-xs font-medium ${row.saved ? "text-muted-foreground" : "text-primary"}`}>
+                {row.saved ? "저장됨" : "미저장"}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-2 space-y-1.5" onClick={(e) => e.stopPropagation()}>
+                <Label className="text-xs text-muted-foreground">티커</Label>
+                <Input
+                  value={row.ticker}
+                  onChange={(e) => handleTickerChange(row.id, e.target.value, e.currentTarget.getBoundingClientRect())}
+                  onFocus={(e) => {
+                    if (row.ticker.length >= 2) {
+                      setSearchRowId(row.id);
+                      setDropdownPos({ top: e.currentTarget.getBoundingClientRect().bottom, left: e.currentTarget.getBoundingClientRect().left });
+                    }
+                  }}
+                  className="h-9 font-data"
+                  placeholder="005930.KS"
+                  disabled={row.locked}
+                />
+                {searchRowId === row.id && (searchHits.length > 0 || searching) && dropdownPos && (
+                  <div
+                    className="fixed z-50 border border-border bg-card"
+                    style={{ top: dropdownPos.top, left: "1rem", right: "1rem" }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {searching && (
+                      <div className="px-3 py-2 font-data text-xs text-muted-foreground">검색 중…</div>
+                    )}
+                    {searchHits.map((hit) => (
+                      <button
+                        key={hit.ticker}
+                        type="button"
+                        onClick={() => selectSearchHit(row.id, hit)}
+                        className="flex w-full flex-col px-3 py-2 text-left hover:bg-[var(--secondary)]"
+                      >
+                        <span className="font-data text-xs text-foreground">{hit.ticker}</span>
+                        <span className="text-xs text-muted-foreground">{hit.name} · {hit.exchange}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="col-span-2 space-y-1.5">
+                <Label className="text-xs text-muted-foreground">종목명</Label>
+                <Input value={row.name} onChange={(e) => update(row.id, "name", e.target.value)}
+                  className="h-9" placeholder="종목명" />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">시장</Label>
+                {row.lookupError ? (
+                  <Select
+                    value={row.market}
+                    disabled={row.locked}
+                    onValueChange={(v) => {
+                      if (!v) return;
+                      update(row.id, "market", v);
+                      handleLookup(row.id, row.ticker, v);
+                    }}
+                  >
+                    <SelectTrigger className="h-9 w-full border-primary font-data text-xs">
+                      <SelectValue placeholder="시장 선택" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {KIS_MARKETS.map((m) => (
+                        <SelectItem key={m} value={m} className="font-data text-xs">{m}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Input
+                    value={row.market}
+                    onChange={(e) => update(row.id, "market", e.target.value)}
+                    className="h-9 font-data text-xs"
+                    placeholder="NASDAQ"
+                    disabled={row.locked}
+                  />
+                )}
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">통화</Label>
+                <Select value={row.currency} disabled={row.locked} onValueChange={(v) => { if (v) update(row.id, "currency", v); }}>
+                  <SelectTrigger className="h-9 w-full font-data"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="KRW">KRW</SelectItem>
+                    <SelectItem value="USD">USD</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">수량</Label>
+                <Input value={row.quantity} onChange={(e) => update(row.id, "quantity", e.target.value)}
+                  type="number" className="h-9 font-data" disabled={row.locked} />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">평균단가</Label>
+                <Input value={row.avg_price} onChange={(e) => update(row.id, "avg_price", e.target.value)}
+                  type="number" className="h-9 font-data" disabled={row.locked} />
+              </div>
+
+              <div className="col-span-2 space-y-1.5">
+                <Label className="text-xs text-muted-foreground">섹터</Label>
+                <Input value={row.sector} onChange={(e) => update(row.id, "sector", e.target.value)}
+                  className="h-9 font-data text-xs" placeholder="반도체" />
+              </div>
+            </div>
+
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3">
+              <button
+                type="button"
+                onClick={() => togglePortfolioVisibility(row.id)}
+                disabled={row.hasManual}
+                className={`h-8 border px-2 font-data text-[10px] ${
+                  row.excludedFromPortfolio
+                    ? "border-border text-muted-foreground hover:text-foreground"
+                    : "border-primary text-primary"
+                } disabled:cursor-not-allowed disabled:border-border disabled:text-muted-foreground`}
+                title={row.excludedFromPortfolio ? "포트폴리오에서 숨김" : "포트폴리오에 포함"}
+              >
+                {row.excludedFromPortfolio ? "숨김" : "포함"}
+              </button>
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={row.locked || !row.ticker || lookingUp.has(row.id)}
+                  onClick={() => handleLookup(row.id, row.ticker, row.market || undefined)}
+                  className="h-8 px-2 font-data text-xs text-muted-foreground hover:text-foreground"
+                  title="티커 정보 자동 조회"
+                >
+                  {lookingUp.has(row.id) ? "…" : "조회"}
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => remove(row)} disabled={row.locked}
+                  className="h-8 text-xs text-error hover:bg-[rgba(221,60,68,0.08)] hover:text-error">삭제</Button>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* 데스크톱 종목 테이블 */}
+      <div className="hidden border border-border md:block">
         <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="border-b border-border bg-[var(--card)]">
@@ -520,11 +677,11 @@ export function HoldingsEditor({
         </div>
       </div>
 
-      <div className="flex items-center gap-3">
-        <Button variant="outline" onClick={addRow}>
+      <div className="flex flex-wrap items-center gap-3">
+        <Button variant="outline" onClick={addRow} className="w-full sm:w-auto">
           + 행 추가
         </Button>
-        <Button onClick={save} disabled={saving}>
+        <Button onClick={save} disabled={saving} className="w-full sm:w-auto">
           {saving ? "저장 중…" : "저장"}
         </Button>
         {status && (
