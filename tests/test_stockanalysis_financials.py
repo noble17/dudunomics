@@ -45,13 +45,22 @@ def _make_balance_sheet_html() -> str:
 
 def _make_choicestock_html() -> str:
     return """<html><body>
-    <div id="chart_eps_financial_wrapper">
-      <script>
+    <span class="chart_unit">최근실적발표 26.05.06 · 단위 : 백만달러</span>
+    <script>
+      var params = ['2024.06','2025.06','2026.06<br> <span style=\\"font-size:10px\\">(예상)</span>','2027.06<br> <span style=\\"font-size:10px\\">(예상)</span>','2028.06<br> <span style=\\"font-size:10px\\">(예상)</span>',];
+      var value = [{y:1359.2,date: '2024.06', change: '-23.08%'},{y:1645,date: '2025.06', change: '+21.03%'},{y:2993.53130,className:'point_color',date: '2026.06 (예상)', change: '+81.98%'},{y:5547.45834,className:'point_color',date: '2027.06 (예상)', change: '+85.31%'},{y:8317.14352,className:'point_color',date: '2028.06 (예상)', change: '+49.93%'},];
+      newDetailChart1('containerfinancials1_1', value, params, '매출액', '백만 달러');
+    </script>
+    <script>
       var params = ['2024.06','2025.06','2026.06<br> <span style=\\"font-size:10px\\">(예상)</span>','2027.06<br> <span style=\\"font-size:10px\\">(예상)</span>','2028.06<br> <span style=\\"font-size:10px\\">(예상)</span>',];
       var value = [{y:-8.12,className:'decrease_color',date: '2024.06', change: '적자지속'},{y:0.37,date: '2025.06', change: '흑자전환'},{y:4.93931,className:'point_color',date: '2026.06 (예상)', change: '+1234.95%'},{y:15.91647,className:'point_color',date: '2027.06 (예상)', change: '+222.24%'},{y:27.75827,className:'point_color',date: '2028.06 (예상)', change: '+74.40%'},];
       newDetailChart1('containerfinancials1_2', value, params, 'EPS', '달러');
-      </script>
-    </div>
+    </script>
+    <script>
+      var params = ['2024.06','2025.06','2026.06<br> <span style=\\"font-size:10px\\">(예상)</span>','2027.06<br> <span style=\\"font-size:10px\\">(예상)</span>','2028.06<br> <span style=\\"font-size:10px\\">(예상)</span>',];
+      var value = [{y:-46.3,className:'decrease_color',date: '2024.06', change: '적자지속'},{y:2.7,date: '2025.06', change: '흑자전환'},{y:10.84,className:'point_color',date: '2026.06 (예상)', change: '+301.48%'},{y:25.19,className:'point_color',date: '2027.06 (예상)', change: '+132.38%'},{y:26.92,className:'point_color',date: '2028.06 (예상)', change: '+6.87%'},];
+      newDetailChart1('containerfinancials1_3', value, params, 'ROE');
+    </script>
     </body></html>"""
 
 
@@ -110,15 +119,22 @@ def test_fetch_annual_financials_eps(tmp_path, monkeypatch):
     assert abs(fy2024["value"] - 6.09) < 0.01
 
 
-def test_fetch_annual_financials_merges_choicestock_eps_estimates(tmp_path, monkeypatch):
+def test_fetch_annual_financials_merges_choicestock_estimates(tmp_path, monkeypatch):
     from core.data import stockanalysis_financials as sa
     monkeypatch.setattr(sa, "_DB_PATH", tmp_path / "sa_cache.sqlite")
     with patch.object(sa._CLIENT, "get", side_effect=_make_mock_get_with_choicestock()):
         result = sa.fetch_annual_financials("LITE")
+    revenue_by_year = {row["year"]: row for row in result["revenue"]}
     eps_by_year = {row["year"]: row for row in result["eps"]}
+    roe_by_year = {row["year"]: row for row in result["roe"]}
+    assert revenue_by_year["2027"]["value"] == 5547.45834
+    assert revenue_by_year["2028"]["value"] == 8317.14352
     assert eps_by_year["2027"]["value"] == 15.91647
     assert eps_by_year["2027"]["is_estimate"] is True
     assert eps_by_year["2028"]["value"] == 27.75827
+    assert roe_by_year["2027"]["value"] == 25.19
+    assert roe_by_year["2028"]["value"] == 26.92
+    assert result["latest_report_date"] == "2026.05.06"
 
 
 def test_fetch_annual_financials_roe(tmp_path, monkeypatch):
