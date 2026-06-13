@@ -40,7 +40,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         className={`${roboto.variable} ${robotoMono.variable} ${notoSansKR.variable} min-h-screen bg-background antialiased`}
       >
         <Nav />
-        <main className="mx-auto w-full max-w-[1800px] px-4 py-8 sm:px-6 2xl:px-8">{children}</main>
+        <main className="mx-auto w-full max-w-[calc(100vw-24px)] px-3 py-6 sm:px-4 2xl:px-5">{children}</main>
       </body>
     </html>
   );
