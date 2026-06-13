@@ -14,7 +14,6 @@ from api.models import GrowthHydrateOut, GrowthScoreOut, GrowthTimingOut, Growth
 from core.auth.deps import CurrentUser, current_user
 from core.data.normalization import normalize_finite_numbers
 from core.data.ohlcv_cache import fetch_ohlcv
-from core.data.price_target_consensus import fetch_price_target_consensus
 from core.data.ticker_data_service import get_fundamentals
 from core.prices.selection import prefer_toss_market_data
 from core.prices.kis import KISPriceProvider
@@ -134,18 +133,7 @@ def get_valuation(
     common = get_fundamentals(ticker, universe=universe)
     has_common_snapshot = row is None and common.get("valuation_source") is not None
     fallback = None if row or has_common_snapshot else _missing_cached_valuation(ticker)
-    consensus = _consensus_not_hydrated(ticker)
-    if refresh_consensus:
-        try:
-            consensus = fetch_price_target_consensus(ticker)
-        except Exception as exc:
-            log.warning(
-                "price target consensus fetch failed ticker=%s source=%s error_type=%s",
-                ticker,
-                _consensus_source(ticker),
-                type(exc).__name__,
-            )
-            consensus = _temporary_consensus_error(ticker)
+    consensus = repo.get_latest_price_target_consensus_snapshot(ticker) or _consensus_not_hydrated(ticker)
     consensus = _with_current_price(ticker, consensus)
     return normalize_finite_numbers({
         "ticker": ticker,
@@ -344,7 +332,7 @@ def _missing_cached_valuation(ticker: str) -> dict:
 def _consensus_not_hydrated(ticker: str) -> dict:
     return {
         "consensus_status": "missing",
-        "consensus_message": f"{ticker} 목표주가 consensus는 화면 조회 중 외부 호출하지 않습니다. 데이터 보강 작업을 실행해 주세요.",
+        "consensus_message": f"{ticker} 목표주가 consensus snapshot이 아직 없습니다. Jobs에서 목표주가 적재 작업을 실행하거나 다음 스케줄을 기다려 주세요.",
         "consensus_source": _consensus_source(ticker),
         "retry_after": None,
         "current_price": None,

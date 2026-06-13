@@ -14,6 +14,7 @@ from core.fx import get_fx_provider
 from core.indicators import compute_indicators
 from core.data.prices_provider import fetch_ohlcv
 from core.data.fundamental_backfill import hydrate_fundamental_snapshots
+from core.data.price_target_backfill import hydrate_price_target_consensus_snapshots
 from core.data.news_provider import fetch_news, filter_recent_news
 from core.prices.selection import prefer_toss_market_data
 from core.prices.kis import KISPriceProvider
@@ -225,6 +226,18 @@ def fundamental_snapshots_hydrate_job():
     result = hydrate_fundamental_snapshots()
     log.info(
         "fundamental_snapshots_hydrate_job 완료: requested=%d updated=%d skipped=%d",
+        result["requested"],
+        result["updated"],
+        result["skipped"],
+    )
+    return {key: value for key, value in result.items() if key != "errors"}
+
+
+def price_target_consensus_hydrate_job():
+    """관심종목/보유종목 목표주가 consensus snapshot 명시 적재."""
+    result = hydrate_price_target_consensus_snapshots()
+    log.info(
+        "price_target_consensus_hydrate_job 완료: requested=%d updated=%d skipped=%d",
         result["requested"],
         result["updated"],
         result["skipped"],
@@ -540,6 +553,16 @@ def _job_registry() -> list[dict]:
             "func": fundamental_snapshots_hydrate_job,
         },
         {
+            "id": "price_target_consensus_hydrate",
+            "name": "관심/보유 목표주가 적재",
+            "category": "valuation",
+            "schedule": "매일 08:30 KST",
+            "description": "관심종목과 보유종목의 목표주가 consensus를 백그라운드에서 수집해 snapshot으로 저장합니다.",
+            "bootstrap": True,
+            "bootstrap_description": "관심/보유 종목의 목표주가 consensus를 저장합니다.",
+            "func": price_target_consensus_hydrate_job,
+        },
+        {
             "id": "daily_holdings_news",
             "name": "보유종목 오늘 뉴스",
             "category": "telegram",
@@ -650,6 +673,8 @@ def create_scheduler() -> BackgroundScheduler:
     )
     scheduler.add_job(lambda: run_registered_job("fundamental_snapshots_hydrate", "schedule"), "cron", hour=8, minute=20,
                       id="fundamental_snapshots_hydrate", timezone="Asia/Seoul")
+    scheduler.add_job(lambda: run_registered_job("price_target_consensus_hydrate", "schedule"), "cron", hour=8, minute=30,
+                      id="price_target_consensus_hydrate", timezone="Asia/Seoul")
     scheduler.add_job(lambda: run_registered_job("daily_holdings_news", "schedule"), "cron", hour=8, minute=40,
                       id="daily_holdings_news", timezone="Asia/Seoul")
     return scheduler

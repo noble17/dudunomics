@@ -158,10 +158,8 @@ export const growthApi = {
     if (signal) params.set("signal", signal);
     return request<GrowthScore[]>(`/api/growth/top?${params.toString()}`);
   },
-  valuation: (ticker: string, universe = "sp500", refreshConsensus = false) =>
-    request<GrowthValuation>(
-      `/api/growth/ticker/${ticker}/valuation?universe=${universe}&refresh_consensus=${refreshConsensus}`
-    ),
+  valuation: (ticker: string, universe = "sp500") =>
+    request<GrowthValuation>(`/api/growth/ticker/${ticker}/valuation?universe=${universe}`),
   timing: (ticker: string) =>
     request<GrowthTiming>(`/api/growth/ticker/${ticker}/timing`),
   hydrate: (ticker: string, universe = "sp500") =>

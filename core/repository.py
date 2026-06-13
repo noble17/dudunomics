@@ -181,6 +181,26 @@ def _init_schema(engine):
         PRIMARY KEY (ticker, as_of, source)
     );
 
+    CREATE TABLE IF NOT EXISTS price_target_consensus_snapshots (
+        ticker           TEXT NOT NULL,
+        as_of            DATE NOT NULL,
+        source           TEXT NOT NULL,
+        consensus_status TEXT,
+        consensus_message TEXT,
+        current_price    DOUBLE,
+        target_mean      DOUBLE,
+        target_median    DOUBLE,
+        target_low       DOUBLE,
+        target_high      DOUBLE,
+        upside_pct       DOUBLE,
+        analyst_count    INTEGER,
+        consensus_as_of  TEXT,
+        fallback_used    BOOLEAN DEFAULT FALSE,
+        attempts_json    JSON,
+        fetched_at       TIMESTAMP DEFAULT current_timestamp,
+        PRIMARY KEY (ticker, as_of, source)
+    );
+
     CREATE TABLE IF NOT EXISTS ticker_data_status (
         ticker          TEXT NOT NULL,
         data_type       TEXT NOT NULL,
@@ -408,6 +428,9 @@ def _init_schema(engine):
             "CREATE TABLE IF NOT EXISTS watchlist_items (watchlist_id INTEGER NOT NULL, ticker TEXT NOT NULL, universe TEXT NOT NULL DEFAULT 'sp500', name TEXT, memo TEXT, created_at TIMESTAMP DEFAULT current_timestamp, PRIMARY KEY (watchlist_id, ticker, universe))",
             "CREATE TABLE IF NOT EXISTS ticker_profiles (ticker TEXT PRIMARY KEY, name TEXT, market TEXT, country TEXT, currency TEXT, sector TEXT, industry TEXT, exchange TEXT, source TEXT, updated_at TIMESTAMP DEFAULT current_timestamp)",
             "CREATE TABLE IF NOT EXISTS fundamental_snapshots (ticker TEXT NOT NULL, as_of DATE NOT NULL, source TEXT NOT NULL, per DOUBLE, pbr DOUBLE, psr DOUBLE, peg DOUBLE, forward_pe DOUBLE, trailing_pe DOUBLE, forward_eps DOUBLE, eps_ttm DOUBLE, roe DOUBLE, roic DOUBLE, debt_ratio DOUBLE, current_ratio DOUBLE, gross_margin DOUBLE, operating_margin DOUBLE, revenue_growth DOUBLE, eps_growth DOUBLE, market_cap DOUBLE, raw_json JSON, fetched_at TIMESTAMP DEFAULT current_timestamp, PRIMARY KEY (ticker, as_of, source))",
+            "CREATE TABLE IF NOT EXISTS price_target_consensus_snapshots (ticker TEXT NOT NULL, as_of DATE NOT NULL, source TEXT NOT NULL, consensus_status TEXT, consensus_message TEXT, current_price DOUBLE, target_mean DOUBLE, target_median DOUBLE, target_low DOUBLE, target_high DOUBLE, upside_pct DOUBLE, analyst_count INTEGER, consensus_as_of TEXT, fallback_used BOOLEAN DEFAULT FALSE, attempts_json JSON, fetched_at TIMESTAMP DEFAULT current_timestamp, PRIMARY KEY (ticker, as_of, source))",
+            "ALTER TABLE price_target_consensus_snapshots ADD COLUMN IF NOT EXISTS current_price DOUBLE",
+            "ALTER TABLE price_target_consensus_snapshots ADD COLUMN IF NOT EXISTS upside_pct DOUBLE",
             "CREATE TABLE IF NOT EXISTS ticker_data_status (ticker TEXT NOT NULL, data_type TEXT NOT NULL, source TEXT NOT NULL, min_date DATE, max_date DATE, last_fetched_at TIMESTAMP, last_success_at TIMESTAMP, last_error TEXT, coverage_json JSON, PRIMARY KEY (ticker, data_type, source))",
             "CREATE TABLE IF NOT EXISTS holding_sources (user_id INTEGER NOT NULL, source TEXT NOT NULL, account_id TEXT NOT NULL DEFAULT '', ticker TEXT NOT NULL, name TEXT NOT NULL, currency TEXT NOT NULL, quantity DOUBLE NOT NULL, avg_price DOUBLE NOT NULL, sector TEXT, market TEXT, excluded_from_portfolio BOOLEAN DEFAULT FALSE, updated_at TIMESTAMP DEFAULT current_timestamp, PRIMARY KEY (user_id, source, account_id, ticker))",
             "CREATE TABLE IF NOT EXISTS portfolio_snapshot_rollups (user_id INTEGER NOT NULL, bucket TEXT NOT NULL, ts TIMESTAMP NOT NULL, total_equity_krw DOUBLE, total_with_cash_krw DOUBLE, cash_krw DOUBLE, total_equity_usd DOUBLE, total_with_cash_usd DOUBLE, cash_usd DOUBLE, usdkrw DOUBLE, PRIMARY KEY (user_id, bucket, ts))",
@@ -1406,6 +1429,74 @@ def get_latest_fundamental_snapshot(ticker: str) -> dict | None:
     return result
 
 
+def upsert_price_target_consensus_snapshot(ticker: str, result: dict, as_of: date | None = None) -> None:
+    row = normalize_finite_numbers({
+        "ticker": ticker.upper(),
+        "as_of": as_of or date.today(),
+        "source": result.get("consensus_source") or "UNKNOWN",
+        "consensus_status": result.get("consensus_status"),
+        "consensus_message": result.get("consensus_message"),
+        "current_price": result.get("current_price"),
+        "target_mean": result.get("target_mean"),
+        "target_median": result.get("target_median"),
+        "target_low": result.get("target_low"),
+        "target_high": result.get("target_high"),
+        "upside_pct": result.get("upside_pct"),
+        "analyst_count": result.get("analyst_count"),
+        "consensus_as_of": result.get("consensus_as_of"),
+        "fallback_used": bool(result.get("fallback_used")),
+        "attempts_json": json.dumps(result.get("consensus_attempts") or []),
+        "fetched_at": datetime.now(),
+    })
+    with session() as s:
+        s.execute(text("""
+            INSERT INTO price_target_consensus_snapshots
+                (ticker, as_of, source, consensus_status, consensus_message,
+                 current_price, target_mean, target_median, target_low, target_high,
+                 upside_pct, analyst_count, consensus_as_of, fallback_used, attempts_json, fetched_at)
+            VALUES
+                (:ticker, :as_of, :source, :consensus_status, :consensus_message,
+                 :current_price, :target_mean, :target_median, :target_low, :target_high,
+                 :upside_pct, :analyst_count, :consensus_as_of, :fallback_used, :attempts_json, :fetched_at)
+            ON CONFLICT (ticker, as_of, source) DO UPDATE SET
+                consensus_status = excluded.consensus_status,
+                consensus_message = excluded.consensus_message,
+                current_price = excluded.current_price,
+                target_mean = excluded.target_mean,
+                target_median = excluded.target_median,
+                target_low = excluded.target_low,
+                target_high = excluded.target_high,
+                upside_pct = excluded.upside_pct,
+                analyst_count = excluded.analyst_count,
+                consensus_as_of = excluded.consensus_as_of,
+                fallback_used = excluded.fallback_used,
+                attempts_json = excluded.attempts_json,
+                fetched_at = excluded.fetched_at
+        """), row)
+        s.commit()
+
+
+def get_latest_price_target_consensus_snapshot(ticker: str) -> dict | None:
+    with session() as s:
+        row = s.execute(text("""
+            SELECT *
+            FROM price_target_consensus_snapshots
+            WHERE ticker = :ticker
+            ORDER BY as_of DESC, fetched_at DESC
+            LIMIT 1
+        """), {"ticker": ticker.upper()}).mappings().fetchone()
+    if not row:
+        return None
+    result = dict(row)
+    attempts = result.pop("attempts_json", "[]")
+    if isinstance(attempts, str):
+        result["consensus_attempts"] = json.loads(attempts)
+    else:
+        result["consensus_attempts"] = attempts or []
+    result["consensus_source"] = result.pop("source")
+    return result
+
+
 def list_fundamental_hydration_tickers() -> list[str]:
     """관심종목/보유종목에서 미국/해외 펀더멘털 수집 후보 티커를 반환."""
     with session() as s:
@@ -1426,6 +1517,11 @@ def list_fundamental_hydration_tickers() -> list[str]:
             ORDER BY ticker
         """)).fetchall()
         return [row[0] for row in rows]
+
+
+def list_price_target_consensus_hydration_tickers() -> list[str]:
+    """관심종목/보유종목에서 목표주가 consensus 수집 후보 티커를 반환."""
+    return list_fundamental_hydration_tickers()
 
 
 def upsert_ticker_data_status(row: dict) -> None:

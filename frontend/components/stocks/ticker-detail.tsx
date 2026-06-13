@@ -46,13 +46,12 @@ export function TickerDetail({ ticker, universe = "sp500", name, compact = false
     setHydrateMessage(null);
     try {
       const result = await tickersApi.hydrate(ticker, ["ohlcv", "fundamental"]);
-      const valuationWithConsensus = await growthApi.valuation(ticker, universe, true);
       const warnings = result.warnings.length ? ` · ${result.warnings.join(", ")}` : "";
       setHydrateMessage(`${ticker} 가격/OHLCV와 펀더멘털 snapshot 보강을 완료했습니다.${warnings}`);
       setChartRefreshKey((value) => value + 1);
       await Promise.all([
         mutateOverview(),
-        mutateValuation(valuationWithConsensus, false),
+        mutateValuation(),
         mutateTiming(),
       ]);
     } catch (error) {
