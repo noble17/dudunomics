@@ -44,11 +44,15 @@ const FALLBACK_CHART_COLORS: ChartColors = {
   brandAlt: "#4391ff",
   ma: {
     "20": "#ff9f0a",
-    "50": "#ffd60a",
-    "120": "#3182f6",
-    "200": "#22d3ee",
+    "50": "#a855f7",
+    "120": "#2563eb",
+    "200": "#0891b2",
   },
 };
+
+const BOLLINGER_COLOR = "#38bdf8";
+const RSI_COLOR = "#bf5af2";
+const SIGNAL_COLOR = "#ff9f0a";
 
 interface Props {
   ticker: string;
@@ -96,11 +100,11 @@ export function TickerCandleChart({
     { label: "SMA50", color: chartColors.ma["50"], group: "ma" },
     { label: "SMA120", color: chartColors.ma["120"], group: "ma" },
     { label: "SMA200", color: chartColors.ma["200"], group: "ma" },
-    { label: "Bollinger", color: "rgba(100, 210, 255, 0.7)", group: "bollinger" },
-    { label: "RSI 14", color: "#bf5af2", group: "rsi" },
+    { label: "Bollinger", color: BOLLINGER_COLOR, group: "bollinger" },
+    { label: "RSI 14", color: RSI_COLOR, group: "rsi" },
     { label: "MACD", color: chartColors.brand, group: "macd" },
-    { label: "Signal", color: "#ff9f0a", group: "macd" },
-    { label: "Vol MA20", color: "#ff9f0a", group: "volumeMa" },
+    { label: "Signal", color: SIGNAL_COLOR, group: "macd" },
+    { label: "Vol MA20", color: SIGNAL_COLOR, group: "volumeMa" },
   ] as const;
   const { data, isLoading } = useSWR(
     ["candles", ticker, period, indicatorsEnabled, refreshKey],
@@ -160,8 +164,8 @@ export function TickerCandleChart({
 
     // ── RSI ──────────────────────────────────────────────────
     const rsiSeries = chart.addSeries(LineSeries, {
-      color: "#bf5af2",
-      lineWidth: 1,
+      color: RSI_COLOR,
+      lineWidth: 2,
       lastValueVisible: false,
       priceLineVisible: false,
     }, 2);
@@ -177,8 +181,8 @@ export function TickerCandleChart({
       priceLineVisible: false,
     }, 3);
     const macdSignalSeries = chart.addSeries(LineSeries, {
-      color: "#ff9f0a",
-      lineWidth: 1,
+      color: SIGNAL_COLOR,
+      lineWidth: 2,
       lastValueVisible: false,
       priceLineVisible: false,
     }, 3);
@@ -201,21 +205,21 @@ export function TickerCandleChart({
 
     // ── 볼린저밴드 ────────────────────────────────────────────
     const bbUpper = chart.addSeries(LineSeries, {
-      color: "rgba(100, 210, 255, 0.4)",
-      lineWidth: 1,
+      color: withOpacity(BOLLINGER_COLOR, 0.82),
+      lineWidth: 2,
       lineStyle: 2, // dashed
       lastValueVisible: false,
       priceLineVisible: false,
     }, 0);
     const bbMiddle = chart.addSeries(LineSeries, {
-      color: "rgba(100, 210, 255, 0.7)",
-      lineWidth: 1,
+      color: withOpacity(BOLLINGER_COLOR, 0.95),
+      lineWidth: 2,
       lastValueVisible: false,
       priceLineVisible: false,
     }, 0);
     const bbLower = chart.addSeries(LineSeries, {
-      color: "rgba(100, 210, 255, 0.4)",
-      lineWidth: 1,
+      color: withOpacity(BOLLINGER_COLOR, 0.82),
+      lineWidth: 2,
       lineStyle: 2,
       lastValueVisible: false,
       priceLineVisible: false,
@@ -223,8 +227,8 @@ export function TickerCandleChart({
 
     // ── VolumeMA ──────────────────────────────────────────────
     const volumeMaSeries = chart.addSeries(LineSeries, {
-      color: "#ff9f0a",
-      lineWidth: 1,
+      color: SIGNAL_COLOR,
+      lineWidth: 2,
       lastValueVisible: false,
       priceLineVisible: false,
     }, 1);
@@ -445,7 +449,7 @@ export function TickerCandleChart({
             <span>거래량 <strong className="font-normal text-[var(--color-text-primary)]">{formatCompact(displayCandle?.volume)}</strong></span>
             {indicatorOptions.volumeMa && (
               <span className="inline-flex items-center gap-1">
-                <Dot color="#ff9f0a" />
+                <Dot color={SIGNAL_COLOR} />
                 Vol MA20 <strong className="font-normal text-[var(--color-text-primary)]">{formatCompact(latestVolumeMa)}</strong>
               </span>
             )}
@@ -453,7 +457,7 @@ export function TickerCandleChart({
           {indicatorOptions.rsi && (
             <MetricGroup title="RSI">
               <span className="inline-flex items-center gap-1">
-                <Dot color="#bf5af2" />
+                <Dot color={RSI_COLOR} />
                 RSI 14 <strong className="font-normal text-[var(--color-text-primary)]">{formatNumber(latestRsi, 2)}</strong>
               </span>
               <span>{rsiLabel(latestRsi)}</span>
@@ -466,7 +470,7 @@ export function TickerCandleChart({
                 MACD <strong className="font-normal text-[var(--color-text-primary)]">{formatNumber(latestMacd, 2)}</strong>
               </span>
               <span className="inline-flex items-center gap-1">
-                <Dot color="#ff9f0a" />
+                <Dot color={SIGNAL_COLOR} />
                 Signal <strong className="font-normal text-[var(--color-text-primary)]">{formatNumber(latestMacdSignal, 2)}</strong>
               </span>
               <span>
@@ -612,9 +616,9 @@ function readChartColors(): ChartColors {
     brandAlt: css("--color-connected", FALLBACK_CHART_COLORS.brandAlt),
     ma: {
       "20": "#ff9f0a",
-      "50": "#facc15",
-      "120": primary,
-      "200": "#22d3ee",
+      "50": "#a855f7",
+      "120": "#2563eb",
+      "200": "#0891b2",
     },
   };
 }
