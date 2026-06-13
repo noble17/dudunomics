@@ -738,6 +738,7 @@ export interface PriceChartData {
     e5: EmaPoint[];
     e20: EmaPoint[];
     e60: EmaPoint[];
+    e120: EmaPoint[];
   };
   quarterly_eps: QuarterlyEpsPoint[];
 }

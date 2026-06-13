@@ -88,7 +88,7 @@ def get_price_chart(
 ):
     upper = ticker.upper()
     today = date.today()
-    start = today - timedelta(days=380)
+    start = today - timedelta(days=1100)
 
     df, _ = fetch_ohlcv([upper], start, today)
     if df.empty or (upper, "Close") not in df.columns:
@@ -119,6 +119,7 @@ def get_price_chart(
             "e5": _compute_ema(close, 5),
             "e20": _compute_ema(close, 20),
             "e60": _compute_ema(close, 60),
+            "e120": _compute_ema(close, 120),
         },
         "quarterly_eps": quarterly_eps,
     }

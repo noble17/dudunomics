@@ -56,5 +56,6 @@ def test_price_chart_endpoint_returns_data(client):
     assert "e5" in body["ema"]
     assert "e20" in body["ema"]
     assert "e60" in body["ema"]
+    assert "e120" in body["ema"]
     assert len(body["quarterly_eps"]) == 1
     assert body["quarterly_eps"][0]["eps"] == 1.57

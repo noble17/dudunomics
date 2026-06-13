@@ -7,6 +7,7 @@ import { TickerCandleChart } from "@/components/charts/ticker-candle-chart";
 import { TimingCard } from "@/components/growth/timing-card";
 import { ValuationCard } from "@/components/growth/valuation-card";
 import { Button } from "@/components/ui/button";
+import { WatchlistInsightCharts } from "@/components/watchlist/watchlist-insight-charts";
 import { growthApi, tickersApi } from "@/lib/api";
 
 interface TickerDetailProps {
@@ -111,6 +112,8 @@ export function TickerDetail({ ticker, universe = "sp500", name, compact = false
           refreshKey={chartRefreshKey}
         />
       </section>
+
+      <WatchlistInsightCharts ticker={ticker} universe={universe} />
 
       <section className="rounded-xl border border-border bg-card p-4">
         <p className="font-data text-[10px] tracking-[0.2em] text-primary">DATA STATUS</p>
