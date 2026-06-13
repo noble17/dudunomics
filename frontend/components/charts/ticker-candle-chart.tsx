@@ -19,6 +19,8 @@ import { chartTheme } from "@/lib/design-tokens";
 type Period = "5D" | "1M" | "3M" | "6M" | "1Y";
 const PERIODS: Period[] = ["5D", "1M", "3M", "6M", "1Y"];
 type IndicatorKey = "ma" | "bollinger" | "rsi" | "macd" | "volumeMa";
+const MA_PERIODS = ["20", "50", "120", "200"] as const;
+const LEGACY_MA_PERIODS = ["5", "60"] as const;
 
 interface Props {
   ticker: string;
@@ -161,7 +163,7 @@ export function TickerCandleChart({
     for (const [p, color] of Object.entries(MA_COLORS)) {
       maSeriesMap[p] = chart.addSeries(LineSeries, {
         color,
-        lineWidth: 1,
+        lineWidth: 2,
         lastValueVisible: false,
         priceLineVisible: false,
       }, 0);
@@ -243,7 +245,10 @@ export function TickerCandleChart({
 
     // MA
     const showMa = indicatorOptions.ma;
-    for (const p of ["20", "50", "120", "200"]) {
+    for (const p of LEGACY_MA_PERIODS) {
+      s[`ma${p}`]?.setData([]);
+    }
+    for (const p of MA_PERIODS) {
       const pts = ind?.ma?.[p] ?? [];
       s[`ma${p}`]?.setData(showMa ? pts : []);
     }
@@ -283,22 +288,23 @@ export function TickerCandleChart({
   const prev = candles[candles.length - 2];
   const displayTime = hoveredTime ?? last?.time ?? null;
   const displayCandle = findCandle(candles, displayTime) ?? last;
+  const displayCandleTime = displayCandle?.time ?? null;
   const displayPrev = displayCandle ? previousCandle(candles, displayCandle.time) : prev;
   const change = displayCandle && displayPrev ? displayCandle.close - displayPrev.close : 0;
   const changePct = displayPrev?.close ? (change / displayPrev.close) * 100 : 0;
   const isUp = change >= 0;
   const indicators = data?.indicators;
   const latestSma = {
-    "20": valueAt(indicators?.ma?.["20"], displayTime),
-    "50": valueAt(indicators?.ma?.["50"], displayTime),
-    "120": valueAt(indicators?.ma?.["120"], displayTime),
-    "200": valueAt(indicators?.ma?.["200"], displayTime),
+    "20": valueAt(indicators?.ma?.["20"], displayCandleTime),
+    "50": valueAt(indicators?.ma?.["50"], displayCandleTime),
+    "120": valueAt(indicators?.ma?.["120"], displayCandleTime),
+    "200": valueAt(indicators?.ma?.["200"], displayCandleTime),
   };
-  const latestRsi = valueAt(indicators?.rsi, displayTime);
-  const latestMacd = valueAt(indicators?.macd?.macd, displayTime);
-  const latestMacdSignal = valueAt(indicators?.macd?.signal, displayTime);
-  const latestMacdHist = valueAt(indicators?.macd?.histogram, displayTime);
-  const latestVolumeMa = valueAt(indicators?.volume_ma, displayTime);
+  const latestRsi = valueAt(indicators?.rsi, displayCandleTime);
+  const latestMacd = valueAt(indicators?.macd?.macd, displayCandleTime);
+  const latestMacdSignal = valueAt(indicators?.macd?.signal, displayCandleTime);
+  const latestMacdHist = valueAt(indicators?.macd?.histogram, displayCandleTime);
+  const latestVolumeMa = valueAt(indicators?.volume_ma, displayCandleTime);
   const toggleIndicator = (key: IndicatorKey) => {
     setIndicatorOptions((current) => ({ ...current, [key]: !current[key] }));
   };
@@ -319,7 +325,7 @@ export function TickerCandleChart({
                 {isUp ? "▲" : "▼"}{Math.abs(change).toFixed(2)} ({changePct.toFixed(2)}%)
               </span>
               <span className="text-[10px] font-data text-[var(--color-text-muted)]">
-                {displayTime ?? "-"} · 일봉 · 완료된 종가 기준
+                {displayCandleTime ?? "-"} · 일봉 · 완료된 종가 기준
               </span>
             </>
           )}
