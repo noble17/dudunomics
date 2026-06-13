@@ -7,7 +7,7 @@ function Signal({ label, value }: { label: string; value?: boolean | null }) {
 
 const STATUS_LABEL = {
   suitable: "적합",
-  watch: "관망",
+  watch: "추세확인",
   unsuitable: "부적합",
   unknown: "데이터 부족",
 };
@@ -64,6 +64,33 @@ function reasonList(title: string, reasons?: TimingReason[], tone = "text-muted-
   );
 }
 
+function statusLabel(data?: GrowthTiming) {
+  const status = data?.status ?? "unknown";
+  if (status === "watch" && data?.aligned && data?.pullback_stage !== "none") return "진입대기";
+  if (status === "watch" && data?.aligned) return "추세확인";
+  return STATUS_LABEL[status];
+}
+
+function nextAction(data?: GrowthTiming) {
+  if (!data || data.status !== "watch") return null;
+  if (data.aligned && data.pullback_stage === "none") {
+    return {
+      title: "다음 진입 조건",
+      body: "정배열은 유지 중입니다. 현재가가 EMA20·EMA50 근처 3% 이내로 내려오거나, 평균 이상 양봉 거래량이 붙으면 진입대기로 봅니다.",
+    };
+  }
+  if (data.aligned && data.pullback) {
+    return {
+      title: "진입대기 조건",
+      body: "눌림목은 들어왔습니다. 평균 이상 양봉 거래량과 RSI 과열 해소가 같이 확인되면 적합으로 올라갑니다.",
+    };
+  }
+  return {
+    title: "확인 필요",
+    body: "EMA 정배열, 눌림목, 거래량 중 부족한 조건이 있어 다음 신호를 기다립니다.",
+  };
+}
+
 export function TimingCard({ data }: { data?: GrowthTiming }) {
   const status = data?.status ?? "unknown";
   const accent = status === "suitable" ? "text-rise" : status === "unsuitable" ? "text-fall" : "text-muted-foreground";
@@ -87,12 +114,13 @@ export function TimingCard({ data }: { data?: GrowthTiming }) {
         !sufficiency.volume ? "20일 평균 거래량" : null,
       ].filter(Boolean)
     : [];
+  const action = nextAction(data);
 
   return (
     <section className="rounded-xl border border-border bg-card p-4">
       <div className="flex items-start justify-between">
         <p className="text-[11px] font-medium tracking-[0.18em] text-primary">TIMING CHECK</p>
-        <span className={`font-heading text-lg ${accent}`}>{STATUS_LABEL[status]}</span>
+        <span className={`font-heading text-lg ${accent}`}>{statusLabel(data)}</span>
       </div>
       <div className="mt-4 flex flex-wrap gap-2">
         <Signal label="EMA 정배열" value={data?.aligned} />
@@ -121,15 +149,21 @@ export function TimingCard({ data }: { data?: GrowthTiming }) {
         <p className="text-muted-foreground">RSI 14 <span className="float-right font-data text-foreground">{rsiValue(data?.rsi14, rsiLevel)}</span></p>
       </div>
       {watchReasons.length ? (
-        <div className="mt-4 rounded-lg border border-fall/30 bg-fall/5 p-3">
-          <p className="text-xs font-medium text-fall">
-            {data?.downgrade_reasons?.length ? "관망 전환 사유" : "관망 사유"}
+        <div className="mt-4 rounded-lg border border-primary/30 bg-primary/5 p-3">
+          <p className="text-xs font-medium text-primary">
+            {data?.downgrade_reasons?.length ? "진입 보류 사유" : "추세확인 사유"}
           </p>
           <div className="mt-2 space-y-1">
             {watchReasons.map((reason) => (
               <p key={reason.code} className="text-xs text-muted-foreground">{reason.message}</p>
             ))}
           </div>
+        </div>
+      ) : null}
+      {action ? (
+        <div className="mt-4 rounded-lg border border-border bg-muted/30 p-3">
+          <p className="text-xs font-medium text-foreground">{action.title}</p>
+          <p className="mt-1 text-xs text-muted-foreground">{action.body}</p>
         </div>
       ) : null}
       <div className="mt-4 grid gap-3">

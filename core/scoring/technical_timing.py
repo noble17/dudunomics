@@ -57,7 +57,7 @@ def analyze_frame(df: pd.DataFrame) -> dict:
     if aligned and pullback_stage == "breakdown":
         warning_reasons.append(_reason("pullback_breakdown", "EMA50 아래 3%를 초과해 눌림목보다 이탈에 가깝습니다.", "warning"))
     elif aligned and not pullback:
-        warning_reasons.append(_reason("missing_pullback", "현재가는 EMA20·EMA50 눌림목 범위가 아니어서 관망합니다.", "warning"))
+        warning_reasons.append(_reason("missing_pullback", "상승 추세는 유효하지만 현재가는 EMA20·EMA50 눌림목 범위 밖입니다.", "warning"))
     if pullback:
         message = "현재가가 EMA20·EMA50 아래 0~3% 눌림목 하단입니다." if pullback_stage == "lower" else "현재가가 EMA20·EMA50 눌림목 접근 범위입니다."
         positive_reasons.append(_reason("pullback", message, "positive"))
