@@ -184,9 +184,16 @@ function PriceEpsTooltip({
 }
 
 function annualPointDate(point: FinancialDataPoint) {
-  const year = point.year ?? point.period_end?.slice(0, 4);
-  if (!year) return null;
-  return `${year}-12-31`;
+  const raw = point.period_end ?? point.period ?? point.year;
+  if (!raw) return null;
+  const normalized = raw.replace(/\s*\(예상\)\s*/g, "").replace(/\./g, "-");
+  const monthMatch = normalized.match(/^(\d{4})-(\d{2})$/);
+  if (monthMatch) return `${monthMatch[1]}-${monthMatch[2]}-28`;
+  const yearMatch = normalized.match(/^(\d{4})$/);
+  if (yearMatch) return `${yearMatch[1]}-12-31`;
+  const date = new Date(normalized);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toISOString().slice(0, 10);
 }
 
 function buildPriceEpsData(
@@ -206,9 +213,9 @@ function buildPriceEpsData(
     .sort((a, b) => a.date.localeCompare(b.date));
 
   const quarterly = [...priceData.quarterly_eps].sort((a, b) => a.date.localeCompare(b.date));
-  const sourceActual = quarterly.length
-    ? quarterly.map((point) => ({ date: point.date, value: point.eps }))
-    : actualEps;
+  const sourceActual = actualEps.length
+    ? actualEps
+    : quarterly.map((point) => ({ date: point.date, value: point.eps }));
   const lastPriceDate = priceData.ohlcv.at(-1)?.date ?? "";
 
   const rows: {
@@ -258,9 +265,12 @@ export function WatchlistInsightCharts({ ticker, universe }: Props) {
     () => screenerApi.financials(ticker, universe),
   );
   const emaData = useMemo(() => mergeEmaData(priceData, emaMode), [priceData, emaMode]);
+  const epsSeries = financials?.sources?.choicestock?.eps?.length
+    ? financials.sources.choicestock.eps
+    : financials?.eps;
   const priceEpsData = useMemo(
-    () => buildPriceEpsData(priceData, financials?.eps),
-    [priceData, financials?.eps],
+    () => buildPriceEpsData(priceData, epsSeries),
+    [priceData, epsSeries],
   );
   const activeEmaKeys = EMA_BY_MODE[emaMode];
   const hasProjectedEps = priceEpsData.some((point) => point.epsProjected != null);
