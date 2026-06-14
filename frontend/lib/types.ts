@@ -717,6 +717,9 @@ export interface FinancialsData {
       source?: string | null;
       source_url?: string | null;
       as_of?: string | null;
+      revenue?: FinancialDataPoint[];
+      eps?: FinancialDataPoint[];
+      roe?: FinancialDataPoint[];
     };
   };
   quarterly: {

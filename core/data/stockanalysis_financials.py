@@ -285,6 +285,26 @@ def fetch_annual_financials(ticker: str, include_choicestock: bool = False) -> O
 
     cached = _from_cache(ticker)
     if cached is not None:
+        choice = cached.get("choicestock") or {}
+        has_choice_rows = any(choice.get(key) for key in ("revenue", "eps", "roe"))
+        if include_choicestock and not has_choice_rows:
+            choicestock = _fetch_choicestock_financials(ticker, include_choicestock)
+            if choicestock["revenue"] or choicestock["eps"] or choicestock["roe"] or choicestock["metrics"]:
+                cached["revenue"] = _merge_financial_rows(cached.get("revenue") or [], choicestock["revenue"])
+                cached["eps"] = _merge_financial_rows(cached.get("eps") or [], choicestock["eps"])
+                cached["roe"] = _merge_financial_rows(cached.get("roe") or [], choicestock["roe"])
+                cached["latest_report_date"] = cached.get("latest_report_date") or choicestock["latest_report_date"]
+                cached["choicestock"] = {
+                    "source": choicestock.get("source"),
+                    "source_url": choicestock.get("source_url"),
+                    "as_of": choicestock.get("as_of"),
+                    "revenue": choicestock.get("revenue") or [],
+                    "eps": choicestock.get("eps") or [],
+                    "roe": choicestock.get("roe") or [],
+                    "metrics": choicestock.get("metrics") or {},
+                    "news": choicestock.get("news") or [],
+                }
+                _to_cache(ticker, cached)
         return cached
 
     try:
@@ -311,6 +331,9 @@ def fetch_annual_financials(ticker: str, include_choicestock: bool = False) -> O
             "source": choicestock.get("source"),
             "source_url": choicestock.get("source_url"),
             "as_of": choicestock.get("as_of"),
+            "revenue": choicestock.get("revenue") or [],
+            "eps": choicestock.get("eps") or [],
+            "roe": choicestock.get("roe") or [],
             "metrics": choicestock.get("metrics") or {},
             "news": choicestock.get("news") or [],
         },

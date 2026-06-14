@@ -77,6 +77,12 @@ function formatMetric(value: number | null | undefined, suffix = "") {
   return `${value.toLocaleString("ko-KR", { maximumFractionDigits: 2 })}${suffix}`;
 }
 
+function pointYear(point: FinancialDataPoint) {
+  const raw = point.year ?? point.period_end?.slice(0, 4) ?? point.period?.slice(0, 4);
+  const year = Number(raw);
+  return Number.isFinite(year) ? year : null;
+}
+
 function toTs(date: string) {
   return new Date(date).getTime();
 }
@@ -368,11 +374,18 @@ export function WatchlistInsightCharts({ ticker, universe }: Props) {
 function GrowthFlowCard({ data }: { data: FinancialsData }) {
   const [activeTab, setActiveTab] = useState<FlowTab>("revenue");
   const tab = FLOW_TABS.find((item) => item.key === activeTab)!;
-  const points = data[activeTab] ?? [];
   const source = data.metrics.source ?? data.sources?.choicestock?.source;
   const sourceUrl = data.metrics.source_url ?? data.sources?.choicestock?.source_url;
   const sourceAsOf = data.metrics.as_of ?? data.sources?.choicestock?.as_of;
-  const chartData = points.map((point) => {
+  const choicePoints = data.sources?.choicestock?.[activeTab] ?? [];
+  const rawPoints = choicePoints.length ? choicePoints : data[activeTab] ?? [];
+  const chartData = rawPoints
+    .filter((point) => {
+      const year = pointYear(point);
+      return year == null || year >= 2024;
+    })
+    .slice(-5)
+    .map((point) => {
     const label = point.period_end?.slice(0, 7).replace("-", ".") || point.year || point.period || "";
     return {
       name: label,
@@ -380,9 +393,10 @@ function GrowthFlowCard({ data }: { data: FinancialsData }) {
       isEstimate: point.is_estimate,
     };
   });
+  const usingChoice = choicePoints.length > 0;
 
   return (
-    <section className="rounded-xl border border-border bg-card p-5">
+    <section className="rounded-xl border border-border bg-card p-4 sm:p-5">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <p className="font-heading text-xl font-semibold tracking-tight">성장성과 수익성 흐름은?</p>
@@ -394,7 +408,7 @@ function GrowthFlowCard({ data }: { data: FinancialsData }) {
                 onClick={() => setActiveTab(item.key)}
                 className={`rounded-full border px-4 py-2 text-sm font-medium transition-colors ${
                   activeTab === item.key
-                    ? "border-foreground bg-foreground text-background"
+                    ? "border-primary bg-primary text-primary-foreground shadow-sm"
                     : "border-border bg-background text-muted-foreground hover:border-primary/60 hover:text-foreground"
                 }`}
               >
@@ -406,21 +420,22 @@ function GrowthFlowCard({ data }: { data: FinancialsData }) {
         <div className="text-right text-xs text-muted-foreground">
           {data.latest_report_date && <p>최근실적발표 {data.latest_report_date}</p>}
           <p>단위: {tab.unit}</p>
+          <p>{usingChoice ? "초이스스탁 공개 데이터" : "공통 재무 데이터"}</p>
         </div>
       </div>
 
-      <div className="mt-8">
+      <div className="mt-6">
         <div className="mb-3 flex items-center justify-between border-b border-border pb-3">
           <p className="text-lg font-semibold">{tab.title}</p>
-          <span className="rounded-lg border border-border bg-background px-3 py-1 text-xs font-medium">연간</span>
+          <span className="rounded-lg border border-border bg-background px-3 py-1 text-xs font-medium text-foreground">연간</span>
         </div>
         {chartData.length ? (
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={chartData} margin={{ top: 28, right: 18, left: 18, bottom: 10 }}>
+          <ResponsiveContainer width="100%" height={230}>
+            <BarChart data={chartData} margin={{ top: 22, right: 10, left: 10, bottom: 4 }}>
               <CartesianGrid stroke="var(--border)" vertical={false} opacity={0.55} />
               <XAxis
                 dataKey="name"
-                tick={{ fontSize: 12, fill: "var(--muted-foreground)" }}
+                tick={{ fontSize: 12, fill: "var(--foreground)", opacity: 0.72 }}
                 axisLine={{ stroke: "var(--border)" }}
                 tickLine={false}
                 interval={0}
@@ -439,7 +454,7 @@ function GrowthFlowCard({ data }: { data: FinancialsData }) {
                   formatter={(value: unknown) => (
                     typeof value === "number" ? formatFlowValue(value, activeTab) : ""
                   )}
-                  fill="var(--muted-foreground)"
+                  fill="var(--foreground)"
                   fontSize={12}
                   fontWeight={600}
                 />
@@ -463,8 +478,8 @@ function GrowthFlowCard({ data }: { data: FinancialsData }) {
         )}
       </div>
 
-      <div className="mt-8 border-t border-border">
-        <div className="flex items-center justify-between border-b border-border py-4">
+      <div className="mt-5 border-t border-border">
+        <div className="flex items-center justify-between border-b border-border py-3">
           <span className="text-base font-medium">시가총액</span>
           <span className="text-right font-data text-xl font-semibold">
             {formatMetric(data.metrics.market_cap_m)}
@@ -478,7 +493,7 @@ function GrowthFlowCard({ data }: { data: FinancialsData }) {
             ["PEG", data.metrics.peg],
             ["PSR", data.metrics.price_to_sales],
           ].map(([label, value]) => (
-            <div key={label as string} className="flex items-center justify-between border-b border-border py-4">
+            <div key={label as string} className="flex items-center justify-between border-b border-border py-3">
               <span className="text-base font-medium">{label}</span>
               <span className="font-data text-lg font-semibold">{formatMetric(value as number | null, "배")}</span>
             </div>

@@ -73,6 +73,9 @@ def get_financials(
                 "source": choice.get("source"),
                 "source_url": choice.get("source_url"),
                 "as_of": choice.get("as_of"),
+                "revenue": choice.get("revenue") or [],
+                "eps": choice.get("eps") or [],
+                "roe": choice.get("roe") or [],
             }
         },
         "quarterly": {
