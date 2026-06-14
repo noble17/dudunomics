@@ -621,6 +621,24 @@ export interface AlertIn {
   condition_value?: number | null
 }
 
+export interface AlertTemplateItem {
+  condition_type: AlertConditionType
+  condition_value?: number | null
+}
+
+export interface AlertTemplateIn {
+  name: string
+  description?: string | null
+  items: AlertTemplateItem[]
+}
+
+export interface AlertTemplate extends AlertTemplateIn {
+  id: number
+  is_default: boolean
+  created_at: string
+  updated_at: string
+}
+
 // ── M8 Trades ──────────────────────────────────────────────────────────────
 
 export interface TradeIn {

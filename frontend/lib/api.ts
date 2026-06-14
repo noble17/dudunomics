@@ -7,7 +7,7 @@ import type {
   WorkspaceLayout,
   QuotesOut,
   NewsOut, AISummaryOut, ChatMessage,
-  AlertCondition, AlertEvent, AlertIn,
+  AlertCondition, AlertEvent, AlertIn, AlertTemplate, AlertTemplateIn,
   TradeImportPreview, TradeIn, TradeOut, PerformanceData, RebalancingRow,
   FinancialsData, PriceChartData, Watchlist, WatchlistItem, WatchlistMembership,
   GrowthScore, GrowthTiming, GrowthValuation, GrowthWatchlistStatus,
@@ -222,6 +222,13 @@ export const alertsApi = {
     request<AlertCondition>("/api/alerts", { method: "POST", body: JSON.stringify(body) }),
   delete: (id: number) =>
     fetch(`/api/alerts/${id}`, { method: "DELETE", credentials: "include" }),
+  templates: () => request<AlertTemplate[]>("/api/alerts/templates"),
+  createTemplate: (body: AlertTemplateIn) =>
+    request<AlertTemplate>("/api/alerts/templates", { method: "POST", body: JSON.stringify(body) }),
+  updateTemplate: (id: number, body: AlertTemplateIn) =>
+    request<AlertTemplate>(`/api/alerts/templates/${id}`, { method: "PUT", body: JSON.stringify(body) }),
+  deleteTemplate: (id: number) =>
+    fetch(`/api/alerts/templates/${id}`, { method: "DELETE", credentials: "include" }),
   events: () => request<AlertEvent[]>("/api/alerts/events"),
   unread: () => request<AlertEvent[]>("/api/alerts/events/unread"),
   markRead: () =>

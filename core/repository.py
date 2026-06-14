@@ -327,6 +327,18 @@ def _init_schema(engine):
         read            BOOLEAN DEFAULT FALSE
     );
 
+    CREATE SEQUENCE IF NOT EXISTS alert_templates_id_seq START 1;
+    CREATE TABLE IF NOT EXISTS alert_templates (
+        id              INTEGER DEFAULT nextval('alert_templates_id_seq') PRIMARY KEY,
+        user_id         INTEGER NOT NULL,
+        name            TEXT NOT NULL,
+        description     TEXT,
+        items_json      JSON NOT NULL,
+        is_default      BOOLEAN DEFAULT FALSE,
+        created_at      TIMESTAMP DEFAULT current_timestamp,
+        updated_at      TIMESTAMP DEFAULT current_timestamp
+    );
+
     CREATE SEQUENCE IF NOT EXISTS trades_id_seq START 1;
     CREATE TABLE IF NOT EXISTS trades (
         id          INTEGER DEFAULT nextval('trades_id_seq') PRIMARY KEY,
@@ -437,6 +449,8 @@ def _init_schema(engine):
             "CREATE TABLE IF NOT EXISTS watchlists (id INTEGER DEFAULT nextval('watchlists_id_seq') PRIMARY KEY, user_id INTEGER NOT NULL, name TEXT NOT NULL, description TEXT, created_at TIMESTAMP DEFAULT current_timestamp, updated_at TIMESTAMP DEFAULT current_timestamp)",
             "CREATE TABLE IF NOT EXISTS watchlist_items (watchlist_id INTEGER NOT NULL, ticker TEXT NOT NULL, universe TEXT NOT NULL DEFAULT 'sp500', name TEXT, memo TEXT, timing_alert_enabled BOOLEAN DEFAULT FALSE, created_at TIMESTAMP DEFAULT current_timestamp, PRIMARY KEY (watchlist_id, ticker, universe))",
             "ALTER TABLE watchlist_items ADD COLUMN IF NOT EXISTS timing_alert_enabled BOOLEAN DEFAULT FALSE",
+            "CREATE SEQUENCE IF NOT EXISTS alert_templates_id_seq START 1",
+            "CREATE TABLE IF NOT EXISTS alert_templates (id INTEGER DEFAULT nextval('alert_templates_id_seq') PRIMARY KEY, user_id INTEGER NOT NULL, name TEXT NOT NULL, description TEXT, items_json JSON NOT NULL, is_default BOOLEAN DEFAULT FALSE, created_at TIMESTAMP DEFAULT current_timestamp, updated_at TIMESTAMP DEFAULT current_timestamp)",
             "CREATE TABLE IF NOT EXISTS ticker_profiles (ticker TEXT PRIMARY KEY, name TEXT, market TEXT, country TEXT, currency TEXT, sector TEXT, industry TEXT, exchange TEXT, source TEXT, updated_at TIMESTAMP DEFAULT current_timestamp)",
             "CREATE TABLE IF NOT EXISTS fundamental_snapshots (ticker TEXT NOT NULL, as_of DATE NOT NULL, source TEXT NOT NULL, per DOUBLE, pbr DOUBLE, psr DOUBLE, peg DOUBLE, forward_pe DOUBLE, trailing_pe DOUBLE, forward_eps DOUBLE, eps_ttm DOUBLE, roe DOUBLE, roic DOUBLE, debt_ratio DOUBLE, current_ratio DOUBLE, gross_margin DOUBLE, operating_margin DOUBLE, revenue_growth DOUBLE, eps_growth DOUBLE, market_cap DOUBLE, raw_json JSON, fetched_at TIMESTAMP DEFAULT current_timestamp, PRIMARY KEY (ticker, as_of, source))",
             "CREATE TABLE IF NOT EXISTS price_target_consensus_snapshots (ticker TEXT NOT NULL, as_of DATE NOT NULL, source TEXT NOT NULL, consensus_status TEXT, consensus_message TEXT, current_price DOUBLE, target_mean DOUBLE, target_median DOUBLE, target_low DOUBLE, target_high DOUBLE, upside_pct DOUBLE, analyst_count INTEGER, consensus_as_of TEXT, fallback_used BOOLEAN DEFAULT FALSE, attempts_json JSON, fetched_at TIMESTAMP DEFAULT current_timestamp, PRIMARY KEY (ticker, as_of, source))",
@@ -2304,6 +2318,144 @@ def delete_user_alert(user_id: int, alert_id: int) -> bool:
         s.execute(text(
             "DELETE FROM user_alerts WHERE id = :id AND user_id = :u"
         ), {"id": alert_id, "u": user_id})
+        s.commit()
+        return True
+
+
+DEFAULT_ALERT_TEMPLATES = [
+    {
+        "name": "추세 진입 기본",
+        "description": "EMA20 근처 눌림과 재돌파를 같이 보고, EMA50 이탈은 리스크로 확인합니다.",
+        "items": [
+            {"condition_type": "ema20_near", "condition_value": 2},
+            {"condition_type": "price_cross_above_ema20", "condition_value": None},
+            {"condition_type": "price_cross_below_ema50", "condition_value": None},
+        ],
+    },
+    {
+        "name": "느긋한 눌림",
+        "description": "EMA50까지 기다리는 보수적인 진입 감시 템플릿입니다.",
+        "items": [
+            {"condition_type": "ema50_near", "condition_value": 3},
+            {"condition_type": "price_cross_above_ema50", "condition_value": None},
+            {"condition_type": "price_cross_below_ema50", "condition_value": None},
+        ],
+    },
+    {
+        "name": "보유 리스크",
+        "description": "보유 종목의 중장기 추세 훼손을 확인합니다.",
+        "items": [
+            {"condition_type": "price_cross_below_ema50", "condition_value": None},
+            {"condition_type": "price_cross_below_ema200", "condition_value": None},
+        ],
+    },
+]
+
+
+def _seed_alert_templates_if_empty(s: Session, user_id: int) -> None:
+    row = s.execute(text(
+        "SELECT COUNT(*) FROM alert_templates WHERE user_id = :u"
+    ), {"u": user_id}).fetchone()
+    if row and row[0] > 0:
+        return
+    for template in DEFAULT_ALERT_TEMPLATES:
+        s.execute(text("""
+            INSERT INTO alert_templates (user_id, name, description, items_json, is_default)
+            VALUES (:u, :name, :description, :items, TRUE)
+        """), {
+            "u": user_id,
+            "name": template["name"],
+            "description": template["description"],
+            "items": json.dumps(template["items"], ensure_ascii=False),
+        })
+
+
+def _load_alert_template_items(value) -> list[dict]:
+    if isinstance(value, list):
+        return value
+    if isinstance(value, str):
+        return json.loads(value or "[]")
+    return []
+
+
+def list_alert_templates(user_id: int) -> list[dict]:
+    with session() as s:
+        _seed_alert_templates_if_empty(s, user_id)
+        s.commit()
+        rows = s.execute(text("""
+            SELECT id, name, description, items_json, is_default, created_at, updated_at
+            FROM alert_templates
+            WHERE user_id = :u
+            ORDER BY is_default DESC, created_at ASC
+        """), {"u": user_id}).fetchall()
+        return [
+            {
+                "id": r[0],
+                "name": r[1],
+                "description": r[2] or "",
+                "items": _load_alert_template_items(r[3]),
+                "is_default": bool(r[4]),
+                "created_at": r[5],
+                "updated_at": r[6],
+            }
+            for r in rows
+        ]
+
+
+def create_alert_template(user_id: int, name: str, description: str | None, items: list[dict]) -> int:
+    with session() as s:
+        row = s.execute(text("""
+            INSERT INTO alert_templates (user_id, name, description, items_json, is_default)
+            VALUES (:u, :name, :description, :items, FALSE)
+            RETURNING id
+        """), {
+            "u": user_id,
+            "name": name,
+            "description": description or "",
+            "items": json.dumps(items, ensure_ascii=False),
+        }).fetchone()
+        s.commit()
+        return row[0]
+
+
+def update_alert_template(user_id: int, template_id: int, name: str, description: str | None, items: list[dict]) -> bool:
+    with session() as s:
+        row = s.execute(text("""
+            SELECT id FROM alert_templates
+            WHERE id = :id AND user_id = :u
+        """), {"id": template_id, "u": user_id}).fetchone()
+        if row is None:
+            return False
+        s.execute(text("""
+            UPDATE alert_templates
+            SET name = :name,
+                description = :description,
+                items_json = :items,
+                updated_at = current_timestamp
+            WHERE id = :id AND user_id = :u
+        """), {
+            "id": template_id,
+            "u": user_id,
+            "name": name,
+            "description": description or "",
+            "items": json.dumps(items, ensure_ascii=False),
+        })
+        s.commit()
+        return True
+
+
+def delete_alert_template(user_id: int, template_id: int) -> bool:
+    with session() as s:
+        row = s.execute(text("""
+            SELECT id FROM alert_templates
+            WHERE id = :id AND user_id = :u
+        """), {"id": template_id, "u": user_id}).fetchone()
+        if row is None:
+            return False
+        s.execute(text("""
+            DELETE FROM alert_templates
+            WHERE id = :id AND user_id = :u
+        """), {"id": template_id, "u": user_id})
         s.commit()
         return True
 

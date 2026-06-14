@@ -524,6 +524,24 @@ class AlertIn(BaseModel):
     condition_type: AlertConditionType
     condition_value: float | None = None
 
+
+class AlertTemplateItem(BaseModel):
+    condition_type: AlertConditionType
+    condition_value: float | None = None
+
+
+class AlertTemplateIn(BaseModel):
+    name: str
+    description: str | None = None
+    items: list[AlertTemplateItem]
+
+
+class AlertTemplateOut(AlertTemplateIn):
+    id: int
+    is_default: bool = False
+    created_at: datetime
+    updated_at: datetime
+
 class AlertOut(BaseModel):
     id: int
     ticker: str
