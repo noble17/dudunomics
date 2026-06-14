@@ -99,6 +99,17 @@ Expected: loads from cache if present; otherwise provider refresh must create ca
   - `get_latest_candidate_scores(region=None, universe_group=None)`
   - `upsert_candidate_shortlist(user_id, ticker, universe_group, status, memo=None)`
   - `get_candidate_shortlist(user_id, as_of=None)`
+- [ ] Candidate shortlist status semantics:
+  - `new`: not explicitly stored unless needed; candidate has no user action.
+  - `watching`: user marked as final candidate / under review.
+  - `added`: user added the ticker to a watchlist.
+  - `dismissed`: user excluded the candidate.
+- [ ] Default candidate queries must exclude:
+  - existing watchlist tickers,
+  - `watching` candidates,
+  - `added` candidates,
+  - `dismissed` candidates.
+- [ ] Excluded statuses must remain queryable through explicit filters/tabs.
 - [ ] Repository tests cover upsert/read for all three tables.
 - [ ] Verify:
 
@@ -192,6 +203,9 @@ PY
   - `sector`
   - `preset`
   - `exclude_watchlist`
+  - `exclude_watching`
+  - `hide_dismissed`
+  - `status`
   - `limit`
   - `min_market_cap`
   - `min_liquidity`
@@ -219,7 +233,14 @@ PY
   - Preset select: 균형형/성장 우선/밸류 우선/타이밍 우선/눌림 대기형.
   - Sector select.
   - Exclude watchlist toggle.
+  - Exclude watching toggle.
+  - Hide dismissed toggle.
   - Numeric filters for market cap/liquidity/Forward PER/PEG/ROE/RSI.
+- [ ] Status tabs:
+  - 신규 후보.
+  - 검토 중.
+  - 관심종목 편입.
+  - 제외됨.
 - [ ] Results:
   - US Top30.
   - KOSPI Top10.
@@ -296,4 +317,3 @@ PY
 - Do not provide buy/sell recommendation language.
 - Do not add real-time candidate ranking.
 - Do not replace existing `/growth` page yet.
-
