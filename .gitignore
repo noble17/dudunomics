@@ -1,5 +1,7 @@
 .env
 data/*.duckdb
+data/*.duckdb.wal
+data/*.duckdb.shm
 data/*.sqlite
 data/*.db
 data/*.json
