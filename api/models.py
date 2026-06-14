@@ -304,6 +304,42 @@ class GrowthWatchlistStatusOut(BaseModel):
     in_watchlist: bool
 
 
+class CandidateScoreOut(BaseModel):
+    as_of: date
+    region: str
+    universe_group: str
+    ticker: str
+    name: str | None = None
+    market: str | None = None
+    sector: str | None = None
+    industry: str | None = None
+    candidate_score: float | None = None
+    growth_score: float | None = None
+    quality_score: float | None = None
+    valuation_score: float | None = None
+    momentum_score: float | None = None
+    timing_score: float | None = None
+    liquidity_score: float | None = None
+    rank: int | None = None
+    status: str | None = None
+    status_memo: str | None = None
+    in_watchlist: bool = False
+    source_universe: str | None = None
+    source_universes: list[str] = Field(default_factory=list)
+    is_tech: bool = False
+
+
+class CandidateShortlistIn(BaseModel):
+    status: Literal["watching", "dismissed", "added", "new"]
+    memo: str | None = None
+    universe_group: str = "us"
+
+
+class CandidateRefreshOut(BaseModel):
+    regions: int = 0
+    rows: int = 0
+
+
 class WatchlistIn(BaseModel):
     name: str
     description: str | None = None

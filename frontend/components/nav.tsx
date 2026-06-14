@@ -7,6 +7,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 const links = [
   { href: "/portfolio", label: "포트폴리오", match: ["/portfolio", "/holdings"] },
   { href: "/watchlist", label: "관심종목", match: ["/watchlist"] },
+  { href: "/candidates", label: "후보발굴", match: ["/candidates"] },
   { href: "/stocks", label: "종목분석", match: ["/stocks", "/screener", "/growth"] },
   { href: "/backtest", label: "전략", match: ["/backtest"] },
   { href: "/manage", label: "관리", match: ["/manage", "/data-sources", "/jobs"] },

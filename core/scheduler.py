@@ -17,6 +17,7 @@ from core.data.fundamental_backfill import hydrate_fundamental_snapshots
 from core.data.price_target_backfill import hydrate_price_target_consensus_snapshots
 from core.data.choicestock_public import get_public_summary, is_supported_public_ticker
 from core.data.universe_provider import refresh_all_tickers
+from core.candidates.scorer import refresh_candidate_scores
 from core.prices.selection import prefer_toss_market_data
 from core.prices.kis import KISPriceProvider
 from core.prices.toss import fetch_buying_power as fetch_toss_buying_power
@@ -194,6 +195,13 @@ def universe_tickers_refresh_job():
     counts = refresh_all_tickers()
     log.info("universe_tickers_refresh_job 완료: %s", counts)
     return counts
+
+
+def candidate_scores_refresh_job():
+    """기존 quant_scores를 후보 발굴용 통합 랭킹으로 정규화."""
+    result = refresh_candidate_scores("all")
+    log.info("candidate_scores_refresh_job 완료: %s", result)
+    return result
 
 
 def toss_holdings_sync_job():
@@ -801,6 +809,16 @@ def _job_registry() -> list[dict]:
             "func": universe_tickers_refresh_job,
         },
         {
+            "id": "candidate_scores_refresh",
+            "name": "후보 발굴 점수 갱신",
+            "category": "valuation",
+            "schedule": "매일 07:25/16:25 KST",
+            "description": "기존 성장주 배치 점수를 후보 발굴용 통합 랭킹으로 저장합니다. 관심종목과 제외 종목은 화면에서 자동 제외됩니다.",
+            "bootstrap": True,
+            "bootstrap_description": "현재 보유한 성장주 점수를 후보 발굴 화면에서 볼 수 있게 정규화합니다.",
+            "func": candidate_scores_refresh_job,
+        },
+        {
             "id": "toss_holdings_sync",
             "name": "Toss 보유/현금 동기화",
             "category": "broker",
@@ -953,6 +971,10 @@ def create_scheduler() -> BackgroundScheduler:
                       id="growth_batch_us", timezone="Asia/Seoul")
     scheduler.add_job(lambda: run_registered_job("universe_tickers_refresh", "schedule"), "cron", day=1, hour=6, minute=20,
                       id="universe_tickers_refresh", timezone="Asia/Seoul")
+    scheduler.add_job(lambda: run_registered_job("candidate_scores_refresh", "schedule"), "cron", hour=7, minute=25,
+                      id="candidate_scores_refresh_us", timezone="Asia/Seoul")
+    scheduler.add_job(lambda: run_registered_job("candidate_scores_refresh", "schedule"), "cron", hour=16, minute=25,
+                      id="candidate_scores_refresh_kr", timezone="Asia/Seoul")
     scheduler.add_job(
         lambda: run_registered_job("toss_holdings_sync", "schedule"),
         "interval",

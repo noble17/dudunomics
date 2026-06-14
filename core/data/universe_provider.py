@@ -2,6 +2,7 @@
 
 S&P 500   : Wikipedia HTML 파싱
 Nasdaq 100: Wikipedia HTML 파싱
+Russell 1000: iShares IWB 공개 holdings CSV
 KOSPI 200 : FDR KRX 전체 목록 → KOSPI 시총 상위 200
 KOSDAQ 150: FDR KRX 전체 목록 → KOSDAQ 시총 상위 150
 
@@ -97,6 +98,55 @@ def get_nasdaq100_tickers(refresh: bool = False) -> list[str]:
         raise RuntimeError("Nasdaq 100 티커 목록 취득 불가") from e
 
 
+# ── Russell 1000 ─────────────────────────────────────────────────────────────
+
+def get_russell1000_tickers(refresh: bool = False) -> list[str]:
+    cache = _DATA / "russell1000_tickers.json"
+    if not refresh:
+        cached = _load_cache(cache)
+        if cached:
+            return cached
+    try:
+        r = requests.get(
+            "https://www.ishares.com/us/products/239707/ishares-russell-1000-etf/"
+            "1467271812596.ajax?fileType=csv&fileName=IWB_holdings&dataType=fund",
+            headers=_HEADERS,
+            timeout=15,
+        )
+        r.raise_for_status()
+        lines = r.text.splitlines()
+        header_idx = next(
+            idx for idx, line in enumerate(lines)
+            if "Ticker" in line and ("Name" in line or "Asset Class" in line)
+        )
+        df = pd.read_csv(StringIO("\n".join(lines[header_idx:])))
+        ticker_col = "Ticker" if "Ticker" in df.columns else "Symbol"
+        tickers = (
+            df[ticker_col]
+            .dropna()
+            .astype(str)
+            .str.strip()
+            .str.upper()
+            .str.replace(".", "-", regex=False)
+        )
+        tickers = [
+            ticker for ticker in tickers.tolist()
+            if ticker and ticker not in {"-", "CASH", "USD", "US DOLLAR"}
+        ]
+        tickers = list(dict.fromkeys(tickers))
+        if len(tickers) < 800:
+            raise ValueError(f"Russell 1000 티커 수가 예상보다 적음: {len(tickers)}")
+        _save_cache(cache, tickers)
+        log.info("Russell 1000 티커 %d개 취득 (iShares IWB)", len(tickers))
+        return tickers
+    except Exception as e:
+        log.warning("Russell 1000 iShares 실패 (%s) — 캐시 시도", e)
+        cached = _load_cache(cache)
+        if cached:
+            return cached
+        raise RuntimeError("Russell 1000 티커 목록 취득 불가") from e
+
+
 # ── KOSPI 200 / KOSDAQ 150 ───────────────────────────────────────────────────
 
 def _get_krx_listing() -> pd.DataFrame:
@@ -152,6 +202,7 @@ def get_kosdaq150_tickers(refresh: bool = False) -> list[str]:
 UNIVERSE_PROVIDERS = {
     "sp500":      get_sp500_tickers,
     "nasdaq100":  get_nasdaq100_tickers,
+    "russell1000": get_russell1000_tickers,
     "kospi200":   get_kospi200_tickers,
     "kosdaq150":  get_kosdaq150_tickers,
 }
@@ -159,6 +210,7 @@ UNIVERSE_PROVIDERS = {
 UNIVERSE_LABELS = {
     "sp500":     "S&P 500",
     "nasdaq100": "Nasdaq 100",
+    "russell1000": "Russell 1000",
     "kospi200":  "KOSPI 200",
     "kosdaq150": "KOSDAQ 150",
 }

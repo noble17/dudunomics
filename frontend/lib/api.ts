@@ -13,6 +13,7 @@ import type {
   GrowthScore, GrowthTiming, GrowthValuation, GrowthWatchlistStatus,
   GrowthHydrate, TickerHydrate, TickerOverview,
   JobOut, JobRun, GoldenCrossOut,
+  CandidateScore,
 } from "./types";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -83,6 +84,33 @@ export const goldenCrossApi = {
     if (group === "KOSPI" || group === "KOSDAQ" || group === "US") params.set("group_name", group);
     return request<GoldenCrossOut>(`/api/golden-cross?${params.toString()}`);
   },
+};
+
+export const candidatesApi = {
+  list: (params: { region?: string; sector?: string; status?: string; limit?: number } = {}) => {
+    const query = new URLSearchParams({
+      region: params.region || "all",
+      sector: params.sector || "tech",
+      status: params.status || "new",
+      limit: String(params.limit || 50),
+    });
+    return request<CandidateScore[]>(`/api/candidates?${query.toString()}`);
+  },
+  refresh: (region = "all") =>
+    request<{ regions: number; rows: number }>(
+      `/api/candidates/refresh?region=${encodeURIComponent(region)}`,
+      { method: "POST" },
+    ),
+  updateStatus: (ticker: string, body: { universe_group: string; status: string; memo?: string | null }) =>
+    request<{ ok: boolean; ticker: string; status: string }>(
+      `/api/candidates/${encodeURIComponent(ticker)}/shortlist`,
+      { method: "PUT", body: JSON.stringify(body) },
+    ),
+  addWatchlist: (ticker: string, universeGroup: string) =>
+    request<{ ok: boolean; ticker: string; watchlist_id: number; universe: string }>(
+      `/api/candidates/${encodeURIComponent(ticker)}/watchlist?universe_group=${encodeURIComponent(universeGroup)}`,
+      { method: "POST" },
+    ),
 };
 
 export const portfolioApi = {

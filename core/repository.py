@@ -266,6 +266,38 @@ def _init_schema(engine):
         PRIMARY KEY (universe, as_of, ticker)
     );
 
+    CREATE TABLE IF NOT EXISTS candidate_scores (
+        as_of             DATE NOT NULL,
+        region            TEXT NOT NULL,
+        universe_group    TEXT NOT NULL,
+        ticker            TEXT NOT NULL,
+        name              TEXT,
+        market            TEXT,
+        sector            TEXT,
+        industry          TEXT,
+        candidate_score   DOUBLE,
+        growth_score      DOUBLE,
+        quality_score     DOUBLE,
+        valuation_score   DOUBLE,
+        momentum_score    DOUBLE,
+        timing_score      DOUBLE,
+        liquidity_score   DOUBLE,
+        rank              INTEGER,
+        raw_json          JSON,
+        created_at        TIMESTAMP DEFAULT current_timestamp,
+        PRIMARY KEY (as_of, region, universe_group, ticker)
+    );
+
+    CREATE TABLE IF NOT EXISTS candidate_shortlist (
+        user_id        INTEGER NOT NULL,
+        ticker         TEXT NOT NULL,
+        universe_group TEXT NOT NULL,
+        status         TEXT NOT NULL,
+        memo           TEXT,
+        updated_at     TIMESTAMP DEFAULT current_timestamp,
+        PRIMARY KEY (user_id, ticker, universe_group)
+    );
+
     CREATE TABLE IF NOT EXISTS user_workspaces (
         user_id     INTEGER NOT NULL,
         name        TEXT NOT NULL DEFAULT 'default',
@@ -443,6 +475,9 @@ def _init_schema(engine):
             "ALTER TABLE quant_scores ADD COLUMN IF NOT EXISTS sector_percentile_fallback  BOOLEAN DEFAULT FALSE",
             "CREATE TABLE IF NOT EXISTS quant_rank_history (universe TEXT, as_of DATE, ticker TEXT, growth_composite DOUBLE, rank INTEGER, PRIMARY KEY (universe, as_of, ticker))",
             "CREATE INDEX IF NOT EXISTS idx_rank_hist ON quant_rank_history (universe, as_of)",
+            "CREATE TABLE IF NOT EXISTS candidate_scores (as_of DATE NOT NULL, region TEXT NOT NULL, universe_group TEXT NOT NULL, ticker TEXT NOT NULL, name TEXT, market TEXT, sector TEXT, industry TEXT, candidate_score DOUBLE, growth_score DOUBLE, quality_score DOUBLE, valuation_score DOUBLE, momentum_score DOUBLE, timing_score DOUBLE, liquidity_score DOUBLE, rank INTEGER, raw_json JSON, created_at TIMESTAMP DEFAULT current_timestamp, PRIMARY KEY (as_of, region, universe_group, ticker))",
+            "CREATE TABLE IF NOT EXISTS candidate_shortlist (user_id INTEGER NOT NULL, ticker TEXT NOT NULL, universe_group TEXT NOT NULL, status TEXT NOT NULL, memo TEXT, updated_at TIMESTAMP DEFAULT current_timestamp, PRIMARY KEY (user_id, ticker, universe_group))",
+            "CREATE INDEX IF NOT EXISTS idx_candidate_scores_latest ON candidate_scores (region, universe_group, as_of)",
             "CREATE TABLE IF NOT EXISTS quarterly_financials (ticker TEXT NOT NULL, period TEXT NOT NULL, eps DOUBLE, roe DOUBLE, debt_ratio DOUBLE, revenue DOUBLE, op_income DOUBLE, source TEXT, PRIMARY KEY (ticker, period))",
             "CREATE TABLE IF NOT EXISTS growth_watchlist (user_id INTEGER NOT NULL, universe TEXT NOT NULL, ticker TEXT NOT NULL, created_at TIMESTAMP DEFAULT current_timestamp, PRIMARY KEY (user_id, universe, ticker))",
             "CREATE SEQUENCE IF NOT EXISTS watchlists_id_seq START 1",
@@ -1838,6 +1873,113 @@ def get_quant_ticker(ticker: str, universe: str) -> dict | None:
               AND as_of = (SELECT MAX(as_of) FROM quant_scores WHERE universe = :universe)
         """), {"ticker": ticker, "universe": universe}).mappings().fetchone()
         return dict(row) if row else None
+
+
+# ── Candidate Screener ──────────────────────────────────────────────────────
+
+def upsert_candidate_scores(rows: list[dict]) -> None:
+    if not rows:
+        return
+    with session() as s:
+        for row in rows:
+            payload = normalize_finite_numbers(dict(row))
+            if isinstance(payload.get("raw_json"), (dict, list)):
+                payload["raw_json"] = json.dumps(payload["raw_json"])
+            s.execute(text("""
+                INSERT INTO candidate_scores (
+                    as_of, region, universe_group, ticker, name, market, sector, industry,
+                    candidate_score, growth_score, quality_score, valuation_score,
+                    momentum_score, timing_score, liquidity_score, rank, raw_json, created_at
+                )
+                VALUES (
+                    :as_of, :region, :universe_group, :ticker, :name, :market, :sector, :industry,
+                    :candidate_score, :growth_score, :quality_score, :valuation_score,
+                    :momentum_score, :timing_score, :liquidity_score, :rank, :raw_json, now()
+                )
+                ON CONFLICT (as_of, region, universe_group, ticker) DO UPDATE SET
+                    name = excluded.name,
+                    market = excluded.market,
+                    sector = excluded.sector,
+                    industry = excluded.industry,
+                    candidate_score = excluded.candidate_score,
+                    growth_score = excluded.growth_score,
+                    quality_score = excluded.quality_score,
+                    valuation_score = excluded.valuation_score,
+                    momentum_score = excluded.momentum_score,
+                    timing_score = excluded.timing_score,
+                    liquidity_score = excluded.liquidity_score,
+                    rank = excluded.rank,
+                    raw_json = excluded.raw_json,
+                    created_at = now()
+            """), payload)
+        s.commit()
+
+
+def get_latest_candidate_scores(
+    region: str | None = None,
+    universe_group: str | None = None,
+) -> list[dict]:
+    clauses = []
+    params: dict[str, Any] = {}
+    if region:
+        clauses.append("region = :region")
+        params["region"] = region
+    if universe_group:
+        clauses.append("universe_group = :universe_group")
+        params["universe_group"] = universe_group
+    where = " AND ".join(clauses)
+    if where:
+        where = "WHERE " + where
+    latest_where = where
+    with session() as s:
+        rows = s.execute(text(f"""
+            SELECT *
+            FROM candidate_scores
+            {where}
+              {"AND" if where else "WHERE"} as_of = (
+                SELECT MAX(as_of)
+                FROM candidate_scores
+                {latest_where}
+              )
+            ORDER BY region, universe_group, rank NULLS LAST, candidate_score DESC NULLS LAST
+        """), params).mappings().all()
+        return [dict(row) for row in rows]
+
+
+def upsert_candidate_shortlist(
+    user_id: int,
+    ticker: str,
+    universe_group: str,
+    status: str,
+    memo: str | None = None,
+) -> None:
+    with session() as s:
+        s.execute(text("""
+            INSERT INTO candidate_shortlist (user_id, ticker, universe_group, status, memo, updated_at)
+            VALUES (:uid, :ticker, :universe_group, :status, :memo, now())
+            ON CONFLICT (user_id, ticker, universe_group) DO UPDATE SET
+                status = excluded.status,
+                memo = COALESCE(excluded.memo, candidate_shortlist.memo),
+                updated_at = now()
+        """), {
+            "uid": user_id,
+            "ticker": ticker.upper(),
+            "universe_group": universe_group,
+            "status": status,
+            "memo": memo,
+        })
+        s.commit()
+
+
+def list_candidate_shortlist(user_id: int) -> list[dict]:
+    with session() as s:
+        rows = s.execute(text("""
+            SELECT *
+            FROM candidate_shortlist
+            WHERE user_id = :uid
+            ORDER BY updated_at DESC, ticker
+        """), {"uid": user_id}).mappings().all()
+        return [dict(row) for row in rows]
 
 
 # ── Growth Watchlist (사용자별) ────────────────────────────────────────────────

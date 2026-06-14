@@ -156,6 +156,31 @@ export interface GoldenCrossOut {
   history: GoldenCrossHistory[];
 }
 
+export interface CandidateScore {
+  as_of: string;
+  region: "US" | "KR" | string;
+  universe_group: string;
+  ticker: string;
+  name: string | null;
+  market: string | null;
+  sector: string | null;
+  industry: string | null;
+  candidate_score: number | null;
+  growth_score: number | null;
+  quality_score: number | null;
+  valuation_score: number | null;
+  momentum_score: number | null;
+  timing_score: number | null;
+  liquidity_score: number | null;
+  rank: number | null;
+  status: "new" | "watching" | "dismissed" | "added" | string | null;
+  status_memo: string | null;
+  in_watchlist: boolean;
+  source_universe: string | null;
+  source_universes: string[];
+  is_tech: boolean;
+}
+
 export interface PortfolioRow {
   ticker: string;
   name: string;
