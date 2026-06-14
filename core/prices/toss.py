@@ -224,17 +224,30 @@ def _fetch_stock_infos(symbols: list[str]) -> dict[str, dict]:
     return {str(row.get("symbol", "")).upper(): row for row in rows if row.get("symbol")}
 
 
+def _ohlcv_count(start: date, end: date) -> int:
+    """요청 구간을 덮을 만큼 일봉 count를 넉넉히 계산한다."""
+    requested_days = max((end - start).days + 10, 200)
+    max_count = int(os.getenv("TOSS_OHLCV_MAX_COUNT", "1200") or 1200)
+    return min(requested_days, max(max_count, 200))
+
+
 def fetch_ohlcv_daily(ticker: str, start: date, end: date) -> pd.DataFrame:
+    params = {
+        "symbol": _to_toss_symbol(ticker),
+        "interval": "1d",
+        "count": _ohlcv_count(start, end),
+        "adjusted": "true",
+    }
     try:
-        res = _get(
-            "/api/v1/candles",
-            params={
-                "symbol": _to_toss_symbol(ticker),
-                "interval": "1d",
-                "count": 200,
-                "adjusted": "true",
-            },
-        )
+        res = _get("/api/v1/candles", params=params)
+    except requests.HTTPError:
+        if params["count"] == 200:
+            return pd.DataFrame()
+        params["count"] = 200
+        try:
+            res = _get("/api/v1/candles", params=params)
+        except (RuntimeError, requests.HTTPError):
+            return pd.DataFrame()
     except RuntimeError:
         return pd.DataFrame()
 

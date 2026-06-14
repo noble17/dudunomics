@@ -454,7 +454,7 @@ function FlowTooltip({
   const row = payload[0].payload;
   const value = row?.value;
   const yoy = row?.yoy;
-  const yoyTone = yoy == null ? "text-muted-foreground" : yoy >= 0 ? "text-loss" : "text-primary";
+  const yoyColor = yoy == null ? undefined : yoy >= 0 ? "#ef4444" : "#3b82f6";
 
   return (
     <div className="rounded-xl border border-border bg-card px-4 py-3 text-sm text-foreground shadow-lg">
@@ -465,7 +465,7 @@ function FlowTooltip({
       <p className="mt-2">
         {title}: {typeof value === "number" ? formatFlowValue(value, tab) : "-"} {unit}
       </p>
-      <p className={`mt-1 font-semibold ${yoyTone}`}>
+      <p className="mt-1 font-semibold text-muted-foreground" style={{ color: yoyColor }}>
         전년대비 {formatYoy(yoy)}
       </p>
     </div>
