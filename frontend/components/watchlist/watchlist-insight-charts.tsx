@@ -197,7 +197,6 @@ export function WatchlistInsightCharts({ ticker, universe }: Props) {
     <div className="min-w-0 space-y-4">
       {financials && <GrowthFlowCard data={financials} />}
 
-      <div className="grid min-w-0 gap-4 xl:grid-cols-2">
       <section className="rounded-xl border border-border bg-card p-4">
         <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
           <div>
@@ -374,7 +373,6 @@ export function WatchlistInsightCharts({ ticker, universe }: Props) {
           <ChartEmpty label="표시할 주가 데이터가 없습니다. 데이터 보강 후 다시 확인해 주세요." />
         )}
       </section>
-      </div>
     </div>
   );
 }
