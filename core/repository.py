@@ -2056,6 +2056,20 @@ def is_user_watchlist_ticker(user_id: int, ticker: str) -> bool:
         return row is not None
 
 
+def list_all_watchlist_tickers() -> list[str]:
+    with session() as s:
+        rows = s.execute(text("""
+            SELECT DISTINCT upper(ticker) AS ticker
+            FROM (
+                SELECT ticker FROM watchlist_items
+                UNION ALL
+                SELECT ticker FROM growth_watchlist
+            ) t
+            ORDER BY ticker
+        """)).mappings().all()
+        return [row["ticker"] for row in rows]
+
+
 def list_timing_alert_watchlist_items() -> list[dict]:
     with session() as s:
         rows = s.execute(text("""

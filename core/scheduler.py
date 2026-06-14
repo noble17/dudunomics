@@ -15,6 +15,7 @@ from core.indicators import compute_indicators
 from core.data.prices_provider import fetch_ohlcv
 from core.data.fundamental_backfill import hydrate_fundamental_snapshots
 from core.data.price_target_backfill import hydrate_price_target_consensus_snapshots
+from core.data.choicestock_public import get_public_summary, is_supported_public_ticker
 from core.data.news_provider import fetch_news, filter_recent_news
 from core.prices.selection import prefer_toss_market_data
 from core.prices.kis import KISPriceProvider
@@ -244,6 +245,32 @@ def price_target_consensus_hydrate_job():
         result["skipped"],
     )
     return {key: value for key, value in result.items() if key != "errors"}
+
+
+def choicestock_public_hydrate_job():
+    """관심종목의 ChoiceStock 공개 summary 캐시를 하루 1회 보강."""
+    tickers = [
+        ticker
+        for ticker in repo.list_all_watchlist_tickers()
+        if is_supported_public_ticker(ticker)
+    ]
+    if not tickers:
+        return {"tickers": 0, "updated": 0, "failed": 0}
+
+    updated = 0
+    failed = 0
+    for ticker in tickers:
+        try:
+            before = repo.get_choicestock_public_snapshot(ticker, date.today())
+            result = get_public_summary(ticker)
+            if result and before is None:
+                updated += 1
+        except Exception as exc:
+            failed += 1
+            log.warning("choicestock_public_hydrate 실패 (%s): %s", ticker, exc)
+
+    log.info("choicestock_public_hydrate 완료: tickers=%d updated=%d failed=%d", len(tickers), updated, failed)
+    return {"tickers": len(tickers), "updated": updated, "failed": failed}
 
 
 def _run_growth_universes(universes: tuple[str, ...]):
@@ -686,6 +713,16 @@ def _job_registry() -> list[dict]:
             "func": price_target_consensus_hydrate_job,
         },
         {
+            "id": "choicestock_public_hydrate",
+            "name": "관심종목 초이스스탁 공개 데이터 적재",
+            "category": "valuation",
+            "schedule": "매일 08:35 KST",
+            "description": "관심종목의 초이스스탁 공개 summary 숫자와 뉴스 링크를 종목당 하루 1회만 캐시에 저장합니다.",
+            "bootstrap": True,
+            "bootstrap_description": "관심종목의 초이스스탁 공개 summary 캐시를 먼저 채웁니다.",
+            "func": choicestock_public_hydrate_job,
+        },
+        {
             "id": "daily_holdings_news",
             "name": "보유종목 오늘 뉴스",
             "category": "telegram",
@@ -806,6 +843,8 @@ def create_scheduler() -> BackgroundScheduler:
                       id="fundamental_snapshots_hydrate", timezone="Asia/Seoul")
     scheduler.add_job(lambda: run_registered_job("price_target_consensus_hydrate", "schedule"), "cron", hour=8, minute=30,
                       id="price_target_consensus_hydrate", timezone="Asia/Seoul")
+    scheduler.add_job(lambda: run_registered_job("choicestock_public_hydrate", "schedule"), "cron", hour=8, minute=35,
+                      id="choicestock_public_hydrate", timezone="Asia/Seoul")
     scheduler.add_job(lambda: run_registered_job("daily_holdings_news", "schedule"), "cron", hour=8, minute=40,
                       id="daily_holdings_news", timezone="Asia/Seoul")
     scheduler.add_job(lambda: run_registered_job("daily_watchlist_timing_alert", "schedule"), "cron", hour=8, minute=50,

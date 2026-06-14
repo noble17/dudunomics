@@ -27,6 +27,14 @@ _HEADERS = {
     "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8",
 }
 _CLIENT = httpx.Client(headers=_HEADERS, timeout=15, follow_redirects=True)
+_SKIP_SUFFIXES = (".KS", ".KQ", ".T", ".HK", ".SS", ".SZ")
+
+
+def is_supported_public_ticker(ticker: str) -> bool:
+    upper = ticker.upper()
+    if any(upper.endswith(suffix) for suffix in _SKIP_SUFFIXES):
+        return False
+    return not upper.isdigit()
 
 
 def _parse_float(text: str | None) -> float | None:
@@ -158,6 +166,8 @@ def parse_public_summary(html: str, ticker: str, source_url: str) -> dict[str, A
 def get_public_summary(ticker: str, force: bool = False) -> dict[str, Any] | None:
     """오늘 수집분이 있으면 DB에서 반환하고, 없으면 공개 HTML을 1회 요청한다."""
     upper = ticker.upper()
+    if not is_supported_public_ticker(upper):
+        return None
     today = date.today()
     if not force:
         cached = repo.get_choicestock_public_snapshot(upper, today)

@@ -10,6 +10,7 @@ def test_jobs_list_includes_registered_jobs(client):
     assert "snapshot" in ids
     assert "toss_holdings_sync" in ids
     assert "fundamental_snapshots_hydrate" in ids
+    assert "choicestock_public_hydrate" in ids
     assert "daily_watchlist_timing_alert" in ids
     toss = next(job for job in payload if job["id"] == "toss_holdings_sync")
     assert toss["bootstrap"] is True
@@ -107,3 +108,25 @@ def test_daily_watchlist_timing_alert_sends_checked_items(client, monkeypatch):
     assert "관심종목 TIMING CHECK" in sent[0]
     assert "[반도체] MU Micron" in sent[0]
     assert "NVDA" not in sent[0]
+
+
+def test_choicestock_public_hydrate_job_collects_watchlist_once(client, monkeypatch):
+    from core.scheduler import choicestock_public_hydrate_job
+
+    target = client.post("/api/watchlists", json={"name": "반도체"}).json()
+    client.put(
+        f"/api/watchlists/{target['id']}/items/LITE",
+        json={"name": "Lumentum", "universe": "sp500"},
+    )
+    client.put(
+        f"/api/watchlists/{target['id']}/items/005930.KS",
+        json={"name": "삼성전자", "universe": "kospi200"},
+    )
+
+    calls = []
+    monkeypatch.setattr("core.scheduler.get_public_summary", lambda ticker: calls.append(ticker) or {"ticker": ticker})
+
+    result = choicestock_public_hydrate_job()
+
+    assert result == {"tickers": 1, "updated": 1, "failed": 0}
+    assert calls == ["LITE"]

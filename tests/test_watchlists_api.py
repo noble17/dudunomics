@@ -118,6 +118,18 @@ def test_watchlist_item_can_toggle_timing_alert(client):
     assert items[0]["timing_alert_enabled"] is False
 
 
+def test_watchlist_prefetch_helper_calls_choicestock(monkeypatch):
+    from api.routers.watchlists import _prefetch_choicestock_public_summary
+
+    calls = []
+    monkeypatch.delenv("CHOICESTOCK_PREFETCH_DISABLED", raising=False)
+    monkeypatch.setattr("api.routers.watchlists.get_public_summary", lambda ticker: calls.append(ticker))
+
+    _prefetch_choicestock_public_summary("LITE")
+
+    assert calls == ["LITE"]
+
+
 def test_watchlist_can_rename_and_return_growth_timing_fields(client):
     target = client.post("/api/watchlists", json={"name": "OLD"}).json()
 

@@ -10,6 +10,7 @@ def fresh_db(tmp_path, monkeypatch):
     monkeypatch.setenv("DB_PATH", str(db_path))
     monkeypatch.delenv("BASIC_AUTH_USERNAME", raising=False)
     monkeypatch.delenv("BASIC_AUTH_PASSWORD", raising=False)
+    monkeypatch.setenv("CHOICESTOCK_PREFETCH_DISABLED", "true")
     monkeypatch.setattr(repo_module, "DB_PATH", db_path)
     repo_module._engine = None
     yield

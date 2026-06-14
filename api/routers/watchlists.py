@@ -1,16 +1,21 @@
 """사용자 Watchlist 관리 엔드포인트."""
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+import logging
+import os
+
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 
 from api.models import WatchlistIn, WatchlistItemIn, WatchlistItemOut, WatchlistMembershipOut, WatchlistOut
 from core.analytics.ticker_performance import build_ticker_performance
 from core.auth.deps import CurrentUser, current_user
+from core.data.choicestock_public import get_public_summary
 from core.scoring.technical_timing import analyze_timing
 import core.repository as repo
 
 
 router = APIRouter(prefix="/api/watchlists", tags=["watchlists"])
+log = logging.getLogger(__name__)
 
 
 @router.get("", response_model=list[WatchlistOut])
@@ -69,6 +74,7 @@ def add_item(
     watchlist_id: int,
     ticker: str,
     body: WatchlistItemIn,
+    background_tasks: BackgroundTasks,
     user: CurrentUser = Depends(current_user),
 ):
     ticker = ticker.upper()
@@ -84,12 +90,22 @@ def add_item(
         )
     except ValueError as exc:
         raise HTTPException(status_code=404, detail="Watchlist를 찾을 수 없습니다.") from exc
+    background_tasks.add_task(_prefetch_choicestock_public_summary, ticker)
     return {
         "ok": True,
         "watchlist_id": watchlist_id,
         "ticker": ticker,
         "universe": body.universe,
     }
+
+
+def _prefetch_choicestock_public_summary(ticker: str) -> None:
+    if os.getenv("CHOICESTOCK_PREFETCH_DISABLED", "").lower() in ("1", "true", "yes"):
+        return
+    try:
+        get_public_summary(ticker)
+    except Exception as exc:
+        log.warning("ChoiceStock 선수집 실패 (%s): %s", ticker, exc)
 
 
 @router.delete("/{watchlist_id}/items/{ticker}")
