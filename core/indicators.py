@@ -17,7 +17,7 @@ def compute_indicators(df: pd.DataFrame) -> dict:
     """
     입력: OHLCV DataFrame (index=DatetimeIndex, columns 포함 Open/High/Low/Close/Volume)
     출력: {
-        ma: {"20": [...], "50": [...], "120": [...], "200": [...]},
+        ma: {"5": [...], "20": [...], "50": [...], "120": [...], "200": [...]},
         bollinger: {"upper": [...], "middle": [...], "lower": [...]},
         rsi: [...],
         macd: {"macd": [...], "signal": [...], "histogram": [...]},
@@ -33,7 +33,7 @@ def compute_indicators(df: pd.DataFrame) -> dict:
     # ── MA ──────────────────────────────────────────────────
     ma = {
         str(p): _to_points(idx, close.rolling(p).mean())
-        for p in (20, 50, 120, 200)
+        for p in (5, 20, 50, 120, 200)
     }
 
     # ── 볼린저밴드 (20일, ±2σ) ─────────────────────────────

@@ -14,6 +14,15 @@ const CONDITION_OPTIONS: { value: AlertConditionType; label: string; needsValue:
   { value: "rsi_below", label: "RSI 과매도", needsValue: true },
   { value: "ma_golden_cross", label: "골든크로스", needsValue: false },
   { value: "ma_dead_cross", label: "데드크로스", needsValue: false },
+  { value: "ema20_near", label: "EMA20 근접", needsValue: true },
+  { value: "ema50_near", label: "EMA50 근접", needsValue: true },
+  { value: "ema200_near", label: "EMA200 근접", needsValue: true },
+  { value: "price_cross_above_ema20", label: "주가 EMA20 상향돌파", needsValue: false },
+  { value: "price_cross_above_ema50", label: "주가 EMA50 상향돌파", needsValue: false },
+  { value: "price_cross_above_ema200", label: "주가 EMA200 상향돌파", needsValue: false },
+  { value: "price_cross_below_ema20", label: "주가 EMA20 하향돌파", needsValue: false },
+  { value: "price_cross_below_ema50", label: "주가 EMA50 하향돌파", needsValue: false },
+  { value: "price_cross_below_ema200", label: "주가 EMA200 하향돌파", needsValue: false },
 ];
 
 interface Props {
@@ -107,12 +116,12 @@ export function AlertManager({ ticker, mode = "manage" }: Props) {
             </label>
             {selectedOption.needsValue && (
               <label className="grid gap-1 text-xs text-muted-foreground">
-                기준값
+                기준값{conditionType.includes("_near") ? " (% 이내)" : ""}
                 <input
                   value={conditionValue}
                   onChange={(event) => setConditionValue(event.target.value)}
                   type="number"
-                  placeholder="값 입력"
+                  placeholder={conditionType.includes("_near") ? "예: 1" : "값 입력"}
                   className="h-9 border border-border bg-background px-3 font-data text-sm text-foreground outline-none focus:border-primary"
                 />
               </label>

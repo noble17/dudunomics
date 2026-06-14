@@ -12,6 +12,7 @@ interface Props {
   onSelect?: (ticker: string) => void;
   onRemove?: (row: WatchlistItem) => void;
   onToggleTimingAlert?: (row: WatchlistItem, enabled: boolean) => void;
+  onOpenAlerts?: (row: WatchlistItem) => void;
 }
 
 const HEAD = "whitespace-nowrap px-4 py-3 text-right font-normal text-[11px] font-medium text-muted-foreground";
@@ -206,25 +207,37 @@ function TimingCell({ row }: { row: WatchlistItem }) {
 function TimingAlertCell({
   row,
   onToggle,
+  onOpenAlerts,
 }: {
   row: WatchlistItem;
   onToggle?: (row: WatchlistItem, enabled: boolean) => void;
+  onOpenAlerts?: (row: WatchlistItem) => void;
 }) {
   return (
     <td className="border-t border-border px-4 py-3 text-right">
-      <label
-        className="inline-flex cursor-pointer items-center justify-end gap-2 rounded-full border border-border px-2.5 py-1 text-[11px] text-muted-foreground hover:border-primary/40 hover:text-primary"
-        title="체크하면 매일 Telegram으로 이 종목의 TIMING CHECK를 받습니다."
-      >
-        <input
-          type="checkbox"
-          checked={row.timing_alert_enabled}
-          onChange={(event) => onToggle?.(row, event.target.checked)}
-          onClick={(event) => event.stopPropagation()}
-          className="size-3 accent-primary"
-        />
-        <span>알림</span>
-      </label>
+      <div className="inline-flex items-center justify-end gap-2">
+        <label
+          className="inline-flex cursor-pointer items-center justify-end gap-2 rounded-full border border-border px-2.5 py-1 text-[11px] text-muted-foreground hover:border-primary/40 hover:text-primary"
+          title="체크하면 매일 Telegram으로 이 종목의 TIMING CHECK를 받습니다."
+        >
+          <input
+            type="checkbox"
+            checked={row.timing_alert_enabled}
+            onChange={(event) => onToggle?.(row, event.target.checked)}
+            onClick={(event) => event.stopPropagation()}
+            className="size-3 accent-primary"
+          />
+          <span>요약</span>
+        </label>
+        <button
+          type="button"
+          onClick={() => onOpenAlerts?.(row)}
+          className="rounded-full border border-border px-2.5 py-1 text-[11px] text-muted-foreground hover:border-primary/40 hover:text-primary"
+          title="가격, RSI, 이동평균 조건 알림을 설정합니다."
+        >
+          조건
+        </button>
+      </div>
     </td>
   );
 }
@@ -237,7 +250,7 @@ function isWatchlistRow(row: Row): row is WatchlistItem {
   return "watchlist_id" in row;
 }
 
-export function PerformanceTable({ rows, mode, selectedTicker, onSelect, onRemove, onToggleTimingAlert }: Props) {
+export function PerformanceTable({ rows, mode, selectedTicker, onSelect, onRemove, onToggleTimingAlert, onOpenAlerts }: Props) {
   const tableMinWidth = mode === "portfolio" ? 1960 : 2040;
   const scrollerRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef({ active: false, startX: 0, scrollLeft: 0 });
@@ -385,7 +398,7 @@ export function PerformanceTable({ rows, mode, selectedTicker, onSelect, onRemov
                   <>
                     <GrowthCell row={row} />
                     <TimingCell row={row} />
-                    <TimingAlertCell row={row} onToggle={onToggleTimingAlert} />
+                    <TimingAlertCell row={row} onToggle={onToggleTimingAlert} onOpenAlerts={onOpenAlerts} />
                     <td className="border-t border-border px-4 py-3 text-right">
                       <button
                         type="button"

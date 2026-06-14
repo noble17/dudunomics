@@ -514,6 +514,9 @@ AlertConditionType = Literal[
     "price_above", "price_below",
     "rsi_above", "rsi_below",
     "ma_golden_cross", "ma_dead_cross",
+    "ema20_near", "ema50_near", "ema200_near",
+    "price_cross_above_ema20", "price_cross_above_ema50", "price_cross_above_ema200",
+    "price_cross_below_ema20", "price_cross_below_ema50", "price_cross_below_ema200",
 ]
 
 class AlertIn(BaseModel):

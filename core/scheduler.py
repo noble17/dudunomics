@@ -326,11 +326,76 @@ def _check_condition(alert: dict, current_price: float, ohlcv_df: pd.DataFrame |
         else:  # dead_cross
             return prev_above and (not curr_above)     # prev: MA5 > MA20, curr: MA5 < MA20
 
+    if ct.startswith("ema") or "_ema" in ct:
+        period = _alert_ema_period(ct)
+        if period is None or len(ohlcv_df) < period + 2:
+            return False
+
+        close = ohlcv_df["Close"].astype(float)
+        ema = close.ewm(span=period, adjust=False).mean()
+        current_close = float(close.iloc[-1])
+        current_ema = float(ema.iloc[-1])
+
+        if ct.endswith("_near"):
+            threshold_pct = float(cv if cv is not None else 1.0)
+            if threshold_pct <= 0:
+                return False
+            distance_pct = abs(current_close - current_ema) / current_ema * 100
+            return distance_pct <= threshold_pct
+
+        prev_close = float(close.iloc[-2])
+        prev_ema = float(ema.iloc[-2])
+        prev_above = prev_close > prev_ema
+        curr_above = current_close > current_ema
+
+        if ct.startswith("price_cross_above_ema"):
+            return (not prev_above) and curr_above
+        if ct.startswith("price_cross_below_ema"):
+            return prev_above and (not curr_above)
+
     return False
 
 
+def _alert_ema_period(condition_type: str) -> int | None:
+    if "ema20" in condition_type:
+        return 20
+    if "ema50" in condition_type:
+        return 50
+    if "ema200" in condition_type:
+        return 200
+    return None
+
+
+def _format_alert_message(alert: dict, current_price: float) -> str:
+    ticker = alert["ticker"]
+    ct = alert["condition_type"]
+    cv = alert.get("condition_value")
+    price = f"{current_price:,.2f}"
+
+    if ct == "price_above":
+        return f"[조건 알림] {ticker}\n현재가 {price}가 기준가 {cv}를 상향 돌파했습니다."
+    if ct == "price_below":
+        return f"[조건 알림] {ticker}\n현재가 {price}가 기준가 {cv}를 하향 돌파했습니다."
+    if ct == "rsi_above":
+        return f"[조건 알림] {ticker}\nRSI가 기준값 {cv}를 상회했습니다. 현재가 {price}"
+    if ct == "rsi_below":
+        return f"[조건 알림] {ticker}\nRSI가 기준값 {cv}를 하회했습니다. 현재가 {price}"
+    if ct == "ma_golden_cross":
+        return f"[조건 알림] {ticker}\nMA5가 MA20을 상향 돌파했습니다. 현재가 {price}"
+    if ct == "ma_dead_cross":
+        return f"[조건 알림] {ticker}\nMA5가 MA20을 하향 돌파했습니다. 현재가 {price}"
+    period = _alert_ema_period(ct)
+    if period and ct.endswith("_near"):
+        return f"[조건 알림] {ticker}\n주가가 EMA{period} {cv}% 이내로 접근했습니다. 현재가 {price}"
+    if period and ct.startswith("price_cross_above_ema"):
+        return f"[조건 알림] {ticker}\n주가가 EMA{period}을 상향 돌파했습니다. 현재가 {price}"
+    if period and ct.startswith("price_cross_below_ema"):
+        return f"[조건 알림] {ticker}\n주가가 EMA{period}을 하향 돌파했습니다. 현재가 {price}"
+    return f"[조건 알림] {ticker}\n조건이 충족되었습니다. 현재가 {price}"
+
+
 def alert_check_job():
-    """활성 알림 조건 체크 — 조건 충족 시 user_alert_events 삽입 (1분 주기)."""
+    """활성 알림 조건 체크 — 조건 충족 시 이벤트 저장 및 Telegram 발송."""
     try:
         alerts = repo.get_all_enabled_alerts()
         if not alerts:
@@ -348,11 +413,13 @@ def alert_check_job():
         indicator_tickers = {
             a["ticker"] for a in alerts
             if a["condition_type"] in ("rsi_above", "rsi_below", "ma_golden_cross", "ma_dead_cross")
+            or a["condition_type"].startswith("ema")
+            or "_ema" in a["condition_type"]
         }
         ohlcv_cache: dict[str, pd.DataFrame] = {}
         if indicator_tickers:
             end = date.today()
-            start = end - timedelta(days=60)
+            start = end - timedelta(days=320)
             for ticker in indicator_tickers:
                 try:
                     prices_df, _ = fetch_ohlcv([ticker], start, end)
@@ -384,6 +451,7 @@ def alert_check_job():
                         condition_value=alert.get("condition_value"),
                         triggered_price=current_price,
                     )
+                    send_telegram(_format_alert_message(alert, current_price), channel="alerts")
                     log.info("alert fired: user=%d ticker=%s type=%s price=%.2f",
                              alert["user_id"], ticker, alert["condition_type"], current_price)
             except Exception as e:

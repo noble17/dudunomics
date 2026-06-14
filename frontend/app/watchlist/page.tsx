@@ -3,6 +3,7 @@
 import { useMemo, useRef, useState } from "react";
 import useSWR from "swr";
 
+import { AlertManager } from "@/components/alerts/alert-manager";
 import { PerformanceTable } from "@/components/performance/performance-table";
 import { TickerDetail } from "@/components/stocks/ticker-detail";
 import { Button } from "@/components/ui/button";
@@ -19,6 +20,7 @@ export default function WatchlistPage() {
   const [hits, setHits] = useState<TickerSearchHit[]>([]);
   const [message, setMessage] = useState<string | null>(null);
   const [selectedTicker, setSelectedTicker] = useState<string | null>(null);
+  const [alertTicker, setAlertTicker] = useState<string | null>(null);
   const detailRef = useRef<HTMLElement | null>(null);
 
   const { data: lists = [], mutate: mutateLists } = useSWR("/api/watchlists", watchlistsApi.list);
@@ -132,6 +134,12 @@ export default function WatchlistPage() {
     window.setTimeout(() => {
       detailRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     }, 0);
+  };
+
+  const openAlerts = (row: WatchlistItem) => {
+    setAlertTicker(row.ticker);
+    setSelectedTicker(row.ticker);
+    setMessage(`${row.ticker} 조건 알림을 설정할 수 있습니다.`);
   };
 
   return (
@@ -274,6 +282,7 @@ export default function WatchlistPage() {
                 onSelect={selectTicker}
                 onRemove={removeTicker}
                 onToggleTimingAlert={toggleTimingAlert}
+                onOpenAlerts={openAlerts}
               />
             ) : (
               <div className="flex h-24 items-center justify-center text-xs text-muted-foreground">
@@ -281,6 +290,24 @@ export default function WatchlistPage() {
               </div>
             )}
           </section>
+
+          {alertTicker && (
+            <section className="rounded-xl border border-primary/25 bg-card p-4">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="font-data text-[10px] tracking-[0.2em] text-primary">CONDITION ALERT</p>
+                  <h2 className="mt-1 text-base font-semibold text-foreground">{alertTicker} 조건 알림</h2>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    여러 조건을 추가하면 백엔드가 주기적으로 확인하고 충족 시 Telegram으로 보냅니다.
+                  </p>
+                </div>
+                <Button type="button" variant="outline" onClick={() => setAlertTicker(null)}>
+                  닫기
+                </Button>
+              </div>
+              <AlertManager ticker={alertTicker} mode="ticker" />
+            </section>
+          )}
 
           {detailTicker && (
             <section ref={detailRef} className="scroll-mt-20 min-w-0 space-y-4">

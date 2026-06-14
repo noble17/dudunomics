@@ -66,6 +66,15 @@ export function formatConditionMsg(ev: AlertEvent): string {
     case "rsi_below":   return `${ev.ticker} RSI 과매도(<${ev.condition_value}) @ $${price}`;
     case "ma_golden_cross": return `${ev.ticker} MA 골든크로스 발생`;
     case "ma_dead_cross":   return `${ev.ticker} MA 데드크로스 발생`;
+    case "ema20_near": return `${ev.ticker} EMA20 ${ev.condition_value}% 이내 접근 @ $${price}`;
+    case "ema50_near": return `${ev.ticker} EMA50 ${ev.condition_value}% 이내 접근 @ $${price}`;
+    case "ema200_near": return `${ev.ticker} EMA200 ${ev.condition_value}% 이내 접근 @ $${price}`;
+    case "price_cross_above_ema20": return `${ev.ticker} 주가 EMA20 상향돌파`;
+    case "price_cross_above_ema50": return `${ev.ticker} 주가 EMA50 상향돌파`;
+    case "price_cross_above_ema200": return `${ev.ticker} 주가 EMA200 상향돌파`;
+    case "price_cross_below_ema20": return `${ev.ticker} 주가 EMA20 하향돌파`;
+    case "price_cross_below_ema50": return `${ev.ticker} 주가 EMA50 하향돌파`;
+    case "price_cross_below_ema200": return `${ev.ticker} 주가 EMA200 하향돌파`;
     default: return `${ev.ticker} 알림 발생`;
   }
 }
