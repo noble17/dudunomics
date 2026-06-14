@@ -366,32 +366,43 @@ def _alert_ema_period(condition_type: str) -> int | None:
     return None
 
 
-def _format_alert_message(alert: dict, current_price: float) -> str:
-    ticker = alert["ticker"]
+def _format_alert_reason(alert: dict) -> str:
     ct = alert["condition_type"]
     cv = alert.get("condition_value")
-    price = f"{current_price:,.2f}"
 
     if ct == "price_above":
-        return f"[조건 알림] {ticker}\n현재가 {price}가 기준가 {cv}를 상향 돌파했습니다."
+        return f"현재가가 기준가 {cv}를 상향 돌파했습니다."
     if ct == "price_below":
-        return f"[조건 알림] {ticker}\n현재가 {price}가 기준가 {cv}를 하향 돌파했습니다."
+        return f"현재가가 기준가 {cv}를 하향 돌파했습니다."
     if ct == "rsi_above":
-        return f"[조건 알림] {ticker}\nRSI가 기준값 {cv}를 상회했습니다. 현재가 {price}"
+        return f"RSI가 기준값 {cv}를 상회했습니다."
     if ct == "rsi_below":
-        return f"[조건 알림] {ticker}\nRSI가 기준값 {cv}를 하회했습니다. 현재가 {price}"
+        return f"RSI가 기준값 {cv}를 하회했습니다."
     if ct == "ma_golden_cross":
-        return f"[조건 알림] {ticker}\nMA5가 MA20을 상향 돌파했습니다. 현재가 {price}"
+        return "MA5가 MA20을 상향 돌파했습니다."
     if ct == "ma_dead_cross":
-        return f"[조건 알림] {ticker}\nMA5가 MA20을 하향 돌파했습니다. 현재가 {price}"
+        return "MA5가 MA20을 하향 돌파했습니다."
     period = _alert_ema_period(ct)
     if period and ct.endswith("_near"):
-        return f"[조건 알림] {ticker}\n주가가 EMA{period} {cv}% 이내로 접근했습니다. 현재가 {price}"
+        return f"주가가 EMA{period} {cv}% 이내로 접근했습니다."
     if period and ct.startswith("price_cross_above_ema"):
-        return f"[조건 알림] {ticker}\n주가가 EMA{period}을 상향 돌파했습니다. 현재가 {price}"
+        return f"주가가 EMA{period}을 상향 돌파했습니다."
     if period and ct.startswith("price_cross_below_ema"):
-        return f"[조건 알림] {ticker}\n주가가 EMA{period}을 하향 돌파했습니다. 현재가 {price}"
-    return f"[조건 알림] {ticker}\n조건이 충족되었습니다. 현재가 {price}"
+        return f"주가가 EMA{period}을 하향 돌파했습니다."
+    return "조건이 충족되었습니다."
+
+
+def _format_alert_message(alert: dict, current_price: float) -> str:
+    ticker = alert["ticker"]
+    price = f"{current_price:,.2f}"
+    return f"[조건 알림] {ticker}\n{_format_alert_reason(alert)} 현재가 {price}"
+
+
+def _format_grouped_alert_message(ticker: str, current_price: float, alerts: list[dict]) -> str:
+    price = f"{current_price:,.2f}"
+    lines = [f"[조건 알림] {ticker}", f"현재가 {price}"]
+    lines.extend(f"- {_format_alert_reason(alert)}" for alert in alerts)
+    return "\n".join(lines)
 
 
 def alert_check_job():
@@ -430,6 +441,8 @@ def alert_check_job():
                 except Exception:
                     pass
 
+        grouped_alerts: dict[tuple[int, str], dict] = {}
+
         for alert in alerts:
             try:
                 ticker = alert["ticker"]
@@ -451,11 +464,27 @@ def alert_check_job():
                         condition_value=alert.get("condition_value"),
                         triggered_price=current_price,
                     )
-                    send_telegram(_format_alert_message(alert, current_price), channel="alerts")
+                    bucket_key = (alert["user_id"], ticker)
+                    bucket = grouped_alerts.setdefault(
+                        bucket_key,
+                        {"ticker": ticker, "current_price": current_price, "alerts": []},
+                    )
+                    bucket["current_price"] = current_price
+                    bucket["alerts"].append(alert)
                     log.info("alert fired: user=%d ticker=%s type=%s price=%.2f",
                              alert["user_id"], ticker, alert["condition_type"], current_price)
             except Exception as e:
                 log.error("alert check 오류 (alert_id=%d): %s", alert.get("id", -1), e)
+
+        for bucket in grouped_alerts.values():
+            send_telegram(
+                _format_grouped_alert_message(
+                    bucket["ticker"],
+                    bucket["current_price"],
+                    bucket["alerts"],
+                ),
+                channel="alerts",
+            )
 
     except Exception as e:
         log.error("alert_check_job 오류: %s", e)

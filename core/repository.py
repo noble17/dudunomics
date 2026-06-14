@@ -2287,12 +2287,43 @@ def save_workspace(user_id: int, layout: dict, name: str = "default") -> None:
 # ── 알림 조건 CRUD ──────────────────────────────────────────
 
 def create_alert(user_id: int, ticker: str, condition_type: str, condition_value: float | None) -> int:
+    normalized_ticker = ticker.upper()
     with session() as s:
+        if condition_value is None:
+            existing = s.execute(text("""
+                SELECT id FROM user_alerts
+                WHERE user_id = :u
+                  AND ticker = :t
+                  AND condition_type = :ct
+                  AND condition_value IS NULL
+                  AND enabled = TRUE
+                ORDER BY created_at DESC
+                LIMIT 1
+            """), {"u": user_id, "t": normalized_ticker, "ct": condition_type}).fetchone()
+        else:
+            existing = s.execute(text("""
+                SELECT id FROM user_alerts
+                WHERE user_id = :u
+                  AND ticker = :t
+                  AND condition_type = :ct
+                  AND condition_value = :cv
+                  AND enabled = TRUE
+                ORDER BY created_at DESC
+                LIMIT 1
+            """), {
+                "u": user_id,
+                "t": normalized_ticker,
+                "ct": condition_type,
+                "cv": condition_value,
+            }).fetchone()
+        if existing:
+            return existing[0]
+
         row = s.execute(text("""
             INSERT INTO user_alerts (user_id, ticker, condition_type, condition_value)
             VALUES (:u, :t, :ct, :cv)
             RETURNING id
-        """), {"u": user_id, "t": ticker.upper(), "ct": condition_type, "cv": condition_value}).fetchone()
+        """), {"u": user_id, "t": normalized_ticker, "ct": condition_type, "cv": condition_value}).fetchone()
         s.commit()
         return row[0]
 
