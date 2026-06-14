@@ -25,6 +25,43 @@ const CONDITION_OPTIONS: { value: AlertConditionType; label: string; needsValue:
   { value: "price_cross_below_ema200", label: "주가 EMA200 하향돌파", needsValue: false },
 ];
 
+const ALERT_TEMPLATES: {
+  id: string;
+  name: string;
+  description: string;
+  items: Omit<AlertIn, "ticker">[];
+}[] = [
+  {
+    id: "trend-entry",
+    name: "추세 진입 기본",
+    description: "EMA20 근처 눌림과 재돌파를 같이 봅니다.",
+    items: [
+      { condition_type: "ema20_near", condition_value: 2 },
+      { condition_type: "price_cross_above_ema20", condition_value: null },
+      { condition_type: "price_cross_below_ema50", condition_value: null },
+    ],
+  },
+  {
+    id: "patient-pullback",
+    name: "느긋한 눌림",
+    description: "EMA50까지 기다리는 보수적인 감시입니다.",
+    items: [
+      { condition_type: "ema50_near", condition_value: 3 },
+      { condition_type: "price_cross_above_ema50", condition_value: null },
+      { condition_type: "price_cross_below_ema50", condition_value: null },
+    ],
+  },
+  {
+    id: "risk-guard",
+    name: "보유 리스크",
+    description: "중장기 추세 훼손을 빠르게 확인합니다.",
+    items: [
+      { condition_type: "price_cross_below_ema50", condition_value: null },
+      { condition_type: "price_cross_below_ema200", condition_value: null },
+    ],
+  },
+];
+
 interface Props {
   ticker?: string;
   mode?: "ticker" | "manage";
@@ -76,6 +113,30 @@ export function AlertManager({ ticker, mode = "manage" }: Props) {
     await mutateConditions();
   };
 
+  const applyTemplate = async (template: typeof ALERT_TEMPLATES[number]) => {
+    const targetTicker = (fixedTicker ?? inputTicker).trim().toUpperCase();
+    if (!targetTicker) return;
+
+    const existingKeys = new Set(
+      conditions
+        .filter((condition) => condition.ticker === targetTicker)
+        .map((condition) => `${condition.condition_type}:${condition.condition_value ?? ""}`),
+    );
+    const nextItems = template.items.filter(
+      (item) => !existingKeys.has(`${item.condition_type}:${item.condition_value ?? ""}`),
+    );
+    if (!nextItems.length) return;
+
+    setSaving(true);
+    try {
+      await Promise.all(nextItems.map((item) => alertsApi.create({ ticker: targetTicker, ...item })));
+      if (!fixedTicker) setInputTicker("");
+      await mutateConditions();
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <section className="border border-border bg-card">
       <div className="flex items-center gap-2 border-b border-border px-4 py-3">
@@ -90,6 +151,29 @@ export function AlertManager({ ticker, mode = "manage" }: Props) {
 
       <div className="grid gap-5 p-4 xl:grid-cols-[360px_minmax(0,1fr)]">
         <div className="space-y-3">
+          <div className="space-y-2 rounded-lg border border-border bg-background/45 p-3">
+            <div>
+              <p className="text-xs font-medium text-foreground">템플릿</p>
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                자주 쓰는 조건 묶음을 현재 종목에 한 번에 추가합니다.
+              </p>
+            </div>
+            <div className="grid gap-2">
+              {ALERT_TEMPLATES.map((template) => (
+                <button
+                  key={template.id}
+                  type="button"
+                  onClick={() => applyTemplate(template)}
+                  disabled={saving}
+                  className="rounded-lg border border-border px-3 py-2 text-left transition-colors hover:border-primary/50 hover:bg-primary/5 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <span className="block text-xs font-medium text-foreground">{template.name}</span>
+                  <span className="mt-1 block text-[11px] leading-snug text-muted-foreground">{template.description}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div className="grid gap-2">
             {!fixedTicker && (
               <label className="grid gap-1 text-xs text-muted-foreground">
