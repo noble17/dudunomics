@@ -16,7 +16,7 @@ export function Nav() {
   const pathname = usePathname();
   return (
     <nav className="sticky top-0 z-50 border-b border-border bg-background">
-      <div className="mx-auto flex h-14 w-full max-w-[calc(100vw-24px)] items-center gap-4 px-3 sm:px-4 2xl:px-5">
+      <div className="mx-auto flex h-14 w-full min-w-[1180px] items-center gap-4 px-4 2xl:px-5">
         <Link
           href="/portfolio"
           className="shrink-0 font-heading text-base font-bold tracking-tight text-foreground"

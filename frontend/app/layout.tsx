@@ -37,10 +37,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <ThemeScript />
       </head>
       <body
-        className={`${roboto.variable} ${robotoMono.variable} ${notoSansKR.variable} min-h-screen bg-background antialiased`}
+        className={`${roboto.variable} ${robotoMono.variable} ${notoSansKR.variable} min-h-screen overflow-x-auto bg-background antialiased`}
       >
         <Nav />
-        <main className="mx-auto w-full max-w-[calc(100vw-24px)] px-3 py-6 sm:px-4 2xl:px-5">{children}</main>
+        <main className="mx-auto w-full min-w-[1180px] px-4 py-6 2xl:px-5">{children}</main>
       </body>
     </html>
   );
