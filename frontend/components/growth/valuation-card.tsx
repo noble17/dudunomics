@@ -39,6 +39,47 @@ function SourceBadge({ source }: { source: GrowthValuation["consensus_source"] }
   );
 }
 
+const HELP_TEXT: Record<string, ReactNode> = {
+  "컨센서스 매출 CAGR": (
+    <>
+      애널리스트 예상치를 기준으로 매출이 앞으로 몇 년 동안 연평균 얼마나 성장할지 계산한 값입니다.
+      회사의 외형 성장 기대치를 볼 때 씁니다.
+    </>
+  ),
+  "컨센서스 EPS CAGR": (
+    <>
+      애널리스트 예상치를 기준으로 주당순이익(EPS)이 앞으로 몇 년 동안 연평균 얼마나 성장할지 계산한 값입니다.
+      주주 1주당 이익 성장 기대치라 매출 CAGR보다 더 직접적인 이익 지표입니다.
+    </>
+  ),
+};
+
+function HelpTip({ children }: { children: ReactNode }) {
+  return (
+    <details className="group relative inline-block">
+      <summary
+        className="ml-1 inline-flex h-4 w-4 cursor-pointer list-none items-center justify-center rounded-full border border-border bg-background text-[10px] font-semibold text-muted-foreground transition-colors hover:border-primary hover:text-primary [&::-webkit-details-marker]:hidden"
+        aria-label="지표 설명"
+      >
+        ?
+      </summary>
+      <div className="absolute left-0 z-20 mt-2 w-72 rounded-lg border border-border bg-popover p-3 text-xs leading-relaxed text-popover-foreground shadow-lg">
+        {children}
+      </div>
+    </details>
+  );
+}
+
+function MetricLabel({ label }: { label: string }) {
+  const help = HELP_TEXT[label];
+  return (
+    <span className="inline-flex items-center text-muted-foreground">
+      {label}
+      {help && <HelpTip>{help}</HelpTip>}
+    </span>
+  );
+}
+
 function Attempts({ data }: { data: GrowthValuation }) {
   if (!data.fallback_used && data.consensus_attempts.length <= 1) return null;
 
@@ -169,7 +210,7 @@ function ConsensusContent({ data, error }: { data?: GrowthValuation; error?: unk
 }
 
 export function ValuationCard({ data, error }: { data?: GrowthValuation; error?: unknown }) {
-  const rows = [
+  const rows: Array<[string, ReactNode]> = [
     ["PEG", metric(data?.peg ?? null)],
     ["Forward PER", metric(data?.forward_pe ?? null, "x")],
     ["PSR", metric(data?.psr ?? null, "x")],
@@ -193,7 +234,7 @@ export function ValuationCard({ data, error }: { data?: GrowthValuation; error?:
       <div className="mt-4 space-y-2">
         {rows.map(([label, value]) => (
           <div key={label} className="flex items-center justify-between border-b border-border pb-2 text-sm last:border-0">
-            <span className="text-muted-foreground">{label}</span>
+            <MetricLabel label={label} />
             <span className="font-data text-foreground">{value}</span>
           </div>
         ))}

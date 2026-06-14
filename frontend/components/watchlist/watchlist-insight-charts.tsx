@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { type ReactNode, useMemo, useState } from "react";
 import useSWR from "swr";
 import {
   Bar,
@@ -47,6 +47,12 @@ const FLOW_TABS: { key: FlowTab; label: string; title: string; unit: string }[] 
   { key: "roe", label: "ROE", title: "ROE", unit: "%" },
 ];
 
+const FLOW_HELP: Record<FlowTab, ReactNode> = {
+  revenue: "회사가 제품과 서비스를 팔아 벌어들인 총매출입니다. 예상 구간은 앞으로 외형이 얼마나 커질지 보는 데 씁니다.",
+  eps: "EPS는 주당순이익입니다. 회사의 순이익을 주식 수로 나눈 값이라, 1주당 이익 체력이 얼마나 좋아지는지 볼 수 있습니다.",
+  roe: "ROE는 자기자본이익률입니다. 순이익을 자기자본으로 나눈 값으로, 회사가 가진 자본을 얼마나 효율적으로 이익으로 바꾸는지 보여줍니다.",
+};
+
 function formatDate(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
@@ -76,6 +82,22 @@ function formatMetric(value: number | null | undefined, suffix = "") {
 function formatYoy(value: number | null | undefined) {
   if (value == null || !Number.isFinite(value)) return "-";
   return `${value >= 0 ? "+" : ""}${value.toLocaleString("ko-KR", { maximumFractionDigits: 2 })}%`;
+}
+
+function HelpTip({ children }: { children: ReactNode }) {
+  return (
+    <details className="group relative inline-block">
+      <summary
+        className="ml-1 inline-flex h-4 w-4 cursor-pointer list-none items-center justify-center rounded-full border border-border bg-background text-[10px] font-semibold text-muted-foreground transition-colors hover:border-primary hover:text-primary [&::-webkit-details-marker]:hidden"
+        aria-label="지표 설명"
+      >
+        ?
+      </summary>
+      <div className="absolute left-0 z-20 mt-2 w-72 rounded-lg border border-border bg-popover p-3 text-xs font-normal leading-relaxed text-popover-foreground shadow-lg">
+        {children}
+      </div>
+    </details>
+  );
 }
 
 function pointYear(point: FinancialDataPoint) {
@@ -542,7 +564,10 @@ function GrowthFlowCard({ data }: { data: FinancialsData }) {
 
       <div className="mt-6">
         <div className="mb-3 flex items-center justify-between border-b border-border pb-3">
-          <p className="text-lg font-semibold">{tab.title}</p>
+          <p className="inline-flex items-center text-lg font-semibold">
+            {tab.title}
+            <HelpTip>{FLOW_HELP[activeTab]}</HelpTip>
+          </p>
           <span className="rounded-lg border border-border bg-background px-3 py-1 text-xs font-medium text-foreground">연간</span>
         </div>
         {chartData.length ? (
