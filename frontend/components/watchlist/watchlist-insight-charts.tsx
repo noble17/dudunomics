@@ -77,6 +77,11 @@ function formatMetric(value: number | null | undefined, suffix = "") {
   return `${value.toLocaleString("ko-KR", { maximumFractionDigits: 2 })}${suffix}`;
 }
 
+function formatYoy(value: number | null | undefined) {
+  if (value == null || !Number.isFinite(value)) return "-";
+  return `${value >= 0 ? "+" : ""}${value.toLocaleString("ko-KR", { maximumFractionDigits: 2 })}%`;
+}
+
 function pointYear(point: FinancialDataPoint) {
   const raw = point.year ?? point.period_end?.slice(0, 4) ?? point.period?.slice(0, 4);
   const year = Number(raw);
@@ -245,6 +250,8 @@ export function WatchlistInsightCharts({ ticker, universe }: Props) {
                 />
                 <Tooltip
                   contentStyle={TOOLTIP_STYLE}
+                  labelStyle={{ color: "var(--foreground)" }}
+                  itemStyle={{ color: "var(--foreground)" }}
                   labelFormatter={(value) => formatDate(new Date(value as number).toISOString())}
                   formatter={(value, name) => [
                     formatNumber(value),
@@ -256,8 +263,7 @@ export function WatchlistInsightCharts({ ticker, universe }: Props) {
                   dataKey="close"
                   stroke={EMA_CONFIG.close.color}
                   strokeWidth={3}
-                  strokeDasharray="2 8"
-                  strokeOpacity={0.72}
+                  strokeOpacity={0.85}
                   dot={false}
                   name="close"
                   connectNulls={false}
@@ -336,10 +342,12 @@ export function WatchlistInsightCharts({ ticker, universe }: Props) {
                 />
                 <Tooltip
                   contentStyle={TOOLTIP_STYLE}
+                  labelStyle={{ color: "var(--foreground)" }}
+                  itemStyle={{ color: "var(--foreground)" }}
                   labelFormatter={(value) => formatDate(new Date(value as number).toISOString())}
-                  formatter={(value, name) => [
+                  formatter={(value, name, item) => [
                     formatNumber(value),
-                    name === "price" ? "주가" : name === "epsProjected" ? "예상 EPS" : "EPS",
+                    item.dataKey === "price" ? "주가" : item.dataKey === "epsProjected" ? "예상 EPS" : "EPS",
                   ]}
                 />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
@@ -371,6 +379,46 @@ export function WatchlistInsightCharts({ ticker, universe }: Props) {
   );
 }
 
+function FlowTooltip({
+  active,
+  payload,
+  label,
+  tab,
+  title,
+  unit,
+}: {
+  active?: boolean;
+  payload?: Array<{
+    value?: number;
+    payload?: { value?: number; yoy?: number | null; isEstimate?: boolean };
+  }>;
+  label?: string;
+  tab: FlowTab;
+  title: string;
+  unit: string;
+}) {
+  if (!active || !payload?.length) return null;
+  const row = payload[0].payload;
+  const value = row?.value;
+  const yoy = row?.yoy;
+  const yoyTone = yoy == null ? "text-muted-foreground" : yoy >= 0 ? "text-loss" : "text-primary";
+
+  return (
+    <div className="rounded-xl border border-border bg-card px-4 py-3 text-sm text-foreground shadow-lg">
+      <p className="font-medium">
+        {label}
+        {row?.isEstimate ? " (예상)" : ""}
+      </p>
+      <p className="mt-2">
+        {title}: {typeof value === "number" ? formatFlowValue(value, tab) : "-"} {unit}
+      </p>
+      <p className={`mt-1 font-semibold ${yoyTone}`}>
+        전년대비 {formatYoy(yoy)}
+      </p>
+    </div>
+  );
+}
+
 function GrowthFlowCard({ data }: { data: FinancialsData }) {
   const [activeTab, setActiveTab] = useState<FlowTab>("revenue");
   const tab = FLOW_TABS.find((item) => item.key === activeTab)!;
@@ -385,14 +433,19 @@ function GrowthFlowCard({ data }: { data: FinancialsData }) {
       return year == null || year >= 2024;
     })
     .slice(-5)
-    .map((point) => {
-    const label = point.period_end?.slice(0, 7).replace("-", ".") || point.year || point.period || "";
-    return {
-      name: label,
-      value: point.value,
-      isEstimate: point.is_estimate,
-    };
-  });
+    .map((point, index, points) => {
+      const label = point.period_end?.slice(0, 7).replace("-", ".") || point.year || point.period || "";
+      const previous = points[index - 1]?.value;
+      const yoy = previous && previous !== 0
+        ? ((point.value - previous) / Math.abs(previous)) * 100
+        : null;
+      return {
+        name: label,
+        value: point.value,
+        isEstimate: point.is_estimate,
+        yoy,
+      };
+    });
   const usingChoice = choicePoints.length > 0;
 
   return (
@@ -443,11 +496,7 @@ function GrowthFlowCard({ data }: { data: FinancialsData }) {
               <YAxis hide domain={["auto", "auto"]} />
               <Tooltip
                 cursor={{ fill: "var(--muted)" }}
-                contentStyle={TOOLTIP_STYLE}
-                labelStyle={{ color: "var(--foreground)" }}
-                itemStyle={{ color: "var(--foreground)" }}
-                formatter={(value) => [`${formatFlowValue(Number(value), activeTab)} ${tab.unit}`, tab.title]}
-                labelFormatter={(label) => String(label)}
+                content={<FlowTooltip tab={activeTab} title={tab.title} unit={tab.unit} />}
               />
               <Bar dataKey="value" radius={[6, 6, 0, 0]} maxBarSize={88}>
                 <LabelList
