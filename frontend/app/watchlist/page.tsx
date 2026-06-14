@@ -97,14 +97,34 @@ export default function WatchlistPage() {
   };
 
   const toggleTimingAlert = async (row: WatchlistItem, enabled: boolean) => {
-    await watchlistsApi.updateItem(row.watchlist_id, row.ticker, {
-      name: row.name,
-      universe: row.universe,
-      memo: row.memo ?? undefined,
-      timing_alert_enabled: enabled,
-    });
-    setMessage(`${row.ticker} TIMING CHECK Telegram 알림을 ${enabled ? "켰습니다" : "껐습니다"}.`);
-    await mutateItems();
+    await mutateItems(
+      (current = []) => current.map((item) => (
+        item.watchlist_id === row.watchlist_id && item.ticker === row.ticker && item.universe === row.universe
+          ? { ...item, timing_alert_enabled: enabled }
+          : item
+      )),
+      { revalidate: false },
+    );
+    try {
+      await watchlistsApi.updateItem(row.watchlist_id, row.ticker, {
+        name: row.name,
+        universe: row.universe,
+        memo: row.memo ?? undefined,
+        timing_alert_enabled: enabled,
+      });
+      setMessage(`${row.ticker} TIMING CHECK Telegram 알림을 ${enabled ? "켰습니다" : "껐습니다"}.`);
+      await mutateItems();
+    } catch {
+      await mutateItems(
+        (current = []) => current.map((item) => (
+          item.watchlist_id === row.watchlist_id && item.ticker === row.ticker && item.universe === row.universe
+            ? { ...item, timing_alert_enabled: row.timing_alert_enabled }
+            : item
+        )),
+        { revalidate: false },
+      );
+      setMessage(`${row.ticker} 알림 설정 저장에 실패했습니다.`);
+    }
   };
 
   const selectTicker = (ticker: string) => {
