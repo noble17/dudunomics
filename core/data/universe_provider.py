@@ -39,8 +39,12 @@ def _save_cache(path: Path, tickers: list[str]) -> None:
 
 # ── S&P 500 ──────────────────────────────────────────────────────────────────
 
-def get_sp500_tickers() -> list[str]:
+def get_sp500_tickers(refresh: bool = False) -> list[str]:
     cache = _DATA / "sp500_tickers.json"
+    if not refresh:
+        cached = _load_cache(cache)
+        if cached:
+            return cached
     try:
         r = requests.get(
             "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies",
@@ -62,8 +66,12 @@ def get_sp500_tickers() -> list[str]:
 
 # ── Nasdaq 100 ────────────────────────────────────────────────────────────────
 
-def get_nasdaq100_tickers() -> list[str]:
+def get_nasdaq100_tickers(refresh: bool = False) -> list[str]:
     cache = _DATA / "nasdaq100_tickers.json"
+    if not refresh:
+        cached = _load_cache(cache)
+        if cached:
+            return cached
     try:
         r = requests.get(
             "https://en.wikipedia.org/wiki/Nasdaq-100",
@@ -97,8 +105,12 @@ def _get_krx_listing() -> pd.DataFrame:
     return fdr.StockListing("KRX")[["Code", "Market", "Marcap"]].dropna(subset=["Marcap"])
 
 
-def get_kospi200_tickers() -> list[str]:
+def get_kospi200_tickers(refresh: bool = False) -> list[str]:
     cache = _DATA / "kospi200_tickers.json"
+    if not refresh:
+        cached = _load_cache(cache)
+        if cached:
+            return cached
     try:
         df = _get_krx_listing()
         top = df[df["Market"] == "KOSPI"].nlargest(200, "Marcap")
@@ -114,8 +126,12 @@ def get_kospi200_tickers() -> list[str]:
         raise RuntimeError("KOSPI 200 티커 목록 취득 불가") from e
 
 
-def get_kosdaq150_tickers() -> list[str]:
+def get_kosdaq150_tickers(refresh: bool = False) -> list[str]:
     cache = _DATA / "kosdaq150_tickers.json"
+    if not refresh:
+        cached = _load_cache(cache)
+        if cached:
+            return cached
     try:
         df = _get_krx_listing()
         top = df[df["Market"] == "KOSDAQ"].nlargest(150, "Marcap")
@@ -148,8 +164,21 @@ UNIVERSE_LABELS = {
 }
 
 
-def get_tickers(universe: str) -> list[str]:
+def get_tickers(universe: str, refresh: bool = False) -> list[str]:
     provider = UNIVERSE_PROVIDERS.get(universe)
     if not provider:
         raise ValueError(f"Unknown universe: {universe}. 지원: {list(UNIVERSE_PROVIDERS)}")
-    return provider()
+    return provider(refresh=refresh)
+
+
+def refresh_tickers(universe: str) -> list[str]:
+    """외부 공개 소스에서 유니버스 티커 JSON 캐시를 강제 갱신한다."""
+    return get_tickers(universe, refresh=True)
+
+
+def refresh_all_tickers() -> dict[str, int]:
+    """전체 유니버스 티커 JSON 캐시를 갱신하고 유니버스별 개수를 반환한다."""
+    return {
+        universe: len(refresh_tickers(universe))
+        for universe in UNIVERSE_PROVIDERS
+    }

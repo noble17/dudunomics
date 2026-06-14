@@ -16,6 +16,7 @@ from core.data.prices_provider import fetch_ohlcv
 from core.data.fundamental_backfill import hydrate_fundamental_snapshots
 from core.data.price_target_backfill import hydrate_price_target_consensus_snapshots
 from core.data.choicestock_public import get_public_summary, is_supported_public_ticker
+from core.data.universe_provider import refresh_all_tickers
 from core.prices.selection import prefer_toss_market_data
 from core.prices.kis import KISPriceProvider
 from core.prices.toss import fetch_buying_power as fetch_toss_buying_power
@@ -186,6 +187,13 @@ def growth_batch_kr_job():
 def growth_batch_us_job():
     """미장 성장주 배치 — 매일 07:10 KST."""
     _run_growth_universes(("sp500", "nasdaq100"))
+
+
+def universe_tickers_refresh_job():
+    """유니버스 티커 JSON 캐시를 외부 공개 소스 기준으로 갱신."""
+    counts = refresh_all_tickers()
+    log.info("universe_tickers_refresh_job 완료: %s", counts)
+    return counts
 
 
 def toss_holdings_sync_job():
@@ -783,6 +791,16 @@ def _job_registry() -> list[dict]:
             "func": growth_batch_us_job,
         },
         {
+            "id": "universe_tickers_refresh",
+            "name": "유니버스 티커 JSON 갱신",
+            "category": "valuation",
+            "schedule": "매월 1일 06:20 KST",
+            "description": "S&P500, NASDAQ100, KOSPI200, KOSDAQ150 티커 JSON 캐시를 공개 소스 기준으로 갱신합니다.",
+            "bootstrap": True,
+            "bootstrap_description": "유니버스 티커 JSON 캐시를 최신 공개 소스 기준으로 채웁니다.",
+            "func": universe_tickers_refresh_job,
+        },
+        {
             "id": "toss_holdings_sync",
             "name": "Toss 보유/현금 동기화",
             "category": "broker",
@@ -933,6 +951,8 @@ def create_scheduler() -> BackgroundScheduler:
                       id="growth_batch_kr", timezone="Asia/Seoul")
     scheduler.add_job(lambda: run_registered_job("growth_batch_us", "schedule"), "cron", hour=7, minute=10,
                       id="growth_batch_us", timezone="Asia/Seoul")
+    scheduler.add_job(lambda: run_registered_job("universe_tickers_refresh", "schedule"), "cron", day=1, hour=6, minute=20,
+                      id="universe_tickers_refresh", timezone="Asia/Seoul")
     scheduler.add_job(
         lambda: run_registered_job("toss_holdings_sync", "schedule"),
         "interval",
