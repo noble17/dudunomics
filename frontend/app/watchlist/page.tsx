@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import useSWR from "swr";
+import { X } from "lucide-react";
 
 import { AlertManager } from "@/components/alerts/alert-manager";
 import { PerformanceTable } from "@/components/performance/performance-table";
@@ -40,6 +41,23 @@ export default function WatchlistPage() {
   );
   const detailTicker = selectedItem?.ticker ?? null;
   const detailUniverse = selectedItem?.universe ?? "sp500";
+
+  useEffect(() => {
+    if (!alertTicker) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setAlertTicker(null);
+    };
+    window.addEventListener("keydown", onKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [alertTicker]);
 
   const createList = async () => {
     const name = newListName.trim();
@@ -291,24 +309,6 @@ export default function WatchlistPage() {
             )}
           </section>
 
-          {alertTicker && (
-            <section className="rounded-xl border border-primary/25 bg-card p-4">
-              <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <p className="font-data text-[10px] tracking-[0.2em] text-primary">CONDITION ALERT</p>
-                  <h2 className="mt-1 text-base font-semibold text-foreground">{alertTicker} 조건 알림</h2>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    여러 조건을 추가하면 백엔드가 주기적으로 확인하고 충족 시 Telegram으로 보냅니다.
-                  </p>
-                </div>
-                <Button type="button" variant="outline" onClick={() => setAlertTicker(null)}>
-                  닫기
-                </Button>
-              </div>
-              <AlertManager ticker={alertTicker} mode="ticker" />
-            </section>
-          )}
-
           {detailTicker && (
             <section ref={detailRef} className="scroll-mt-20 min-w-0 space-y-4">
               <div className="sticky top-14 z-20 rounded-xl border border-primary/30 bg-card/95 px-4 py-3 shadow-sm backdrop-blur">
@@ -345,6 +345,46 @@ export default function WatchlistPage() {
           )}
         </main>
       </section>
+
+      {alertTicker && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setAlertTicker(null);
+          }}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="watchlist-alert-title"
+            className="flex max-h-[88vh] w-full max-w-5xl flex-col overflow-hidden rounded-xl border border-primary/25 bg-card shadow-2xl"
+          >
+            <div className="flex items-start justify-between gap-4 border-b border-border px-5 py-4">
+              <div className="min-w-0">
+                <p className="font-data text-[10px] tracking-[0.2em] text-primary">CONDITION ALERT</p>
+                <h2 id="watchlist-alert-title" className="mt-1 text-base font-semibold text-foreground">
+                  {alertTicker} 조건 알림
+                </h2>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  여러 조건을 추가하면 백엔드가 주기적으로 확인하고 충족 시 Telegram으로 보냅니다.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAlertTicker(null)}
+                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
+                aria-label="조건 알림 닫기"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="min-h-0 overflow-y-auto p-5">
+              <AlertManager ticker={alertTicker} mode="ticker" />
+            </div>
+          </section>
+        </div>
+      )}
     </div>
   );
 }
