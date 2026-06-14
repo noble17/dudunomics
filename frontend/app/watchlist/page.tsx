@@ -144,24 +144,34 @@ export default function WatchlistPage() {
         </p>
       </header>
 
-      <section className="grid gap-4 lg:grid-cols-[280px_1fr]">
-        <aside className="rounded-xl border border-border bg-card p-4">
-          <div className="space-y-2">
-            {lists.map((list) => (
-              <button
-                key={list.id}
-                type="button"
-                onClick={() => setSelectedId(list.id)}
-                className={`flex w-full items-center justify-between rounded border px-3 py-2 text-left text-sm ${
-                  activeId === list.id ? "border-primary bg-primary/10 text-foreground" : "border-border text-muted-foreground"
-                }`}
-              >
-                <span>{list.name}</span>
-                <span className="font-data text-xs">{list.item_count}</span>
-              </button>
-            ))}
+      <section className="space-y-4">
+        <section className="rounded-xl border border-border bg-card p-4">
+          <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+            <div className="min-w-0">
+              <p className="text-sm font-medium">Watchlist 선택</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                목록을 바꾸면 아래 Performance View와 상세 차트가 함께 갱신됩니다.
+              </p>
+            </div>
+            <div className="flex min-w-0 flex-1 flex-wrap gap-2 xl:justify-end">
+              {lists.map((list) => (
+                <button
+                  key={list.id}
+                  type="button"
+                  onClick={() => setSelectedId(list.id)}
+                  className={`flex min-w-[160px] max-w-full items-center justify-between gap-4 rounded-lg border px-3 py-2 text-left text-sm transition-colors ${
+                    activeId === list.id
+                      ? "border-primary bg-primary/10 text-foreground"
+                      : "border-border text-muted-foreground hover:border-primary/60 hover:text-foreground"
+                  }`}
+                >
+                  <span className="truncate">{list.name}</span>
+                  <span className="shrink-0 font-data text-xs">{list.item_count}</span>
+                </button>
+              ))}
+            </div>
           </div>
-          <div className="mt-4 flex gap-2">
+          <div className="mt-4 flex max-w-lg gap-2">
             <input
               value={newListName}
               onChange={(event) => setNewListName(event.target.value)}
@@ -173,7 +183,7 @@ export default function WatchlistPage() {
             />
             <Button type="button" onClick={createList}>추가</Button>
           </div>
-        </aside>
+        </section>
 
         <main className="min-w-0 space-y-4">
           <section className="rounded-xl border border-border bg-card p-4">
@@ -274,6 +284,29 @@ export default function WatchlistPage() {
 
           {detailTicker && (
             <section ref={detailRef} className="scroll-mt-20 min-w-0 space-y-4">
+              <div className="sticky top-14 z-20 rounded-xl border border-primary/30 bg-card/95 px-4 py-3 shadow-sm backdrop-blur">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-data text-[10px] tracking-[0.2em] text-primary">SELECTED TICKER</p>
+                    <div className="mt-1 flex min-w-0 items-baseline gap-2">
+                      <span className="font-heading text-xl font-medium tracking-tight">{detailTicker}</span>
+                      {selectedItem?.name && (
+                        <span className="truncate text-sm text-muted-foreground">{selectedItem.name}</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <span className="rounded-full border border-border bg-background px-2 py-1">
+                      {detailUniverse}
+                    </span>
+                    {selectedItem?.growth_composite != null && (
+                      <span className="rounded-full border border-primary/30 bg-primary/10 px-2 py-1 text-primary">
+                        성장 {selectedItem.growth_composite.toFixed(1)}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
               <TickerDetail
                 key={`${detailTicker}-${detailUniverse}`}
                 ticker={detailTicker}

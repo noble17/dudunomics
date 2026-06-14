@@ -3,7 +3,11 @@
 import { useMemo, useState } from "react";
 import useSWR from "swr";
 import {
+  Bar,
+  BarChart,
   CartesianGrid,
+  Cell,
+  LabelList,
   Legend,
   Line,
   LineChart,
@@ -14,7 +18,7 @@ import {
 } from "recharts";
 
 import { screenerApi } from "@/lib/api";
-import type { FinancialDataPoint, PriceChartData } from "@/lib/types";
+import type { FinancialDataPoint, FinancialsData, PriceChartData } from "@/lib/types";
 
 interface Props {
   ticker: string;
@@ -22,6 +26,7 @@ interface Props {
 }
 
 type EmaMode = "short" | "middle";
+type FlowTab = "revenue" | "eps" | "roe";
 
 const EMA_CONFIG = {
   close: { label: "주가", color: "var(--foreground)" },
@@ -44,6 +49,12 @@ const TOOLTIP_STYLE = {
   fontSize: 11,
 };
 
+const FLOW_TABS: { key: FlowTab; label: string; title: string; unit: string }[] = [
+  { key: "revenue", label: "매출액", title: "매출액", unit: "백만달러" },
+  { key: "eps", label: "EPS 주당순이익", title: "EPS 주당순이익", unit: "달러" },
+  { key: "roe", label: "ROE", title: "ROE", unit: "%" },
+];
+
 function formatDate(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
@@ -53,6 +64,17 @@ function formatDate(value: string) {
 function formatNumber(value: unknown, digits = 2) {
   if (typeof value !== "number" || !Number.isFinite(value)) return "-";
   return value.toLocaleString("ko-KR", { maximumFractionDigits: digits });
+}
+
+function formatFlowValue(value: number, tab: FlowTab) {
+  if (tab === "revenue") return value.toLocaleString("ko-KR", { maximumFractionDigits: 0 });
+  if (tab === "eps") return value.toLocaleString("ko-KR", { maximumFractionDigits: 2 });
+  return value.toLocaleString("ko-KR", { maximumFractionDigits: 2 });
+}
+
+function formatMetric(value: number | null | undefined, suffix = "") {
+  if (value == null || !Number.isFinite(value)) return "-";
+  return `${value.toLocaleString("ko-KR", { maximumFractionDigits: 2 })}${suffix}`;
 }
 
 function toTs(date: string) {
@@ -161,7 +183,10 @@ export function WatchlistInsightCharts({ ticker, universe }: Props) {
   const epsUnavailable = Boolean(financialsError);
 
   return (
-    <div className="grid min-w-0 gap-4 xl:grid-cols-2">
+    <div className="min-w-0 space-y-4">
+      {financials && <GrowthFlowCard data={financials} />}
+
+      <div className="grid min-w-0 gap-4 xl:grid-cols-2">
       <section className="rounded-xl border border-border bg-card p-4">
         <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
           <div>
@@ -335,7 +360,147 @@ export function WatchlistInsightCharts({ ticker, universe }: Props) {
           <ChartEmpty label="표시할 주가 데이터가 없습니다. 데이터 보강 후 다시 확인해 주세요." />
         )}
       </section>
+      </div>
     </div>
+  );
+}
+
+function GrowthFlowCard({ data }: { data: FinancialsData }) {
+  const [activeTab, setActiveTab] = useState<FlowTab>("revenue");
+  const tab = FLOW_TABS.find((item) => item.key === activeTab)!;
+  const points = data[activeTab] ?? [];
+  const source = data.metrics.source ?? data.sources?.choicestock?.source;
+  const sourceUrl = data.metrics.source_url ?? data.sources?.choicestock?.source_url;
+  const sourceAsOf = data.metrics.as_of ?? data.sources?.choicestock?.as_of;
+  const chartData = points.map((point) => {
+    const label = point.period_end?.slice(0, 7).replace("-", ".") || point.year || point.period || "";
+    return {
+      name: label,
+      value: point.value,
+      isEstimate: point.is_estimate,
+    };
+  });
+
+  return (
+    <section className="rounded-xl border border-border bg-card p-5">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <p className="font-heading text-xl font-semibold tracking-tight">성장성과 수익성 흐름은?</p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            {FLOW_TABS.map((item) => (
+              <button
+                key={item.key}
+                type="button"
+                onClick={() => setActiveTab(item.key)}
+                className={`rounded-full border px-4 py-2 text-sm font-medium transition-colors ${
+                  activeTab === item.key
+                    ? "border-foreground bg-foreground text-background"
+                    : "border-border bg-background text-muted-foreground hover:border-primary/60 hover:text-foreground"
+                }`}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="text-right text-xs text-muted-foreground">
+          {data.latest_report_date && <p>최근실적발표 {data.latest_report_date}</p>}
+          <p>단위: {tab.unit}</p>
+        </div>
+      </div>
+
+      <div className="mt-8">
+        <div className="mb-3 flex items-center justify-between border-b border-border pb-3">
+          <p className="text-lg font-semibold">{tab.title}</p>
+          <span className="rounded-lg border border-border bg-background px-3 py-1 text-xs font-medium">연간</span>
+        </div>
+        {chartData.length ? (
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={chartData} margin={{ top: 28, right: 18, left: 18, bottom: 10 }}>
+              <CartesianGrid stroke="var(--border)" vertical={false} opacity={0.55} />
+              <XAxis
+                dataKey="name"
+                tick={{ fontSize: 12, fill: "var(--muted-foreground)" }}
+                axisLine={{ stroke: "var(--border)" }}
+                tickLine={false}
+                interval={0}
+              />
+              <YAxis hide domain={["auto", "auto"]} />
+              <Tooltip
+                cursor={{ fill: "var(--muted)" }}
+                contentStyle={TOOLTIP_STYLE}
+                formatter={(value) => [`${formatFlowValue(Number(value), activeTab)} ${tab.unit}`, tab.title]}
+                labelFormatter={(label) => String(label)}
+              />
+              <Bar dataKey="value" radius={[6, 6, 0, 0]} maxBarSize={88}>
+                <LabelList
+                  dataKey="value"
+                  position="top"
+                  formatter={(value: unknown) => (
+                    typeof value === "number" ? formatFlowValue(value, activeTab) : ""
+                  )}
+                  fill="var(--muted-foreground)"
+                  fontSize={12}
+                  fontWeight={600}
+                />
+                {chartData.map((entry) => (
+                  <Cell
+                    key={entry.name}
+                    fill={
+                      entry.value < 0
+                        ? "rgba(96, 165, 250, 0.35)"
+                        : entry.isEstimate
+                          ? "rgba(148, 163, 184, 0.72)"
+                          : "var(--primary)"
+                    }
+                  />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        ) : (
+          <ChartEmpty label="연간 재무 데이터가 없습니다." />
+        )}
+      </div>
+
+      <div className="mt-8 border-t border-border">
+        <div className="flex items-center justify-between border-b border-border py-4">
+          <span className="text-base font-medium">시가총액</span>
+          <span className="text-right font-data text-xl font-semibold">
+            {formatMetric(data.metrics.market_cap_m)}
+            <span className="ml-2 block text-xs font-normal text-muted-foreground">백만달러</span>
+          </span>
+        </div>
+        <div className="grid gap-x-10 md:grid-cols-2">
+          {[
+            ["PER", data.metrics.trailing_pe],
+            ["PER(F)", data.metrics.forward_pe],
+            ["PEG", data.metrics.peg],
+            ["PSR", data.metrics.price_to_sales],
+          ].map(([label, value]) => (
+            <div key={label as string} className="flex items-center justify-between border-b border-border py-4">
+              <span className="text-base font-medium">{label}</span>
+              <span className="font-data text-lg font-semibold">{formatMetric(value as number | null, "배")}</span>
+            </div>
+          ))}
+        </div>
+        {(source || sourceAsOf) && (
+          <div className="pt-4 text-right text-xs text-muted-foreground">
+            {sourceAsOf ? `${sourceAsOf} 기준` : ""}
+            {source && (
+              <>
+                {" · 출처: "}
+                {sourceUrl ? (
+                  <a href={sourceUrl} target="_blank" rel="noreferrer" className="underline-offset-2 hover:underline">
+                    {source}
+                  </a>
+                ) : source}
+              </>
+            )}
+          </div>
+        )}
+      </div>
+    </section>
   );
 }
 
