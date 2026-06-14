@@ -1,4 +1,5 @@
 import core.repository as repo
+from datetime import date
 
 
 def test_jobs_list_includes_registered_jobs(client):
@@ -130,3 +131,42 @@ def test_choicestock_public_hydrate_job_collects_watchlist_once(client, monkeypa
 
     assert result == {"tickers": 1, "updated": 1, "failed": 0}
     assert calls == ["LITE"]
+
+
+def test_daily_holdings_news_uses_choicestock_summary(client, monkeypatch):
+    from core.scheduler import daily_holdings_news_job
+
+    target = client.post("/api/watchlists", json={"name": "뉴스"}).json()
+    client.put(
+        f"/api/watchlists/{target['id']}/items/LITE",
+        json={"name": "Lumentum", "universe": "sp500"},
+    )
+
+    today_text = date.today().strftime("%Y.%m.%d")
+    monkeypatch.setattr("core.scheduler.get_public_summary", lambda ticker: {
+        "news": [
+            {
+                "title": "루멘텀홀딩스, AI 성장 전략 제시",
+                "published_date": f"{today_text} 08:10",
+                "url": "https://www.choicestock.co.kr/stock/news_view/150978",
+                "site": "ChoiceStock public page",
+            },
+            {
+                "title": "어제 뉴스",
+                "published_date": "2026.01.01 08:10",
+                "url": "https://www.choicestock.co.kr/stock/news_view/1",
+                "site": "ChoiceStock public page",
+            },
+        ],
+    })
+    sent = []
+    monkeypatch.setattr("core.scheduler.send_telegram", lambda text: sent.append(text) or True)
+
+    result = daily_holdings_news_job()
+
+    assert result == {"tickers": 1, "news": 1, "sent": True}
+    assert len(sent) == 1
+    assert "관심종목 오늘 뉴스" in sent[0]
+    assert "루멘텀홀딩스, AI 성장 전략 제시" in sent[0]
+    assert "choicestock.co.kr/stock/news_view/150978" in sent[0]
+    assert "어제 뉴스" not in sent[0]

@@ -16,7 +16,6 @@ from core.data.prices_provider import fetch_ohlcv
 from core.data.fundamental_backfill import hydrate_fundamental_snapshots
 from core.data.price_target_backfill import hydrate_price_target_consensus_snapshots
 from core.data.choicestock_public import get_public_summary, is_supported_public_ticker
-from core.data.news_provider import fetch_news, filter_recent_news
 from core.prices.selection import prefer_toss_market_data
 from core.prices.kis import KISPriceProvider
 from core.prices.toss import fetch_buying_power as fetch_toss_buying_power
@@ -396,42 +395,46 @@ def alert_check_job():
 
 
 def daily_holdings_news_job():
-    """보유종목의 오늘 발행 뉴스를 Telegram으로 발송."""
+    """관심종목의 ChoiceStock 공개 summary 오늘 뉴스를 Telegram으로 발송."""
     today = datetime.now().date()
-    tickers: set[str] = set()
-    for user_id in repo.get_active_user_ids_with_holdings():
-        tickers.update(h["ticker"] for h in repo.get_holdings(user_id))
+    tickers = [
+        ticker
+        for ticker in repo.list_all_watchlist_tickers()
+        if is_supported_public_ticker(ticker)
+    ]
     if not tickers:
         return {"tickers": 0, "sent": False}
 
-    lines = [f"오늘 수집한 보유종목 뉴스 ({today.isoformat()})"]
+    lines = [f"관심종목 오늘 뉴스 ({today.isoformat()})"]
     count = 0
     for ticker in sorted(tickers):
-        items = filter_recent_news(fetch_news(ticker, limit=12), days=7)
-        today_items = []
-        for item in items:
-            published = str(item.get("published_utc") or "")
-            try:
-                from email.utils import parsedate_to_datetime
-                dt = parsedate_to_datetime(published)
-                if dt.date() == today:
-                    today_items.append(item)
-            except Exception:
-                continue
+        summary = get_public_summary(ticker)
+        today_items = [
+            item for item in (summary or {}).get("news", [])
+            if _is_choicestock_news_today(item, today)
+        ]
         if not today_items:
             continue
         lines.append(f"\n[{ticker}]")
         for item in today_items[:3]:
             title = item.get("title", "")
-            link = item.get("link", "")
-            publisher = item.get("publisher", "")
-            lines.append(f"- {title} ({publisher})\n  {link}")
+            link = item.get("url", "")
+            site = item.get("site", "ChoiceStock public page")
+            lines.append(f"- {title} ({site})\n  {link}")
             count += 1
 
     if count == 0:
         return {"tickers": len(tickers), "news": 0, "sent": False}
     sent = send_telegram("\n".join(lines))
     return {"tickers": len(tickers), "news": count, "sent": sent}
+
+
+def _is_choicestock_news_today(item: dict, today: date) -> bool:
+    published = str(item.get("published_date") or "")
+    try:
+        return datetime.strptime(published[:10], "%Y.%m.%d").date() == today
+    except Exception:
+        return False
 
 
 def daily_watchlist_timing_alert_job():
@@ -724,10 +727,10 @@ def _job_registry() -> list[dict]:
         },
         {
             "id": "daily_holdings_news",
-            "name": "보유종목 오늘 뉴스",
+            "name": "관심종목 초이스스탁 오늘 뉴스",
             "category": "telegram",
             "schedule": "매일 08:40 KST",
-            "description": "보유종목의 오늘 발행 뉴스를 최근 7일 뉴스 provider에서 수집해 Telegram으로 발송합니다.",
+            "description": "관심종목의 초이스스탁 공개 summary 오늘 뉴스 링크를 Telegram으로 발송합니다.",
             "func": daily_holdings_news_job,
         },
         {
