@@ -45,12 +45,14 @@ def compute_indicators(df: pd.DataFrame) -> dict:
         "lower": _to_points(idx, bb_middle - 2 * bb_std),
     }
 
-    # ── RSI (14일) ────────────────────────────────────────
+    # ── RSI (14일, Wilder smoothing) ─────────────────────
     delta = close.diff()
-    gain = delta.clip(lower=0).rolling(14).mean()
-    loss = (-delta.clip(upper=0)).rolling(14).mean()
-    rs = gain / loss.replace(0, 1e-10)
+    gain = delta.clip(lower=0).ewm(alpha=1 / 14, adjust=False).mean()
+    loss = (-delta.clip(upper=0)).ewm(alpha=1 / 14, adjust=False).mean()
+    rs = gain / loss
     rsi_series = 100 - (100 / (1 + rs))
+    rsi_series = rsi_series.mask((loss == 0) & (gain > 0), 100.0)
+    rsi_series = rsi_series.mask((loss == 0) & (gain <= 0), 50.0).fillna(50.0)
     rsi = _to_points(idx, rsi_series)
 
     # ── MACD (12/26/9) ────────────────────────────────────

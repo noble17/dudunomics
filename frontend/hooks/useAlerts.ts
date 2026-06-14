@@ -62,8 +62,8 @@ export function formatConditionMsg(ev: AlertEvent): string {
   switch (ev.condition_type) {
     case "price_above": return `${ev.ticker} $${price} ▲ ${ev.condition_value} 돌파`;
     case "price_below": return `${ev.ticker} $${price} ▼ ${ev.condition_value} 하향`;
-    case "rsi_above":   return `${ev.ticker} RSI 과매수(>${ev.condition_value}) @ $${price}`;
-    case "rsi_below":   return `${ev.ticker} RSI 과매도(<${ev.condition_value}) @ $${price}`;
+    case "rsi_above":   return `${ev.ticker} RSI 기준 상회(>${ev.condition_value}) @ $${price}`;
+    case "rsi_below":   return `${ev.ticker} RSI 기준 하회(<${ev.condition_value}) @ $${price}`;
     case "ma_golden_cross": return `${ev.ticker} MA 골든크로스 발생`;
     case "ma_dead_cross":   return `${ev.ticker} MA 데드크로스 발생`;
     case "ema20_near": return `${ev.ticker} EMA20 ${ev.condition_value}% 이내 접근 @ $${price}`;

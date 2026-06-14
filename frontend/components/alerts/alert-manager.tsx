@@ -10,8 +10,8 @@ import { formatConditionMsg } from "@/hooks/useAlerts";
 const CONDITION_OPTIONS: { value: AlertConditionType; label: string; needsValue: boolean }[] = [
   { value: "price_above", label: "가격 초과", needsValue: true },
   { value: "price_below", label: "가격 미만", needsValue: true },
-  { value: "rsi_above", label: "RSI 과매수", needsValue: true },
-  { value: "rsi_below", label: "RSI 과매도", needsValue: true },
+  { value: "rsi_above", label: "RSI 기준 상회", needsValue: true },
+  { value: "rsi_below", label: "RSI 기준 하회", needsValue: true },
   { value: "ma_golden_cross", label: "골든크로스", needsValue: false },
   { value: "ma_dead_cross", label: "데드크로스", needsValue: false },
   { value: "ema20_near", label: "EMA20 근접", needsValue: true },
