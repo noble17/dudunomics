@@ -107,44 +107,80 @@ def get_russell1000_tickers(refresh: bool = False) -> list[str]:
         if cached:
             return cached
     try:
-        r = requests.get(
-            "https://www.ishares.com/us/products/239707/ishares-russell-1000-etf/"
-            "1467271812596.ajax?fileType=csv&fileName=IWB_holdings&dataType=fund",
-            headers=_HEADERS,
-            timeout=15,
-        )
-        r.raise_for_status()
-        lines = r.text.splitlines()
-        header_idx = next(
-            idx for idx, line in enumerate(lines)
-            if "Ticker" in line and ("Name" in line or "Asset Class" in line)
-        )
-        df = pd.read_csv(StringIO("\n".join(lines[header_idx:])))
-        ticker_col = "Ticker" if "Ticker" in df.columns else "Symbol"
-        tickers = (
-            df[ticker_col]
-            .dropna()
-            .astype(str)
-            .str.strip()
-            .str.upper()
-            .str.replace(".", "-", regex=False)
-        )
-        tickers = [
-            ticker for ticker in tickers.tolist()
-            if ticker and ticker not in {"-", "CASH", "USD", "US DOLLAR"}
-        ]
-        tickers = list(dict.fromkeys(tickers))
+        tickers = _get_russell1000_tickers_from_ishares()
+    except Exception as e:
+        log.warning("Russell 1000 iShares 실패 (%s) — Wikipedia 시도", e)
+        try:
+            tickers = _get_russell1000_tickers_from_wikipedia()
+        except Exception as wiki_error:
+            log.warning("Russell 1000 Wikipedia 실패 (%s) — 캐시 시도", wiki_error)
+            cached = _load_cache(cache)
+            if cached:
+                return cached
+            raise RuntimeError("Russell 1000 티커 목록 취득 불가") from wiki_error
+
+    try:
         if len(tickers) < 800:
             raise ValueError(f"Russell 1000 티커 수가 예상보다 적음: {len(tickers)}")
         _save_cache(cache, tickers)
-        log.info("Russell 1000 티커 %d개 취득 (iShares IWB)", len(tickers))
+        log.info("Russell 1000 티커 %d개 취득", len(tickers))
         return tickers
     except Exception as e:
-        log.warning("Russell 1000 iShares 실패 (%s) — 캐시 시도", e)
+        log.warning("Russell 1000 저장/검증 실패 (%s) — 캐시 시도", e)
         cached = _load_cache(cache)
         if cached:
             return cached
         raise RuntimeError("Russell 1000 티커 목록 취득 불가") from e
+
+
+def _get_russell1000_tickers_from_ishares() -> list[str]:
+    r = requests.get(
+        "https://www.ishares.com/us/products/239707/ishares-russell-1000-etf/"
+        "1467271812596.ajax?fileType=csv&fileName=IWB_holdings&dataType=fund",
+        headers={**_HEADERS, "Accept": "text/csv,*/*"},
+        timeout=15,
+    )
+    r.raise_for_status()
+    if r.text.lstrip().lower().startswith(("<!doctype html", "<html")):
+        raise ValueError("iShares가 CSV 대신 HTML을 반환함")
+    lines = r.text.splitlines()
+    header_idx = next(
+        idx for idx, line in enumerate(lines)
+        if line.startswith("Ticker,") or line.startswith('"Ticker",')
+    )
+    df = pd.read_csv(StringIO("\n".join(lines[header_idx:])), on_bad_lines="skip")
+    return _clean_ticker_series(df["Ticker"])
+
+
+def _get_russell1000_tickers_from_wikipedia() -> list[str]:
+    r = requests.get(
+        "https://en.wikipedia.org/wiki/Russell_1000_Index",
+        headers=_HEADERS,
+        timeout=10,
+    )
+    r.raise_for_status()
+    tables = pd.read_html(StringIO(r.text))
+    for table in tables:
+        if "Symbol" in table.columns:
+            tickers = _clean_ticker_series(table["Symbol"])
+            log.info("Russell 1000 티커 %d개 취득 (Wikipedia)", len(tickers))
+            return tickers
+    raise ValueError("Symbol 컬럼을 찾을 수 없음")
+
+
+def _clean_ticker_series(series: pd.Series) -> list[str]:
+    tickers = (
+        series
+        .dropna()
+        .astype(str)
+        .str.strip()
+        .str.upper()
+        .str.replace(".", "-", regex=False)
+    )
+    return [
+        ticker for ticker in dict.fromkeys(tickers.tolist())
+        if ticker and ticker not in {"-", "CASH", "USD", "US DOLLAR", "NAN"}
+    ]
 
 
 # ── KOSPI 200 / KOSDAQ 150 ───────────────────────────────────────────────────
