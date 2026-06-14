@@ -309,7 +309,7 @@ def _run_growth_universes(universes: tuple[str, ...]):
 
 
 def _check_condition(alert: dict, current_price: float, ohlcv_df: pd.DataFrame | None) -> bool:
-    """알림 조건 충족 여부 반환."""
+    """알림 조건의 현재 충족 여부 반환."""
     ct = alert["condition_type"]
     cv = alert.get("condition_value")
 
@@ -370,6 +370,32 @@ def _check_condition(alert: dict, current_price: float, ohlcv_df: pd.DataFrame |
             return prev_above and (not curr_above)
 
     return False
+
+
+def _check_cross_condition(alert: dict, current_price: float, ohlcv_df: pd.DataFrame | None) -> bool:
+    """직전 값과 현재 값 사이에서 실제 돌파가 발생했는지 반환."""
+    ct = alert["condition_type"]
+    cv = alert.get("condition_value")
+
+    if ct in ("price_above", "price_below"):
+        return _check_condition(alert, current_price, ohlcv_df)
+
+    if ohlcv_df is None or len(ohlcv_df) < 21:
+        return False
+
+    indicators = compute_indicators(ohlcv_df)
+
+    if ct in ("rsi_above", "rsi_below") and cv is not None:
+        rsi_pts = indicators["rsi"]
+        if len(rsi_pts) < 2:
+            return False
+        prev_rsi = rsi_pts[-2]["value"]
+        last_rsi = rsi_pts[-1]["value"]
+        if ct == "rsi_above":
+            return prev_rsi <= cv < last_rsi
+        return prev_rsi >= cv > last_rsi
+
+    return _check_condition(alert, current_price, ohlcv_df)
 
 
 def _alert_ema_period(condition_type: str) -> int | None:
@@ -468,10 +494,15 @@ def alert_check_job():
                 current_price = prices[ticker].current
                 ohlcv_df = ohlcv_cache.get(ticker)
 
-                if repo.has_recent_alert_event(alert["id"], minutes=60):
-                    continue
+                matched = _check_condition(alert, current_price, ohlcv_df)
+                state = repo.get_alert_state(alert["id"])
+                was_matched = bool(state["matched"]) if state else matched
+                crossed_now = _check_cross_condition(alert, current_price, ohlcv_df)
+                should_fire = (not was_matched) and matched and crossed_now
 
-                if _check_condition(alert, current_price, ohlcv_df):
+                repo.upsert_alert_state(alert, matched, current_price)
+
+                if should_fire:
                     repo.insert_alert_event(
                         user_id=alert["user_id"],
                         alert_id=alert["id"],

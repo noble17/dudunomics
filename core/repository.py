@@ -359,6 +359,17 @@ def _init_schema(engine):
         read            BOOLEAN DEFAULT FALSE
     );
 
+    CREATE TABLE IF NOT EXISTS user_alert_states (
+        alert_id        INTEGER PRIMARY KEY,
+        user_id         INTEGER NOT NULL,
+        ticker          VARCHAR NOT NULL,
+        condition_type  VARCHAR NOT NULL,
+        condition_value DOUBLE,
+        matched         BOOLEAN NOT NULL,
+        last_price      DOUBLE,
+        checked_at      TIMESTAMP DEFAULT current_timestamp
+    );
+
     CREATE SEQUENCE IF NOT EXISTS alert_templates_id_seq START 1;
     CREATE TABLE IF NOT EXISTS alert_templates (
         id              INTEGER DEFAULT nextval('alert_templates_id_seq') PRIMARY KEY,
@@ -484,6 +495,7 @@ def _init_schema(engine):
             "CREATE TABLE IF NOT EXISTS watchlists (id INTEGER DEFAULT nextval('watchlists_id_seq') PRIMARY KEY, user_id INTEGER NOT NULL, name TEXT NOT NULL, description TEXT, created_at TIMESTAMP DEFAULT current_timestamp, updated_at TIMESTAMP DEFAULT current_timestamp)",
             "CREATE TABLE IF NOT EXISTS watchlist_items (watchlist_id INTEGER NOT NULL, ticker TEXT NOT NULL, universe TEXT NOT NULL DEFAULT 'sp500', name TEXT, memo TEXT, timing_alert_enabled BOOLEAN DEFAULT FALSE, created_at TIMESTAMP DEFAULT current_timestamp, PRIMARY KEY (watchlist_id, ticker, universe))",
             "ALTER TABLE watchlist_items ADD COLUMN IF NOT EXISTS timing_alert_enabled BOOLEAN DEFAULT FALSE",
+            "CREATE TABLE IF NOT EXISTS user_alert_states (alert_id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, ticker VARCHAR NOT NULL, condition_type VARCHAR NOT NULL, condition_value DOUBLE, matched BOOLEAN NOT NULL, last_price DOUBLE, checked_at TIMESTAMP DEFAULT current_timestamp)",
             "CREATE SEQUENCE IF NOT EXISTS alert_templates_id_seq START 1",
             "CREATE TABLE IF NOT EXISTS alert_templates (id INTEGER DEFAULT nextval('alert_templates_id_seq') PRIMARY KEY, user_id INTEGER NOT NULL, name TEXT NOT NULL, description TEXT, items_json JSON NOT NULL, is_default BOOLEAN DEFAULT FALSE, created_at TIMESTAMP DEFAULT current_timestamp, updated_at TIMESTAMP DEFAULT current_timestamp)",
             "CREATE TABLE IF NOT EXISTS ticker_profiles (ticker TEXT PRIMARY KEY, name TEXT, market TEXT, country TEXT, currency TEXT, sector TEXT, industry TEXT, exchange TEXT, source TEXT, updated_at TIMESTAMP DEFAULT current_timestamp)",
@@ -2489,6 +2501,9 @@ def delete_user_alert(user_id: int, alert_id: int) -> bool:
         if row is None:
             return False
         s.execute(text(
+            "DELETE FROM user_alert_states WHERE alert_id = :id AND user_id = :u"
+        ), {"id": alert_id, "u": user_id})
+        s.execute(text(
             "DELETE FROM user_alerts WHERE id = :id AND user_id = :u"
         ), {"id": alert_id, "u": user_id})
         s.commit()
@@ -2653,6 +2668,48 @@ def has_recent_alert_event(alert_id: int, minutes: int = 60) -> bool:
               AND triggered_at >= current_timestamp - INTERVAL (CAST(:m AS VARCHAR) || ' minutes')
         """), {"aid": alert_id, "m": minutes}).fetchone()
         return row[0] > 0
+
+
+def get_alert_state(alert_id: int) -> dict | None:
+    with session() as s:
+        row = s.execute(text("""
+            SELECT alert_id, user_id, ticker, condition_type, condition_value,
+                   matched, last_price, checked_at
+            FROM user_alert_states
+            WHERE alert_id = :aid
+        """), {"aid": alert_id}).mappings().fetchone()
+        return dict(row) if row else None
+
+
+def upsert_alert_state(alert: dict, matched: bool, current_price: float) -> None:
+    with session() as s:
+        s.execute(text("""
+            INSERT INTO user_alert_states (
+                alert_id, user_id, ticker, condition_type, condition_value,
+                matched, last_price, checked_at
+            )
+            VALUES (
+                :alert_id, :user_id, :ticker, :condition_type, :condition_value,
+                :matched, :last_price, now()
+            )
+            ON CONFLICT (alert_id) DO UPDATE SET
+                user_id = excluded.user_id,
+                ticker = excluded.ticker,
+                condition_type = excluded.condition_type,
+                condition_value = excluded.condition_value,
+                matched = excluded.matched,
+                last_price = excluded.last_price,
+                checked_at = excluded.checked_at
+        """), {
+            "alert_id": alert["id"],
+            "user_id": alert["user_id"],
+            "ticker": alert["ticker"],
+            "condition_type": alert["condition_type"],
+            "condition_value": alert.get("condition_value"),
+            "matched": bool(matched),
+            "last_price": current_price,
+        })
+        s.commit()
 
 
 def insert_alert_event(user_id: int, alert_id: int, ticker: str,
