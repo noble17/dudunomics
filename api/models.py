@@ -327,6 +327,14 @@ class CandidateScoreOut(BaseModel):
     source_universe: str | None = None
     source_universes: list[str] = Field(default_factory=list)
     is_tech: bool = False
+    raw_forward_pe: float | None = None
+    raw_peg: float | None = None
+    raw_roe: float | None = None
+    raw_rsi: float | None = None
+    raw_market_cap: float | None = None
+    raw_fwd_eps_growth: float | None = None
+    raw_fwd_rev_growth: float | None = None
+    above_ma200: bool | None = None
 
 
 class CandidateShortlistIn(BaseModel):

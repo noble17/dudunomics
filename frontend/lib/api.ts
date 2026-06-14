@@ -87,13 +87,38 @@ export const goldenCrossApi = {
 };
 
 export const candidatesApi = {
-  list: (params: { region?: string; sector?: string; status?: string; limit?: number } = {}) => {
+  list: (params: {
+    region?: string;
+    sector?: string;
+    status?: string;
+    source?: string;
+    limit?: number;
+    excludeWatchlist?: boolean;
+    weights?: Record<string, number>;
+    filters?: Record<string, number | boolean | null>;
+  } = {}) => {
     const query = new URLSearchParams({
       region: params.region || "all",
       sector: params.sector || "tech",
       status: params.status || "new",
+      source: params.source || "all",
       limit: String(params.limit || 50),
+      exclude_watchlist: String(params.excludeWatchlist ?? true),
     });
+    if (params.weights) {
+      for (const [key, value] of Object.entries(params.weights)) {
+        query.set(`${key}_weight`, String(value));
+      }
+    }
+    if (params.filters) {
+      for (const [key, value] of Object.entries(params.filters)) {
+        if (typeof value === "boolean") {
+          query.set(key, String(value));
+        } else if (value !== null && value !== undefined && Number.isFinite(value)) {
+          query.set(key, String(value));
+        }
+      }
+    }
     return request<CandidateScore[]>(`/api/candidates?${query.toString()}`);
   },
   refresh: (region = "all") =>
@@ -108,7 +133,7 @@ export const candidatesApi = {
     ),
   addWatchlist: (ticker: string, universeGroup: string) =>
     request<{ ok: boolean; ticker: string; watchlist_id: number; universe: string }>(
-      `/api/candidates/${encodeURIComponent(ticker)}/watchlist?universe_group=${encodeURIComponent(universeGroup)}`,
+      `/api/candidates/${encodeURIComponent(ticker)}/add-watchlist?universe_group=${encodeURIComponent(universeGroup)}`,
       { method: "POST" },
     ),
 };

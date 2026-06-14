@@ -179,6 +179,14 @@ export interface CandidateScore {
   source_universe: string | null;
   source_universes: string[];
   is_tech: boolean;
+  raw_forward_pe: number | null;
+  raw_peg: number | null;
+  raw_roe: number | null;
+  raw_rsi: number | null;
+  raw_market_cap: number | null;
+  raw_fwd_eps_growth: number | null;
+  raw_fwd_rev_growth: number | null;
+  above_ma200: boolean | null;
 }
 
 export interface PortfolioRow {

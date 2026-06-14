@@ -112,6 +112,8 @@ def _candidate_from_quant(row: dict, region: str, universe: str) -> dict:
             "raw_fwd_pe": row.get("raw_fwd_pe"),
             "raw_psr": row.get("raw_psr"),
             "raw_roe": row.get("raw_roe"),
+            "raw_rsi": row.get("raw_rsi"),
+            "above_ma200": row.get("above_ma200"),
             "is_tech": _is_tech(row),
         },
     }
