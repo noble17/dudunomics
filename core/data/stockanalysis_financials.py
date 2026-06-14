@@ -25,6 +25,8 @@ from typing import Optional
 import httpx
 from selectolax.parser import HTMLParser
 
+from core.data.choicestock_public import get_public_summary
+
 log = logging.getLogger(__name__)
 
 _DB_PATH = Path(__file__).parent.parent.parent / "data" / "fundamentals_cache.sqlite"
@@ -233,57 +235,24 @@ def _fetch_roe_annual(ticker: str) -> list[dict]:
     return result
 
 
-def _fetch_choicestock_financials(ticker: str) -> dict:
-    """ChoiceStock 공개 summary HTML에서 연간 재무/예상치를 추출합니다."""
-    try:
-        resp = _CLIENT.get(f"https://www.choicestock.co.kr/search/summary/{ticker.upper()}")
-        resp.raise_for_status()
-    except Exception as e:
-        log.debug("ChoiceStock financials fetch 실패 (%s): %s", ticker, e)
-        return {"revenue": [], "eps": [], "roe": [], "latest_report_date": None}
-
+def _fetch_choicestock_financials(ticker: str, enabled: bool) -> dict:
+    """ChoiceStock 공개 summary 캐시에서 연간 재무/예상치를 추출합니다."""
+    if not enabled:
+        return {"revenue": [], "eps": [], "roe": [], "latest_report_date": None, "metrics": {}, "news": []}
+    data = get_public_summary(ticker)
+    if not data:
+        return {"revenue": [], "eps": [], "roe": [], "latest_report_date": None, "metrics": {}, "news": []}
     return {
-        "revenue": _parse_choicestock_chart(resp.text, "containerfinancials1_1"),
-        "eps": _parse_choicestock_chart(resp.text, "containerfinancials1_2"),
-        "roe": _parse_choicestock_chart(resp.text, "containerfinancials1_3"),
-        "latest_report_date": _parse_choicestock_latest_report_date(resp.text),
+        "revenue": data.get("revenue") or [],
+        "eps": data.get("eps") or [],
+        "roe": data.get("roe") or [],
+        "latest_report_date": data.get("latest_report_date"),
+        "metrics": data.get("metrics") or {},
+        "news": data.get("news") or [],
+        "source": data.get("source"),
+        "source_url": data.get("source_url"),
+        "as_of": data.get("as_of") or data.get("fetched_date"),
     }
-
-
-def _parse_choicestock_chart(html: str, container_id: str) -> list[dict]:
-    match = re.search(
-        rf"var params = \[(?P<params>.*?)\];\s*var value = \[(?P<value>.*?)\];\s*newDetailChart1\('{re.escape(container_id)}'",
-        html,
-        re.DOTALL,
-    )
-    if not match:
-        return []
-    rows: list[dict] = []
-    for item in re.finditer(r"\{(?P<body>.*?)}", match.group("value"), re.DOTALL):
-        body = item.group("body")
-        y_match = re.search(r"y\s*:\s*(?P<value>-?\d+(?:\.\d+)?)", body)
-        date_match = re.search(r"date\s*:\s*'(?P<date>[^']+)'", body)
-        if not y_match or not date_match:
-            continue
-        raw_date = date_match.group("date")
-        year = raw_date[:4]
-        if not year.isdigit():
-            continue
-        rows.append({
-            "year": year,
-            "period_end": year,
-            "value": float(y_match.group("value")),
-            "is_estimate": "예상" in raw_date,
-        })
-    return rows
-
-
-def _parse_choicestock_latest_report_date(html: str) -> Optional[str]:
-    match = re.search(r"최근실적발표\s*(?P<date>\d{2}\.\d{2}\.\d{2})", html)
-    if not match:
-        return None
-    yy, mm, dd = match.group("date").split(".")
-    return f"20{yy}.{mm}.{dd}"
 
 
 def _merge_financial_rows(primary: list[dict], supplement: list[dict]) -> list[dict]:
@@ -301,7 +270,7 @@ def _merge_financial_rows(primary: list[dict], supplement: list[dict]) -> list[d
 
 # ── 공개 API ──────────────────────────────────────────────────────────────────
 
-def fetch_annual_financials(ticker: str) -> Optional[dict]:
+def fetch_annual_financials(ticker: str, include_choicestock: bool = False) -> Optional[dict]:
     """연간 재무 데이터 반환. 국내 종목은 None. 캐시 우선(24h TTL).
 
     Returns: {
@@ -327,7 +296,7 @@ def fetch_annual_financials(ticker: str) -> Optional[dict]:
         return None
 
     revenue, eps, latest_date = _parse_script(resp.text)
-    choicestock = _fetch_choicestock_financials(ticker)
+    choicestock = _fetch_choicestock_financials(ticker, include_choicestock)
     revenue = _merge_financial_rows(revenue, choicestock["revenue"])
     eps = _merge_financial_rows(eps, choicestock["eps"])
     roe = _fetch_roe_annual(ticker)
@@ -338,6 +307,13 @@ def fetch_annual_financials(ticker: str) -> Optional[dict]:
         "eps": eps,
         "roe": roe,
         "latest_report_date": latest_date or choicestock["latest_report_date"],
+        "choicestock": {
+            "source": choicestock.get("source"),
+            "source_url": choicestock.get("source_url"),
+            "as_of": choicestock.get("as_of"),
+            "metrics": choicestock.get("metrics") or {},
+            "news": choicestock.get("news") or [],
+        },
     }
     # 빈 결과는 캐싱하지 않음 — 스크래핑 실패를 24h 동안 숨기는 것 방지
     if revenue or eps:

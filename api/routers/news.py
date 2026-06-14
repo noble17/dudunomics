@@ -7,11 +7,13 @@ from api.models import NewsItem, NewsOut
 from core.data.yf_session import get_session
 from core.data.news_provider import fetch_news as _fetch_news_native
 from core.data.news_provider import filter_recent_news
+from core.data.choicestock_public import get_public_summary
+import core.repository as repo
 
 router = APIRouter(prefix="/api/news", tags=["news"])
 
-# (ticker, limit) → (items, expires_at)
-_cache: dict[tuple[str, int], tuple[list, float]] = {}
+# (ticker, limit, include_choicestock) → (items, expires_at)
+_cache: dict[tuple[str, int, bool], tuple[list, float]] = {}
 _TTL = 300.0  # 5분
 
 
@@ -62,20 +64,53 @@ def _yf_to_items(raw_list: list, limit: int) -> list[NewsItem]:
     return items
 
 
-def _fetch_news(ticker: str, limit: int) -> list[NewsItem]:
-    cache_key = (ticker.upper(), limit)
+def _choicestock_to_items(ticker: str, limit: int) -> list[NewsItem]:
+    summary = get_public_summary(ticker)
+    if not summary:
+        return []
+    items = []
+    for row in (summary.get("news") or [])[:limit]:
+        items.append(NewsItem(
+            title=row.get("title", ""),
+            published_date=row.get("published_date") or "",
+            url=row.get("url", ""),
+            site=row.get("site", "ChoiceStock public page"),
+            image=None,
+        ))
+    return items
+
+
+def _dedupe_news(items: list[NewsItem], limit: int) -> list[NewsItem]:
+    seen: set[str] = set()
+    result: list[NewsItem] = []
+    for item in items:
+        key = item.url or item.title
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        result.append(item)
+        if len(result) >= limit:
+            break
+    return result
+
+
+def _fetch_news(ticker: str, limit: int, include_choicestock: bool = False) -> list[NewsItem]:
+    cache_key = (ticker.upper(), limit, include_choicestock)
     now = time.time()
     if cache_key in _cache:
         items, expires_at = _cache[cache_key]
         if now < expires_at:
             return items
 
+    choice_items = _choicestock_to_items(ticker, limit) if include_choicestock else []
+
     # 1차: native RSS provider (Google News → Yahoo RSS)
     native_raw = filter_recent_news(_fetch_news_native(ticker.upper(), limit * 3), days=7)
     if native_raw:
         items = _native_to_items(native_raw, limit)
-        _cache[cache_key] = (items, now + _TTL)
-        return items
+        merged = _dedupe_news(choice_items + items, limit)
+        _cache[cache_key] = (merged, now + _TTL)
+        return merged
 
     # 최후 fallback: yfinance
     try:
@@ -85,8 +120,9 @@ def _fetch_news(ticker: str, limit: int) -> list[NewsItem]:
     except Exception:
         items = []
 
-    _cache[cache_key] = (items, now + _TTL)
-    return items
+    merged = _dedupe_news(choice_items + items, limit)
+    _cache[cache_key] = (merged, now + _TTL)
+    return merged
 
 
 @router.get("", response_model=NewsOut)
@@ -95,5 +131,6 @@ def get_news(
     limit: int = Query(10, ge=1, le=50),
     user: CurrentUser = Depends(current_user),
 ) -> NewsOut:
-    items = _fetch_news(ticker, limit)
+    include_choice = repo.is_user_watchlist_ticker(user.id, ticker.upper())
+    items = _fetch_news(ticker, limit, include_choicestock=include_choice)
     return NewsOut(ticker=ticker.upper(), items=items)

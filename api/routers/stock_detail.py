@@ -15,6 +15,11 @@ import core.repository as repo
 router = APIRouter(prefix="/api/screener/ticker", tags=["stock-detail"])
 
 
+def _prefer_choice(choice_metrics: dict, key: str, fallback):
+    value = choice_metrics.get(key)
+    return value if value is not None else fallback
+
+
 @router.get("/{ticker}/financials")
 def get_financials(
     ticker: str,
@@ -22,18 +27,24 @@ def get_financials(
     user: CurrentUser = Depends(current_user),
 ):
     upper = ticker.upper()
-    data = fetch_annual_financials(upper)
+    include_choice = repo.is_user_watchlist_ticker(user.id, upper)
+    data = fetch_annual_financials(upper, include_choicestock=include_choice)
     if data is None:
         raise HTTPException(status_code=404, detail=f"{upper} 재무 데이터 없음 (국내 종목 미지원)")
 
     snap = fetch_fundamentals(upper)
+    choice = data.get("choicestock") or {}
+    choice_metrics = choice.get("metrics") or {}
     metrics: dict = {
-        "market_cap_m": snap.market_cap_m if snap else None,
-        "trailing_pe": snap.trailing_pe if snap else None,
-        "forward_pe": snap.forward_pe if snap else None,
+        "market_cap_m": _prefer_choice(choice_metrics, "market_cap_m", snap.market_cap_m if snap else None),
+        "trailing_pe": _prefer_choice(choice_metrics, "trailing_pe", snap.trailing_pe if snap else None),
+        "forward_pe": _prefer_choice(choice_metrics, "forward_pe", snap.forward_pe if snap else None),
         "forward_eps": snap.forward_eps if snap else None,
-        "peg": snap.peg if snap else None,
-        "price_to_sales": snap.price_to_sales if snap else None,
+        "peg": _prefer_choice(choice_metrics, "peg", snap.peg if snap else None),
+        "price_to_sales": _prefer_choice(choice_metrics, "price_to_sales", snap.price_to_sales if snap else None),
+        "source": choice_metrics.get("source") or choice.get("source"),
+        "source_url": choice.get("source_url"),
+        "as_of": choice_metrics.get("as_of") or choice.get("as_of"),
     }
 
     # 분기 데이터 (quarterly_financials 테이블)
@@ -57,6 +68,13 @@ def get_financials(
         "roe": data["roe"],
         "latest_report_date": data.get("latest_report_date"),
         "metrics": metrics,
+        "sources": {
+            "choicestock": {
+                "source": choice.get("source"),
+                "source_url": choice.get("source_url"),
+                "as_of": choice.get("as_of"),
+            }
+        },
         "quarterly": {
             "revenue": quarterly_revenue,
             "eps": quarterly_eps,

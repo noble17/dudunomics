@@ -71,6 +71,9 @@ export function GrowthChart({ data }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>("revenue");
   const [period, setPeriod] = useState<Period>("annual");
   const tabCfg = TABS.find((t) => t.key === activeTab)!;
+  const source = data.metrics.source ?? data.sources?.choicestock?.source;
+  const sourceUrl = data.metrics.source_url ?? data.sources?.choicestock?.source_url;
+  const sourceAsOf = data.metrics.as_of ?? data.sources?.choicestock?.as_of;
 
   const annualPoints = data[activeTab] ?? [];
   const quarterlyPoints = data.quarterly?.[activeTab] ?? [];
@@ -214,6 +217,16 @@ export function GrowthChart({ data }: Props) {
           </div>
         ))}
       </div>
+      {source && (
+        <div className="mt-2 border-t border-border pt-2 text-[10px] text-muted-foreground">
+          출처: {sourceUrl ? (
+            <a href={sourceUrl} target="_blank" rel="noreferrer" className="underline-offset-2 hover:underline">
+              {source}
+            </a>
+          ) : source}
+          {sourceAsOf ? ` · 기준일 ${sourceAsOf}` : ""}
+        </div>
+      )}
     </div>
   );
 }

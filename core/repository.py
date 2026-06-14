@@ -201,6 +201,15 @@ def _init_schema(engine):
         PRIMARY KEY (ticker, as_of, source)
     );
 
+    CREATE TABLE IF NOT EXISTS choicestock_public_snapshots (
+        ticker      TEXT NOT NULL,
+        as_of       DATE NOT NULL,
+        source_url  TEXT NOT NULL,
+        data_json   JSON NOT NULL,
+        fetched_at  TIMESTAMP DEFAULT current_timestamp,
+        PRIMARY KEY (ticker, as_of)
+    );
+
     CREATE TABLE IF NOT EXISTS ticker_data_status (
         ticker          TEXT NOT NULL,
         data_type       TEXT NOT NULL,
@@ -433,6 +442,7 @@ def _init_schema(engine):
             "CREATE TABLE IF NOT EXISTS price_target_consensus_snapshots (ticker TEXT NOT NULL, as_of DATE NOT NULL, source TEXT NOT NULL, consensus_status TEXT, consensus_message TEXT, current_price DOUBLE, target_mean DOUBLE, target_median DOUBLE, target_low DOUBLE, target_high DOUBLE, upside_pct DOUBLE, analyst_count INTEGER, consensus_as_of TEXT, fallback_used BOOLEAN DEFAULT FALSE, attempts_json JSON, fetched_at TIMESTAMP DEFAULT current_timestamp, PRIMARY KEY (ticker, as_of, source))",
             "ALTER TABLE price_target_consensus_snapshots ADD COLUMN IF NOT EXISTS current_price DOUBLE",
             "ALTER TABLE price_target_consensus_snapshots ADD COLUMN IF NOT EXISTS upside_pct DOUBLE",
+            "CREATE TABLE IF NOT EXISTS choicestock_public_snapshots (ticker TEXT NOT NULL, as_of DATE NOT NULL, source_url TEXT NOT NULL, data_json JSON NOT NULL, fetched_at TIMESTAMP DEFAULT current_timestamp, PRIMARY KEY (ticker, as_of))",
             "CREATE TABLE IF NOT EXISTS ticker_data_status (ticker TEXT NOT NULL, data_type TEXT NOT NULL, source TEXT NOT NULL, min_date DATE, max_date DATE, last_fetched_at TIMESTAMP, last_success_at TIMESTAMP, last_error TEXT, coverage_json JSON, PRIMARY KEY (ticker, data_type, source))",
             "CREATE TABLE IF NOT EXISTS holding_sources (user_id INTEGER NOT NULL, source TEXT NOT NULL, account_id TEXT NOT NULL DEFAULT '', ticker TEXT NOT NULL, name TEXT NOT NULL, currency TEXT NOT NULL, quantity DOUBLE NOT NULL, avg_price DOUBLE NOT NULL, sector TEXT, market TEXT, excluded_from_portfolio BOOLEAN DEFAULT FALSE, updated_at TIMESTAMP DEFAULT current_timestamp, PRIMARY KEY (user_id, source, account_id, ticker))",
             "CREATE TABLE IF NOT EXISTS portfolio_snapshot_rollups (user_id INTEGER NOT NULL, bucket TEXT NOT NULL, ts TIMESTAMP NOT NULL, total_equity_krw DOUBLE, total_with_cash_krw DOUBLE, cash_krw DOUBLE, total_equity_usd DOUBLE, total_with_cash_usd DOUBLE, cash_usd DOUBLE, usdkrw DOUBLE, PRIMARY KEY (user_id, bucket, ts))",
@@ -2029,6 +2039,23 @@ def list_watchlist_memberships(user_id: int, ticker: str) -> list[dict]:
         return [dict(row) for row in rows]
 
 
+def is_user_watchlist_ticker(user_id: int, ticker: str) -> bool:
+    upper = ticker.upper()
+    with session() as s:
+        row = s.execute(text("""
+            SELECT 1
+            FROM watchlist_items i
+            JOIN watchlists w ON w.id = i.watchlist_id
+            WHERE w.user_id = :uid AND i.ticker = :ticker
+            UNION ALL
+            SELECT 1
+            FROM growth_watchlist
+            WHERE user_id = :uid AND ticker = :ticker
+            LIMIT 1
+        """), {"uid": user_id, "ticker": upper}).fetchone()
+        return row is not None
+
+
 def list_timing_alert_watchlist_items() -> list[dict]:
     with session() as s:
         rows = s.execute(text("""
@@ -2046,6 +2073,73 @@ def list_timing_alert_watchlist_items() -> list[dict]:
             ORDER BY w.user_id, w.id, i.ticker
         """)).mappings().all()
         return [dict(row) for row in rows]
+
+
+def _json_payload(value: Any) -> dict:
+    if value is None:
+        return {}
+    if isinstance(value, str):
+        try:
+            return json.loads(value)
+        except Exception:
+            return {}
+    if isinstance(value, dict):
+        return value
+    return dict(value)
+
+
+def get_choicestock_public_snapshot(ticker: str, as_of: date) -> dict | None:
+    with session() as s:
+        row = s.execute(text("""
+            SELECT ticker, as_of, source_url, data_json, fetched_at
+            FROM choicestock_public_snapshots
+            WHERE ticker = :ticker AND as_of = :as_of
+        """), {"ticker": ticker.upper(), "as_of": as_of}).mappings().fetchone()
+        if not row:
+            return None
+        data = _json_payload(row["data_json"])
+        data["ticker"] = row["ticker"]
+        data["as_of"] = str(row["as_of"])
+        data["source_url"] = row["source_url"]
+        data["fetched_at"] = str(row["fetched_at"]) if row["fetched_at"] else None
+        return data
+
+
+def get_latest_choicestock_public_snapshot(ticker: str) -> dict | None:
+    with session() as s:
+        row = s.execute(text("""
+            SELECT ticker, as_of, source_url, data_json, fetched_at
+            FROM choicestock_public_snapshots
+            WHERE ticker = :ticker
+            ORDER BY as_of DESC
+            LIMIT 1
+        """), {"ticker": ticker.upper()}).mappings().fetchone()
+        if not row:
+            return None
+        data = _json_payload(row["data_json"])
+        data["ticker"] = row["ticker"]
+        data["as_of"] = str(row["as_of"])
+        data["source_url"] = row["source_url"]
+        data["fetched_at"] = str(row["fetched_at"]) if row["fetched_at"] else None
+        return data
+
+
+def upsert_choicestock_public_snapshot(ticker: str, as_of: date, source_url: str, data: dict) -> None:
+    with session() as s:
+        s.execute(text("""
+            INSERT INTO choicestock_public_snapshots (ticker, as_of, source_url, data_json, fetched_at)
+            VALUES (:ticker, :as_of, :source_url, :data_json, current_timestamp)
+            ON CONFLICT (ticker, as_of) DO UPDATE SET
+                source_url = excluded.source_url,
+                data_json = excluded.data_json,
+                fetched_at = excluded.fetched_at
+        """), {
+            "ticker": ticker.upper(),
+            "as_of": as_of,
+            "source_url": source_url,
+            "data_json": json.dumps(normalize_finite_numbers(data), ensure_ascii=False),
+        })
+        s.commit()
 
 
 def upsert_rank_history(rows: list[dict]) -> None:

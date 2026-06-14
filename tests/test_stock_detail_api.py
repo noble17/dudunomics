@@ -29,6 +29,63 @@ def test_financials_endpoint_returns_data(client):
     assert body["metrics"]["forward_eps"] == 7.5
 
 
+def test_financials_endpoint_prefers_choicestock_metrics(client):
+    mock_financials = {
+        "revenue": [{"year": "2026", "period_end": "2026.06", "value": 2993.5, "is_estimate": True}],
+        "eps": [],
+        "roe": [],
+        "latest_report_date": "2026.05.06",
+        "choicestock": {
+            "source": "ChoiceStock public page",
+            "source_url": "https://www.choicestock.co.kr/search/summary/LITE",
+            "as_of": "2026-06-14",
+            "metrics": {
+                "market_cap_m": 71697.0,
+                "trailing_pe": 163.6,
+                "forward_pe": 56.84,
+                "peg": 0.74,
+                "price_to_sales": 28.8,
+                "as_of": "2026.06.12",
+                "source": "ChoiceStock public page",
+            },
+        },
+    }
+    mock_snap = type("Snap", (), {
+        "market_cap_m": 1.0,
+        "trailing_pe": 2.0,
+        "forward_pe": 3.0,
+        "forward_eps": 4.0,
+        "peg": 5.0,
+        "price_to_sales": 6.0,
+    })()
+    with patch("api.routers.stock_detail.fetch_annual_financials", return_value=mock_financials), \
+         patch("api.routers.stock_detail.fetch_fundamentals", return_value=mock_snap):
+        resp = client.get("/api/screener/ticker/LITE/financials?universe=sp500")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["metrics"]["market_cap_m"] == 71697.0
+    assert body["metrics"]["forward_pe"] == 56.84
+    assert body["metrics"]["forward_eps"] == 4.0
+    assert body["metrics"]["source"] == "ChoiceStock public page"
+    assert body["metrics"]["as_of"] == "2026.06.12"
+
+
+def test_financials_endpoint_enables_choicestock_only_for_watchlist(client):
+    mock_financials = {
+        "revenue": [],
+        "eps": [],
+        "roe": [],
+        "latest_report_date": None,
+        "choicestock": {},
+    }
+    with patch("api.routers.stock_detail.repo.is_user_watchlist_ticker", return_value=True), \
+         patch("api.routers.stock_detail.fetch_annual_financials", return_value=mock_financials) as fetch, \
+         patch("api.routers.stock_detail.fetch_fundamentals", return_value=None):
+        resp = client.get("/api/screener/ticker/LITE/financials?universe=sp500")
+    assert resp.status_code == 200
+    fetch.assert_called_once_with("LITE", include_choicestock=True)
+
+
 def test_financials_404_for_korean(client):
     with patch("api.routers.stock_detail.fetch_annual_financials", return_value=None):
         resp = client.get("/api/screener/ticker/005930.KS/financials")

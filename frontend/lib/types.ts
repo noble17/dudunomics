@@ -701,6 +701,9 @@ export interface FinancialMetrics {
   forward_eps: number | null;
   peg: number | null;
   price_to_sales: number | null;
+  source?: string | null;
+  source_url?: string | null;
+  as_of?: string | null;
 }
 
 export interface FinancialsData {
@@ -709,6 +712,13 @@ export interface FinancialsData {
   roe: FinancialDataPoint[];
   latest_report_date: string | null;
   metrics: FinancialMetrics;
+  sources?: {
+    choicestock?: {
+      source?: string | null;
+      source_url?: string | null;
+      as_of?: string | null;
+    };
+  };
   quarterly: {
     revenue: QuarterlyFinancialDataPoint[];
     eps: QuarterlyFinancialDataPoint[];

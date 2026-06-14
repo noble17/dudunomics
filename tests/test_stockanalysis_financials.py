@@ -98,7 +98,8 @@ def _make_mock_get_with_choicestock():
 def test_fetch_annual_financials_revenue(tmp_path, monkeypatch):
     from core.data import stockanalysis_financials as sa
     monkeypatch.setattr(sa, "_DB_PATH", tmp_path / "sa_cache.sqlite")
-    with patch.object(sa._CLIENT, "get", side_effect=_make_mock_get()):
+    with patch.object(sa._CLIENT, "get", side_effect=_make_mock_get()), \
+         patch.object(sa, "get_public_summary", return_value=None):
         result = sa.fetch_annual_financials("AAPL")
     assert result is not None
     assert len(result["revenue"]) == 6
@@ -112,7 +113,8 @@ def test_fetch_annual_financials_revenue(tmp_path, monkeypatch):
 def test_fetch_annual_financials_eps(tmp_path, monkeypatch):
     from core.data import stockanalysis_financials as sa
     monkeypatch.setattr(sa, "_DB_PATH", tmp_path / "sa_cache.sqlite")
-    with patch.object(sa._CLIENT, "get", side_effect=_make_mock_get()):
+    with patch.object(sa._CLIENT, "get", side_effect=_make_mock_get()), \
+         patch.object(sa, "get_public_summary", return_value=None):
         result = sa.fetch_annual_financials("AAPL")
     assert result is not None
     fy2024 = next(r for r in result["eps"] if r["year"] == "2024")
@@ -122,8 +124,24 @@ def test_fetch_annual_financials_eps(tmp_path, monkeypatch):
 def test_fetch_annual_financials_merges_choicestock_estimates(tmp_path, monkeypatch):
     from core.data import stockanalysis_financials as sa
     monkeypatch.setattr(sa, "_DB_PATH", tmp_path / "sa_cache.sqlite")
-    with patch.object(sa._CLIENT, "get", side_effect=_make_mock_get_with_choicestock()):
-        result = sa.fetch_annual_financials("LITE")
+    choice = {
+        "revenue": [
+            {"year": "2027", "period_end": "2027.06", "value": 5547.45834, "is_estimate": True},
+            {"year": "2028", "period_end": "2028.06", "value": 8317.14352, "is_estimate": True},
+        ],
+        "eps": [
+            {"year": "2027", "period_end": "2027.06", "value": 15.91647, "is_estimate": True},
+            {"year": "2028", "period_end": "2028.06", "value": 27.75827, "is_estimate": True},
+        ],
+        "roe": [
+            {"year": "2027", "period_end": "2027.06", "value": 25.19, "is_estimate": True},
+            {"year": "2028", "period_end": "2028.06", "value": 26.92, "is_estimate": True},
+        ],
+        "latest_report_date": "2026.05.06",
+    }
+    with patch.object(sa._CLIENT, "get", side_effect=_make_mock_get()), \
+         patch.object(sa, "get_public_summary", return_value=choice):
+        result = sa.fetch_annual_financials("LITE", include_choicestock=True)
     revenue_by_year = {row["year"]: row for row in result["revenue"]}
     eps_by_year = {row["year"]: row for row in result["eps"]}
     roe_by_year = {row["year"]: row for row in result["roe"]}
@@ -140,7 +158,8 @@ def test_fetch_annual_financials_merges_choicestock_estimates(tmp_path, monkeypa
 def test_fetch_annual_financials_roe(tmp_path, monkeypatch):
     from core.data import stockanalysis_financials as sa
     monkeypatch.setattr(sa, "_DB_PATH", tmp_path / "sa_cache.sqlite")
-    with patch.object(sa._CLIENT, "get", side_effect=_make_mock_get()):
+    with patch.object(sa._CLIENT, "get", side_effect=_make_mock_get()), \
+         patch.object(sa, "get_public_summary", return_value=None):
         result = sa.fetch_annual_financials("AAPL")
     assert result is not None
     roe = result["roe"]
@@ -170,7 +189,8 @@ def test_roe_skips_estimates(tmp_path, monkeypatch):
             mock.text = _make_forecast_html()
         return mock
 
-    with patch.object(sa._CLIENT, "get", side_effect=side_effect_with_estimates):
+    with patch.object(sa._CLIENT, "get", side_effect=side_effect_with_estimates), \
+         patch.object(sa, "get_public_summary", return_value=None):
         result = sa.fetch_annual_financials("AAPL")
     roe = result["roe"]
     assert len(roe) == 1
@@ -192,7 +212,8 @@ def test_roe_graceful_on_parse_failure(tmp_path, monkeypatch):
             mock.text = _make_forecast_html()
         return mock
 
-    with patch.object(sa._CLIENT, "get", side_effect=side_effect_no_equity):
+    with patch.object(sa._CLIENT, "get", side_effect=side_effect_no_equity), \
+         patch.object(sa, "get_public_summary", return_value=None):
         result = sa.fetch_annual_financials("AAPL")
     assert result is not None
     assert result["roe"] == []
@@ -235,7 +256,8 @@ def test_cache_invalidated_on_version_mismatch(tmp_path, monkeypatch):
     conn.commit()
     conn.close()
 
-    with patch.object(sa._CLIENT, "get", side_effect=_make_mock_get()) as mock_get:
+    with patch.object(sa._CLIENT, "get", side_effect=_make_mock_get()) as mock_get, \
+         patch.object(sa, "get_public_summary", return_value=None):
         result = sa.fetch_annual_financials("AAPL")
     assert mock_get.called
     assert len(result["revenue"]) == 6
