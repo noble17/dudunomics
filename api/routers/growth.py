@@ -14,6 +14,7 @@ from api.models import GrowthHydrateOut, GrowthScoreOut, GrowthTimingOut, Growth
 from core.auth.deps import CurrentUser, current_user
 from core.data.normalization import normalize_finite_numbers
 from core.data.ohlcv_cache import fetch_ohlcv
+from core.data.choicestock_public import get_public_summary
 from core.data.ticker_data_service import get_fundamentals
 from core.prices.selection import prefer_toss_market_data
 from core.prices.kis import KISPriceProvider
@@ -135,17 +136,18 @@ def get_valuation(
     fallback = None if row or has_common_snapshot else _missing_cached_valuation(ticker)
     consensus = repo.get_latest_price_target_consensus_snapshot(ticker) or _consensus_not_hydrated(ticker)
     consensus = _with_current_price(ticker, consensus)
+    valuation = _valuation_values(ticker, universe, user.id, row, common, has_common_snapshot, fallback)
     return normalize_finite_numbers({
         "ticker": ticker,
         **_score_status(ticker, universe, row),
-        "valuation_source": "BATCH" if row else common["valuation_source"] if has_common_snapshot else fallback["valuation_source"],
-        "valuation_as_of": str(row.get("as_of")) if row else str(common.get("valuation_as_of")) if has_common_snapshot else None,
+        "valuation_source": valuation["valuation_source"],
+        "valuation_as_of": valuation["valuation_as_of"],
         "valuation_stale": False,
         "missing_reasons": [] if row or has_common_snapshot else fallback["missing_reasons"],
-        "peg": row.get("raw_peg") if row else common["peg"] if has_common_snapshot else fallback["peg"],
-        "forward_pe": row.get("raw_fwd_pe") if row else common["forward_pe"] if has_common_snapshot else fallback["forward_pe"],
-        "psr": row.get("raw_psr") if row else common["psr"] if has_common_snapshot else fallback["psr"],
-        "forward_eps": row.get("raw_fwd_eps") if row else common["forward_eps"] if has_common_snapshot else fallback["forward_eps"],
+        "peg": valuation["peg"],
+        "forward_pe": valuation["forward_pe"],
+        "psr": valuation["psr"],
+        "forward_eps": valuation["forward_eps"],
         "forward_revenue_growth": row.get("raw_fwd_rev_growth") if row else common["forward_revenue_growth"] if has_common_snapshot else fallback["forward_revenue_growth"],
         "forward_eps_growth": row.get("raw_fwd_eps_growth") if row else common["forward_eps_growth"] if has_common_snapshot else fallback["forward_eps_growth"],
         **consensus,
@@ -311,6 +313,76 @@ def _score_status(ticker: str, universe: str, row: dict | None) -> dict:
         "score_status": "missing",
         "score_message": f"{ticker}는 {universe} 성장주 배치 데이터에 아직 없습니다.",
     }
+
+
+def _valuation_values(
+    ticker: str,
+    universe: str,
+    user_id: int,
+    row: dict | None,
+    common: dict,
+    has_common_snapshot: bool,
+    fallback: dict | None,
+) -> dict:
+    values = {
+        "valuation_source": "BATCH" if row else common["valuation_source"] if has_common_snapshot else fallback["valuation_source"],
+        "valuation_as_of": str(row.get("as_of")) if row else str(common.get("valuation_as_of")) if has_common_snapshot else None,
+        "peg": row.get("raw_peg") if row else common["peg"] if has_common_snapshot else fallback["peg"],
+        "forward_pe": row.get("raw_fwd_pe") if row else common["forward_pe"] if has_common_snapshot else fallback["forward_pe"],
+        "psr": row.get("raw_psr") if row else common["psr"] if has_common_snapshot else fallback["psr"],
+        "forward_eps": row.get("raw_fwd_eps") if row else common["forward_eps"] if has_common_snapshot else fallback["forward_eps"],
+    }
+    choice = _choicestock_valuation(ticker, user_id)
+    if not choice:
+        return values
+    values.update({
+        key: choice[key]
+        for key in ("peg", "forward_pe", "psr", "forward_eps")
+        if choice.get(key) is not None
+    })
+    values["valuation_source"] = choice.get("source") or values["valuation_source"]
+    values["valuation_as_of"] = choice.get("as_of") or values["valuation_as_of"]
+    return values
+
+
+def _choicestock_valuation(ticker: str, user_id: int) -> dict | None:
+    if not repo.is_user_watchlist_ticker(user_id, ticker):
+        return None
+    data = get_public_summary(ticker)
+    if not data:
+        return None
+    metrics = data.get("metrics") or {}
+    return {
+        "source": metrics.get("source") or data.get("source"),
+        "as_of": metrics.get("as_of") or data.get("as_of") or data.get("fetched_date"),
+        "peg": metrics.get("peg"),
+        "forward_pe": metrics.get("forward_pe"),
+        "psr": metrics.get("price_to_sales"),
+        "forward_eps": _next_choice_eps(data.get("eps") or []),
+    }
+
+
+def _next_choice_eps(rows: list[dict]) -> float | None:
+    today_year = date.today().year
+    estimates = sorted(
+        (
+            row for row in rows
+            if row.get("is_estimate") and _row_year(row) is not None and _row_year(row) >= today_year
+        ),
+        key=lambda row: _row_year(row) or 9999,
+    )
+    if estimates:
+        return estimates[0].get("value")
+    latest = [row for row in rows if row.get("value") is not None]
+    return latest[-1].get("value") if latest else None
+
+
+def _row_year(row: dict) -> int | None:
+    raw = row.get("year") or str(row.get("period_end") or "")[:4] or str(row.get("period") or "")[:4]
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return None
 
 
 def _missing_cached_valuation(ticker: str) -> dict:

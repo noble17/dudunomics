@@ -277,6 +277,41 @@ def test_growth_valuation_returns_consensus_metrics(client):
     assert body["consensus_attempts"] == [{"source": "FMP", "status": "ok"}]
 
 
+def test_growth_valuation_prefers_choicestock_for_watchlist_ticker(client, monkeypatch):
+    repo.upsert_quant_scores([_score_row("LITE", 91.0, raw_peg=0.8, raw_fwd_pe=20.0, raw_psr=4.0, raw_fwd_eps=6.0)])
+    watchlist = client.post("/api/watchlists", json={"name": "미주은 모멘텀"}).json()
+    client.put(f"/api/watchlists/{watchlist['id']}/items/LITE", json={"name": "Lumentum", "universe": "sp500"})
+    year = date.today().year
+
+    monkeypatch.setattr("api.routers.growth.get_public_summary", lambda ticker: {
+        "source": "ChoiceStock public page",
+        "fetched_date": "2026-06-14",
+        "metrics": {
+            "source": "ChoiceStock public page",
+            "as_of": "2026.06.12",
+            "peg": 0.35,
+            "forward_pe": 49.74,
+            "price_to_sales": 28.81,
+        },
+        "eps": [
+            {"year": str(year - 1), "period_end": f"{year - 1}-06-30", "value": 0.37, "is_estimate": False},
+            {"year": str(year), "period_end": f"{year}-06-30", "value": 4.94, "is_estimate": True},
+            {"year": str(year + 1), "period_end": f"{year + 1}-06-30", "value": 15.92, "is_estimate": True},
+        ],
+    })
+
+    response = client.get("/api/growth/ticker/LITE/valuation?universe=sp500")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["valuation_source"] == "ChoiceStock public page"
+    assert body["valuation_as_of"] == "2026.06.12"
+    assert body["peg"] == 0.35
+    assert body["forward_pe"] == 49.74
+    assert body["psr"] == 28.81
+    assert body["forward_eps"] == 4.94
+
+
 def test_growth_valuation_returns_empty_metrics_when_quant_row_is_missing(client):
     response = client.get("/api/growth/ticker/BE/valuation?universe=sp500")
 

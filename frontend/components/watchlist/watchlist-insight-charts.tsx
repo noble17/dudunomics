@@ -444,6 +444,8 @@ function GrowthFlowCard({ data }: { data: FinancialsData }) {
               <Tooltip
                 cursor={{ fill: "var(--muted)" }}
                 contentStyle={TOOLTIP_STYLE}
+                labelStyle={{ color: "var(--foreground)" }}
+                itemStyle={{ color: "var(--foreground)" }}
                 formatter={(value) => [`${formatFlowValue(Number(value), activeTab)} ${tab.unit}`, tab.title]}
                 labelFormatter={(label) => String(label)}
               />
