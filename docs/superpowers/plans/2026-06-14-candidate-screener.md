@@ -4,7 +4,7 @@
 
 **Goal:** Build a candidate screener that finds stocks outside the user's current watchlist from Russell 1000, NASDAQ100, S&P500, KOSPI, and KOSDAQ, ranks them with configurable filters, and lets the user add selected candidates to a watchlist.
 
-**Architecture:** Add a Russell 1000 universe provider and candidate-specific DB tables. Reuse existing price, fundamentals, quant score, growth score, and timing infrastructure for broad, lightweight scoring. Avoid expensive ChoiceStock collection for the full universe; reserve detailed collection for selected/final candidates and watchlist items.
+**Architecture:** Add a Russell 1000 universe provider and candidate-specific DB tables. Reuse existing price, fundamentals, quant score, growth score, and timing infrastructure for broad, lightweight scoring. Avoid expensive ChoiceStock collection for the full universe and final-candidate states; collect ChoiceStock only after the user adds a ticker to a watchlist.
 
 **Tech Stack:** Python/FastAPI/DuckDB/SQLAlchemy/Pandas/APScheduler backend; Next.js/TypeScript/SWR frontend; pytest, py_compile, ESLint for verification.
 
@@ -17,6 +17,8 @@
 - Do not revert unrelated dirty files. `data/kospi200_tickers.json` and `data/kosdaq150_tickers.json` may be dirty from prior data refreshes.
 - Read APIs should prefer DB/cache. External provider calls belong in scheduled jobs, manual refresh, or explicit hydrate flows.
 - ChoiceStock public HTML must not be collected for the full Russell 1000 universe.
+- ChoiceStock public HTML must not be collected for `watching` or final-candidate-only status.
+- ChoiceStock public HTML may be collected only after the user adds the ticker to a watchlist.
 - Candidate scores are screening/ranking aids, not buy recommendations.
 
 ## File Map
@@ -272,7 +274,8 @@ PY
   - Calls watchlist API.
   - Marks candidate status as `added`.
   - Does not immediately run ChoiceStock for all candidates.
-  - After adding, normal watchlist/ChoiceStock daily cache path handles detailed data.
+  - Does not run ChoiceStock for `watching` or final-candidate-only status.
+  - After adding to a watchlist, normal watchlist/ChoiceStock daily cache path handles detailed data.
 
 ---
 
@@ -313,6 +316,7 @@ PY
 ## Non-Goals For v1
 
 - Do not collect ChoiceStock for all Russell 1000 symbols.
+- Do not collect ChoiceStock for final candidates unless they are added to a watchlist.
 - Do not attempt all US listed stocks.
 - Do not provide buy/sell recommendation language.
 - Do not add real-time candidate ranking.
