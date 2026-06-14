@@ -9,12 +9,20 @@ log = logging.getLogger(__name__)
 _MAX_LEN = 4096
 
 
-def send_telegram(text: str) -> bool:
+def _chat_id_for(channel: str) -> str | None:
+    channel_key = channel.upper()
+    return (
+        os.getenv(f"TELEGRAM_CHAT_ID_{channel_key}")
+        or os.getenv("TELEGRAM_CHAT_ID")
+    )
+
+
+def send_telegram(text: str, channel: str = "default") -> bool:
     """Telegram 메시지 전송. 성공 True, 실패/미설정 False."""
     token = os.getenv("TELEGRAM_BOT_TOKEN")
-    chat_id = os.getenv("TELEGRAM_CHAT_ID")
+    chat_id = _chat_id_for(channel)
     if not token or not chat_id:
-        log.warning("TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID 미설정 — 전송 스킵")
+        log.warning("TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID_%s 미설정 — 전송 스킵", channel.upper())
         return False
 
     url = f"https://api.telegram.org/bot{token}/sendMessage"

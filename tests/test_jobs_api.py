@@ -85,7 +85,7 @@ def test_daily_watchlist_timing_alert_sends_checked_items(client, monkeypatch):
     )
 
     sent = []
-    monkeypatch.setattr("core.scheduler.send_telegram", lambda text: sent.append(text) or True)
+    monkeypatch.setattr("core.scheduler.send_telegram", lambda text, **_: sent.append(text) or True)
     monkeypatch.setattr("core.scheduler.analyze_timing", lambda ticker: {
         "status": "watch",
         "aligned": True,
@@ -160,7 +160,7 @@ def test_daily_holdings_news_uses_choicestock_summary(client, monkeypatch):
         ],
     })
     sent = []
-    monkeypatch.setattr("core.scheduler.send_telegram", lambda text: sent.append(text) or True)
+    monkeypatch.setattr("core.scheduler.send_telegram", lambda text, **_: sent.append(text) or True)
 
     result = daily_holdings_news_job()
 

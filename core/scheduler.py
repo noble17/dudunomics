@@ -425,7 +425,7 @@ def daily_holdings_news_job():
 
     if count == 0:
         return {"tickers": len(tickers), "news": 0, "sent": False}
-    sent = send_telegram("\n".join(lines))
+    sent = send_telegram("\n".join(lines), channel="daily")
     return {"tickers": len(tickers), "news": count, "sent": sent}
 
 
@@ -458,7 +458,7 @@ def daily_watchlist_timing_alert_job():
             log.error("watchlist timing alert 오류 (%s): %s", ticker, exc)
             lines.append(f"\n[{item['watchlist_name']}] {ticker}\n상태: 분석 실패")
 
-    sent = send_telegram("\n".join(lines))
+    sent = send_telegram("\n".join(lines), channel="daily")
     return {"items": len(items), "success": success, "failed": failed, "sent": sent}
 
 

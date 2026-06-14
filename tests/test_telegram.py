@@ -26,6 +26,20 @@ def test_send_telegram_success(monkeypatch):
     assert call_args[1]["json"]["text"] == "hello"
 
 
+def test_send_telegram_uses_channel_chat_id(monkeypatch):
+    """채널별 chat id가 있으면 기본 chat id보다 우선."""
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "123:ABC")
+    monkeypatch.setenv("TELEGRAM_CHAT_ID", "999")
+    monkeypatch.setenv("TELEGRAM_CHAT_ID_ALERTS", "111")
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    with patch("httpx.post", return_value=mock_resp) as mock_post:
+        from core.telegram import send_telegram
+        result = send_telegram("alert", channel="alerts")
+    assert result is True
+    assert mock_post.call_args[1]["json"]["chat_id"] == "111"
+
+
 def test_send_telegram_long_message(monkeypatch):
     """4096자 초과 메시지는 청크로 분할 전송."""
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "123:ABC")

@@ -266,7 +266,7 @@ def run_ema_scan(market: str) -> dict:
 
     for group, entries in entries_by_group.items():
         msg = _build_group_message(group, today, entries["new"], entries["maintained"], names)
-        send_telegram(msg)
+        send_telegram(msg, channel="alerts")
 
     new_count = sum(len(entries["new"]) for entries in entries_by_group.values())
     maintained_count = sum(len(entries["maintained"]) for entries in entries_by_group.values())
