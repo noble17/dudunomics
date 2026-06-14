@@ -49,7 +49,7 @@ def list_items(watchlist_id: int, user: CurrentUser = Depends(current_user)):
         raise HTTPException(status_code=404, detail="Watchlist를 찾을 수 없습니다.")
     tickers = [item["ticker"] for item in items]
     names = {item["ticker"]: item.get("name") or item["ticker"] for item in items}
-    performance = build_ticker_performance(tickers, names=names) if tickers else []
+    performance = build_ticker_performance(tickers, names=names, cache_only=True) if tickers else []
     item_by_key = {(item["ticker"], item["universe"]): item for item in items}
     item_by_ticker = {item["ticker"]: item for item in items}
     return [

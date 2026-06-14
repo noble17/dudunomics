@@ -55,9 +55,11 @@ def test_watchlists_create_multiple_lists_and_share_one_ticker(client):
     assert counts["반도체"] == 1
     assert counts["AI 인프라"] == 1
 
-    with patch("api.routers.watchlists.build_ticker_performance", return_value=[_perf_row("MU", "Micron")]):
+    with patch("api.routers.watchlists.build_ticker_performance", return_value=[_perf_row("MU", "Micron")]) as build:
         items = client.get(f"/api/watchlists/{semiconductor['id']}/items").json()
 
+    build.assert_called_once()
+    assert build.call_args.kwargs["cache_only"] is True
     assert items[0]["ticker"] == "MU"
     assert items[0]["name"] == "Micron"
     assert items[0]["price_vs_ma200"] == 25.0

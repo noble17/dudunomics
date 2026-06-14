@@ -33,11 +33,16 @@ _EMPTY_ROW = {
 }
 
 
-def build_ticker_performance(tickers: list[str], names: dict[str, str] | None = None) -> list[dict[str, Any]]:
+def build_ticker_performance(
+    tickers: list[str],
+    names: dict[str, str] | None = None,
+    *,
+    cache_only: bool = False,
+) -> list[dict[str, Any]]:
     """OHLCV 캐시/수집 데이터를 읽어 Performance View row를 만든다."""
     today = date.today()
     start = today - timedelta(days=430)
-    ohlcv, _ = fetch_ohlcv(tickers, start, today)
+    ohlcv, _ = fetch_ohlcv(tickers, start, today, cache_only=cache_only)
     return compute_ticker_performance(tickers, names=names, ohlcv=ohlcv)
 
 
