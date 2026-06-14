@@ -130,7 +130,11 @@ export function TickerDetail({ ticker, universe = "sp500", name, compact = false
                   <span className="font-data text-foreground">{status.max_date ?? "-"}</span>
                 </p>
                 <p className="mt-1 text-muted-foreground">마지막 성공: {formatDate(status.last_success_at)}</p>
-                {status.last_error && <p className="mt-1 text-loss">오류: {status.last_error}</p>}
+                {status.last_error && (
+                  <p className="mt-2 rounded border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-amber-700 dark:text-amber-200">
+                    주의: {status.last_error}
+                  </p>
+                )}
               </div>
             ))
           ) : (

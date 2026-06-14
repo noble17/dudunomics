@@ -41,14 +41,6 @@ const EMA_BY_MODE: Record<EmaMode, (keyof PriceChartData["ema"])[]> = {
   middle: ["e20", "e60", "e120"],
 };
 
-const TOOLTIP_STYLE = {
-  backgroundColor: "var(--card)",
-  border: "1px solid var(--border)",
-  borderRadius: 8,
-  color: "var(--foreground)",
-  fontSize: 11,
-};
-
 const FLOW_TABS: { key: FlowTab; label: string; title: string; unit: string }[] = [
   { key: "revenue", label: "매출액", title: "매출액", unit: "백만달러" },
   { key: "eps", label: "EPS 주당순이익", title: "EPS 주당순이익", unit: "달러" },
@@ -58,7 +50,11 @@ const FLOW_TABS: { key: FlowTab; label: string; title: string; unit: string }[] 
 function formatDate(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return `${String(date.getFullYear()).slice(2)}.${String(date.getMonth() + 1).padStart(2, "0")}`;
+  return [
+    String(date.getFullYear()).slice(2),
+    String(date.getMonth() + 1).padStart(2, "0"),
+    String(date.getDate()).padStart(2, "0"),
+  ].join(".");
 }
 
 function formatNumber(value: unknown, digits = 2) {
@@ -92,6 +88,13 @@ function toTs(date: string) {
   return new Date(date).getTime();
 }
 
+function formatTooltipLabel(label: number | string | undefined) {
+  if (label == null) return "-";
+  const date = typeof label === "number" ? new Date(label) : new Date(label);
+  if (Number.isNaN(date.getTime())) return String(label);
+  return formatDate(date.toISOString());
+}
+
 function mergeEmaData(data: PriceChartData | undefined, mode: EmaMode) {
   if (!data) return [];
   const activeKeys = EMA_BY_MODE[mode];
@@ -108,6 +111,76 @@ function mergeEmaData(data: PriceChartData | undefined, mode: EmaMode) {
     for (const key of activeKeys) row[key] = maps[key].get(point.date) ?? null;
     return row;
   });
+}
+
+type ChartTooltipPayload = Array<{
+  dataKey?: string | number;
+  name?: string | number;
+  value?: number;
+  color?: string;
+  stroke?: string;
+}>;
+
+function SeriesTooltip({
+  active,
+  payload,
+  label,
+}: {
+  active?: boolean;
+  payload?: ChartTooltipPayload;
+  label?: number | string;
+}) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="rounded-xl border border-border bg-card px-4 py-3 text-sm text-foreground shadow-lg">
+      <p className="font-medium">{formatTooltipLabel(label)}</p>
+      <div className="mt-2 space-y-1.5">
+        {payload.map((item) => {
+          const key = String(item.dataKey ?? item.name ?? "");
+          const config = EMA_CONFIG[key as keyof typeof EMA_CONFIG];
+          const color = config?.color ?? item.color ?? item.stroke ?? "var(--foreground)";
+          return (
+            <p key={key} className="font-data" style={{ color }}>
+              {config?.label ?? key}: {formatNumber(item.value)}
+            </p>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function PriceEpsTooltip({
+  active,
+  payload,
+  label,
+}: {
+  active?: boolean;
+  payload?: ChartTooltipPayload;
+  label?: number | string;
+}) {
+  if (!active || !payload?.length) return null;
+  const labels: Record<string, { label: string; color: string }> = {
+    price: { label: "주가", color: "#4f7cff" },
+    eps: { label: "EPS", color: "#22c55e" },
+    epsProjected: { label: "예상 EPS", color: "#9ca3af" },
+  };
+  return (
+    <div className="rounded-xl border border-border bg-card px-4 py-3 text-sm text-foreground shadow-lg">
+      <p className="font-medium">{formatTooltipLabel(label)}</p>
+      <div className="mt-2 space-y-1.5">
+        {payload.map((item) => {
+          const key = String(item.dataKey ?? item.name ?? "");
+          const meta = labels[key] ?? { label: key, color: item.color ?? "var(--foreground)" };
+          return (
+            <p key={key} className="font-data" style={{ color: meta.color }}>
+              {meta.label}: {formatNumber(item.value)}
+            </p>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 function annualPointDate(point: FinancialDataPoint) {
@@ -247,16 +320,7 @@ export function WatchlistInsightCharts({ ticker, universe }: Props) {
                   axisLine={false}
                   width={48}
                 />
-                <Tooltip
-                  contentStyle={TOOLTIP_STYLE}
-                  labelStyle={{ color: "var(--foreground)" }}
-                  itemStyle={{ color: "var(--foreground)" }}
-                  labelFormatter={(value) => formatDate(new Date(value as number).toISOString())}
-                  formatter={(value, name) => [
-                    formatNumber(value),
-                    EMA_CONFIG[name as keyof typeof EMA_CONFIG]?.label ?? String(name),
-                  ]}
-                />
+                <Tooltip content={<SeriesTooltip />} />
                 <Line
                   type="monotone"
                   dataKey="close"
@@ -339,16 +403,7 @@ export function WatchlistInsightCharts({ ticker, universe }: Props) {
                   width={42}
                   domain={["auto", "auto"]}
                 />
-                <Tooltip
-                  contentStyle={TOOLTIP_STYLE}
-                  labelStyle={{ color: "var(--foreground)" }}
-                  itemStyle={{ color: "var(--foreground)" }}
-                  labelFormatter={(value) => formatDate(new Date(value as number).toISOString())}
-                  formatter={(value, name, item) => [
-                    formatNumber(value),
-                    item.dataKey === "price" ? "주가" : item.dataKey === "epsProjected" ? "예상 EPS" : "EPS",
-                  ]}
-                />
+                <Tooltip content={<PriceEpsTooltip />} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
                 <Line yAxisId="price" type="monotone" dataKey="price" stroke="#4f7cff" strokeWidth={2} dot={false} name="주가" connectNulls={false} />
                 <Line yAxisId="eps" type="stepAfter" dataKey="eps" stroke="#22c55e" strokeWidth={2.2} dot={false} name="EPS" connectNulls />
