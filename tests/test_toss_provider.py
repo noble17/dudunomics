@@ -250,3 +250,50 @@ def test_fetch_orders_maps_filled_orders_to_trades(monkeypatch):
     }]
     assert get.call_args.kwargs["params"] == {"status": "OPEN", "from": "2026-06-01", "to": "2026-06-07"}
     assert get.call_args.kwargs["headers"]["X-Tossinvest-Account"] == "7"
+
+
+def test_fetch_closed_orders_follows_pagination_and_includes_tax(monkeypatch):
+    monkeypatch.setenv("TOSS_ACCOUNT_SEQ", "7")
+    first = _resp({
+        "result": {
+            "orders": [{
+                "orderId": "sell-1",
+                "symbol": "AAPL",
+                "side": "SELL",
+                "status": "FILLED",
+                "currency": "USD",
+                "marketCountry": "US",
+                "execution": {
+                    "filledQuantity": "2",
+                    "averageFilledPrice": "210",
+                    "commission": "1.2",
+                    "tax": "0.3",
+                    "filledAt": "2026-06-18T10:00:00+09:00",
+                },
+            }],
+            "hasNext": True,
+            "nextCursor": "next-1",
+        }
+    })
+    second = _resp({
+        "result": {
+            "orders": [],
+            "hasNext": False,
+            "nextCursor": None,
+        }
+    })
+
+    with patch("core.prices.toss._get_token", return_value="tok"), \
+         patch("core.prices.toss.requests.get", side_effect=[first, second]) as get:
+        from core.prices.toss import fetch_orders
+
+        trades = fetch_orders(status="CLOSED")
+
+    assert trades[0]["trade_type"] == "SELL"
+    assert trades[0]["fee"] == 1.5
+    assert get.call_args_list[0].kwargs["params"] == {"status": "CLOSED", "limit": 100}
+    assert get.call_args_list[1].kwargs["params"] == {
+        "status": "CLOSED",
+        "limit": 100,
+        "cursor": "next-1",
+    }

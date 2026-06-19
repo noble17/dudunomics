@@ -134,3 +134,34 @@ def test_sync_from_toss_adds_readonly_trades_without_duplicates(trades_client, m
 
     delete_res = trades_client.delete(f"/api/trades/{toss_trade['id']}")
     assert delete_res.status_code == 422
+
+
+def test_sync_from_toss_updates_existing_partial_fill(trades_client, monkeypatch):
+    item = {
+        "external_id": "toss-order-partial",
+        "ticker": "AAPL",
+        "market": "NASDAQ",
+        "trade_type": "SELL",
+        "quantity": 1,
+        "price": 200,
+        "currency": "USD",
+        "traded_at": "2026-06-18",
+        "fee": 0.5,
+        "note": "Toss OpenAPI 주문/체결 동기화",
+    }
+    monkeypatch.setattr(
+        "api.routers.trades.fetch_toss_orders",
+        lambda start_date=None, end_date=None, status="OPEN": [dict(item)],
+    )
+
+    assert trades_client.post("/api/trades/sync-from-toss").json()["added"] == 1
+    item.update(quantity=3, price=205, fee=1.2)
+    assert trades_client.post("/api/trades/sync-from-toss").json()["added"] == 0
+
+    trade = next(
+        row for row in trades_client.get("/api/trades").json()
+        if row["external_id"] == "toss-order-partial"
+    )
+    assert trade["quantity"] == 3
+    assert trade["price"] == 205
+    assert trade["fee"] == 1.2

@@ -22,6 +22,7 @@ from core.prices.selection import prefer_toss_market_data
 from core.prices.kis import KISPriceProvider
 from core.prices.toss import fetch_buying_power as fetch_toss_buying_power
 from core.prices.toss import fetch_holdings as fetch_toss_holdings
+from core.prices.toss import fetch_orders as fetch_toss_orders
 from core.prices.toss import TossPriceProvider
 from core.scoring.technical_timing import analyze_timing
 from core.telegram import send_telegram
@@ -215,6 +216,7 @@ def toss_holdings_sync_job():
 
     try:
         holdings = fetch_toss_holdings()
+        trades = fetch_toss_orders(status="CLOSED")
         cash_krw = fetch_toss_buying_power("KRW")
         cash_usd = fetch_toss_buying_power("USD")
     except Exception as e:
@@ -223,6 +225,23 @@ def toss_holdings_sync_job():
 
     for user_id in user_ids:
         try:
+            for item in trades:
+                repo.create_trade(
+                    user_id=user_id,
+                    ticker=item["ticker"],
+                    market=item.get("market"),
+                    trade_type=item["trade_type"],
+                    quantity=item["quantity"],
+                    price=item["price"],
+                    currency=item["currency"],
+                    traded_at=item["traded_at"],
+                    fee=item.get("fee", 0),
+                    note=item.get("note"),
+                    source="toss",
+                    external_id=item["external_id"],
+                    sync_holdings=False,
+                )
+            repo.delete_seeded_manual_holding_shadows(user_id)
             for item in holdings:
                 repo.upsert_holding(
                     user_id=user_id,
@@ -230,6 +249,11 @@ def toss_holdings_sync_job():
                     preserve_display_fields=True,
                     **item,
                 )
+            repo.delete_holdings_missing_from_source(
+                user_id,
+                "toss",
+                {item["ticker"] for item in holdings},
+            )
             repo.set_cash_source(user_id, "toss", cash_krw, cash_usd)
         except Exception as e:
             log.error("toss_holdings_sync_job 저장 오류(user_id=%d): %s", user_id, e)

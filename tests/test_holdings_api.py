@@ -74,6 +74,7 @@ def test_sync_from_toss_upserts_holdings(client, monkeypatch):
          "avg_price": 185.0, "currency": "USD", "market": "NASDAQ"},
     ]
     monkeypatch.setattr("api.routers.holdings.fetch_toss_holdings", lambda: items)
+    monkeypatch.setattr("api.routers.holdings.fetch_toss_orders", lambda status="CLOSED": [])
     monkeypatch.setattr(
         "api.routers.holdings.fetch_toss_buying_power",
         lambda currency: 1_000_000 if currency == "KRW" else 500,
@@ -82,7 +83,7 @@ def test_sync_from_toss_upserts_holdings(client, monkeypatch):
     res = client.post("/api/holdings/sync-from-toss")
 
     assert res.status_code == 200
-    assert res.json() == {"added": 2, "updated": 0, "errors": []}
+    assert res.json() == {"added": 2, "updated": 0, "deleted": 0, "errors": []}
     tickers = {h["ticker"] for h in client.get("/api/holdings").json()}
     assert tickers == {"005930.KS", "AAPL"}
     cash = client.get("/api/holdings/cash").json()
@@ -103,6 +104,146 @@ def test_sync_from_toss_returns_error_instead_of_500(client, monkeypatch):
     assert body["added"] == 0
     assert body["updated"] == 0
     assert "Toss 동기화 실패" in body["errors"][0]
+
+
+def test_sync_from_toss_deletes_missing_toss_holding_and_keeps_manual_source(client, monkeypatch):
+    import core.repository as repo
+
+    user = repo.get_user_by_email("test@test.com")
+    repo.upsert_holding(
+        user["id"], "AAPL", "Apple", "USD", 2, 180,
+        market="NASDAQ", source="manual",
+    )
+    repo.upsert_holding(
+        user["id"], "AAPL", "Apple", "USD", 3, 185,
+        market="NASDAQ", source="toss",
+    )
+    repo.upsert_holding(
+        user["id"], "TSLA", "Tesla", "USD", 4, 220,
+        market="NASDAQ", source="toss",
+    )
+    monkeypatch.setattr("api.routers.holdings.fetch_toss_holdings", lambda: [])
+    monkeypatch.setattr("api.routers.holdings.fetch_toss_orders", lambda status="CLOSED": [])
+    monkeypatch.setattr("api.routers.holdings.fetch_toss_buying_power", lambda currency: 0)
+
+    res = client.post("/api/holdings/sync-from-toss")
+
+    assert res.status_code == 200
+    assert res.json() == {"added": 0, "updated": 0, "deleted": 2, "errors": []}
+    holdings = client.get("/api/holdings").json()
+    assert [(row["ticker"], row["quantity"]) for row in holdings] == [("AAPL", 2)]
+    assert holdings[0]["sources"][0]["source"] == "manual"
+
+
+def test_sync_from_toss_saves_closed_sell_trade_before_removing_holding(client, monkeypatch):
+    import core.repository as repo
+
+    user = repo.get_user_by_email("test@test.com")
+    repo.upsert_holding(
+        user["id"], "AAPL", "Apple", "USD", 3, 185,
+        market="NASDAQ", source="toss",
+    )
+    monkeypatch.setattr("api.routers.holdings.fetch_toss_holdings", lambda: [])
+    monkeypatch.setattr("api.routers.holdings.fetch_toss_buying_power", lambda currency: 0)
+    monkeypatch.setattr("api.routers.holdings.fetch_toss_orders", lambda status="CLOSED": [{
+        "external_id": "sell-aapl-1",
+        "ticker": "AAPL",
+        "market": "NASDAQ",
+        "trade_type": "SELL",
+        "quantity": 3,
+        "price": 210,
+        "currency": "USD",
+        "traded_at": "2026-06-18",
+        "fee": 1.25,
+        "note": "Toss OpenAPI 주문/체결 동기화",
+    }])
+
+    res = client.post("/api/holdings/sync-from-toss")
+
+    assert res.json()["deleted"] == 1
+    assert client.get("/api/holdings").json() == []
+    trades = client.get("/api/trades").json()
+    assert len(trades) == 1
+    assert trades[0]["trade_type"] == "SELL"
+    assert trades[0]["price"] == 210
+    assert trades[0]["source"] == "toss"
+
+
+def test_sync_from_toss_removes_seeded_manual_shadow_for_sold_and_current_tickers(client, monkeypatch):
+    import core.repository as repo
+
+    user = repo.get_user_by_email("test@test.com")
+    uid = user["id"]
+    for ticker, quantity, avg_price in [
+        ("327260.KS", 50, 63318),
+        ("LITE", 10, 911.56),
+        ("AAPL", 7, 150),
+    ]:
+        repo.upsert_holding(
+            uid, ticker, ticker, "KRW" if ticker.endswith(".KS") else "USD",
+            quantity, avg_price, source="manual",
+        )
+        repo.create_trade(
+            uid, ticker, "KRX" if ticker.endswith(".KS") else "NASDAQ",
+            "BUY", quantity, avg_price,
+            "KRW" if ticker.endswith(".KS") else "USD",
+            "2024-01-01", sync_holdings=False,
+        )
+
+    monkeypatch.setattr("api.routers.holdings.fetch_toss_holdings", lambda: [{
+        "ticker": "AAPL",
+        "name": "Apple",
+        "quantity": 3,
+        "avg_price": 190,
+        "currency": "USD",
+        "market": "NASDAQ",
+    }])
+    monkeypatch.setattr("api.routers.holdings.fetch_toss_buying_power", lambda currency: 0)
+    monkeypatch.setattr("api.routers.holdings.fetch_toss_orders", lambda status="CLOSED": [
+        {
+            "external_id": "sell-rf",
+            "ticker": "327260.KS",
+            "market": "KRX",
+            "trade_type": "SELL",
+            "quantity": 50,
+            "price": 64700,
+            "currency": "KRW",
+            "traded_at": "2026-06-17",
+            "fee": 0,
+            "note": "Toss OpenAPI 주문/체결 동기화",
+        },
+        {
+            "external_id": "sell-lite",
+            "ticker": "LITE",
+            "market": "NASDAQ",
+            "trade_type": "SELL",
+            "quantity": 10,
+            "price": 844.6,
+            "currency": "USD",
+            "traded_at": "2026-06-19",
+            "fee": 0,
+            "note": "Toss OpenAPI 주문/체결 동기화",
+        },
+        {
+            "external_id": "buy-aapl",
+            "ticker": "AAPL",
+            "market": "NASDAQ",
+            "trade_type": "BUY",
+            "quantity": 3,
+            "price": 190,
+            "currency": "USD",
+            "traded_at": "2026-06-18",
+            "fee": 0,
+            "note": "Toss OpenAPI 주문/체결 동기화",
+        },
+    ])
+
+    res = client.post("/api/holdings/sync-from-toss")
+
+    assert res.status_code == 200
+    holdings = client.get("/api/holdings").json()
+    assert [(row["ticker"], row["quantity"]) for row in holdings] == [("AAPL", 3)]
+    assert holdings[0]["sources"][0]["source"] == "toss"
 
 
 def test_patch_holding_source_meta_updates_toss_sector(client):

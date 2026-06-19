@@ -75,6 +75,7 @@ def test_toss_holdings_sync_job_updates_users(monkeypatch, fresh_db):
         "market": "KRX",
     }
     monkeypatch.setattr("core.scheduler.fetch_toss_holdings", lambda: [item])
+    monkeypatch.setattr("core.scheduler.fetch_toss_orders", lambda status="CLOSED": [])
     monkeypatch.setattr("core.scheduler.fetch_toss_buying_power", lambda currency: 1000 if currency == "KRW" else 2)
 
     toss_holdings_sync_job()
@@ -84,3 +85,36 @@ def test_toss_holdings_sync_job_updates_users(monkeypatch, fresh_db):
     assert holdings[0]["sources"][0]["source"] == "toss"
     assert repo.get_cash_source(user_id, "toss") == {"cash_krw": 1000.0, "cash_usd": 2.0}
     assert repo.get_cash_total(user_id) == {"cash_krw": 1000.0, "cash_usd": 2.0}
+
+
+def test_toss_holdings_sync_job_deletes_missing_holding_and_saves_sell(monkeypatch, fresh_db):
+    import core.repository as repo
+    from core.auth.passwords import hash_password
+    from core.scheduler import toss_holdings_sync_job
+
+    monkeypatch.setenv("TOSS_HOLDINGS_SYNC_ENABLED", "true")
+    user_id = repo.create_user("sync-delete@test.com", hash_password("password123"))
+    repo.upsert_holding(
+        user_id, "AAPL", "Apple", "USD", 2, 180,
+        market="NASDAQ", source="toss",
+    )
+    monkeypatch.setattr("core.scheduler.fetch_toss_holdings", lambda: [])
+    monkeypatch.setattr("core.scheduler.fetch_toss_buying_power", lambda currency: 0)
+    monkeypatch.setattr("core.scheduler.fetch_toss_orders", lambda status="CLOSED": [{
+        "external_id": "sell-aapl-job",
+        "ticker": "AAPL",
+        "market": "NASDAQ",
+        "trade_type": "SELL",
+        "quantity": 2,
+        "price": 205,
+        "currency": "USD",
+        "traded_at": "2026-06-18",
+        "fee": 1,
+        "note": "Toss OpenAPI 주문/체결 동기화",
+    }])
+
+    toss_holdings_sync_job()
+
+    assert repo.get_holdings(user_id) == []
+    trades = repo.get_trades(user_id)
+    assert [(row["trade_type"], row["price"]) for row in trades] == [("SELL", 205)]

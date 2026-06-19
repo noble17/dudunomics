@@ -303,7 +303,7 @@ export function HoldingsEditor({
       if (result.errors.length) {
         setStatus(`오류: ${result.errors[0]}`);
       } else {
-        setStatus(`${provider} 동기화 완료: 추가 ${result.added}개, 수정 ${result.updated}개`);
+        setStatus(`${provider} 동기화 완료: 추가 ${result.added}개, 수정 ${result.updated}개, 삭제 ${result.deleted}개`);
       }
     } catch (e: unknown) {
       setStatus(`오류: ${e instanceof Error ? e.message : String(e)}`);

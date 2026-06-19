@@ -899,6 +899,82 @@ def delete_holding(user_id: int, ticker: str, source: str = "manual", account_id
         s.commit()
 
 
+def delete_holdings_missing_from_source(
+    user_id: int,
+    source: str,
+    current_tickers: set[str],
+    account_id: str = "",
+) -> list[str]:
+    with session() as s:
+        rows = s.execute(text("""
+            SELECT ticker
+            FROM holding_sources
+            WHERE user_id = :uid AND source = :source AND account_id = :account_id
+        """), {"uid": user_id, "source": source, "account_id": account_id}).fetchall()
+        missing = sorted({str(row[0]) for row in rows} - current_tickers)
+        for ticker in missing:
+            s.execute(text("""
+                DELETE FROM holding_sources
+                WHERE user_id = :uid
+                  AND source = :source
+                  AND account_id = :account_id
+                  AND ticker = :ticker
+            """), {
+                "uid": user_id,
+                "source": source,
+                "account_id": account_id,
+                "ticker": ticker,
+            })
+            _rebuild_holding_aggregate(s, user_id, ticker)
+        s.commit()
+        return missing
+
+
+def delete_seeded_manual_holding_shadows(user_id: int) -> list[str]:
+    """source 도입 시 자동 생성된 manual 보유분만 제거한다."""
+    with session() as s:
+        rows = s.execute(text("""
+            SELECT DISTINCT hs.ticker
+            FROM holding_sources hs
+            WHERE hs.user_id = :uid
+              AND hs.source = 'manual'
+              AND hs.account_id = ''
+              AND EXISTS (
+                SELECT 1
+                FROM trades t
+                WHERE t.user_id = hs.user_id
+                  AND t.ticker = hs.ticker
+                  AND coalesce(t.source, 'manual') = 'manual'
+                  AND t.external_id IS NULL
+                  AND t.trade_type = 'BUY'
+                  AND t.traded_at = '2024-01-01'
+                  AND coalesce(t.fee, 0) = 0
+                  AND t.note IS NULL
+                  AND t.quantity = hs.quantity
+                  AND t.price = hs.avg_price
+              )
+              AND EXISTS (
+                SELECT 1
+                FROM trades t
+                WHERE t.user_id = hs.user_id
+                  AND t.ticker = hs.ticker
+                  AND t.source = 'toss'
+              )
+        """), {"uid": user_id}).fetchall()
+        tickers = sorted({str(row[0]) for row in rows})
+        for ticker in tickers:
+            s.execute(text("""
+                DELETE FROM holding_sources
+                WHERE user_id = :uid
+                  AND source = 'manual'
+                  AND account_id = ''
+                  AND ticker = :ticker
+            """), {"uid": user_id, "ticker": ticker})
+            _rebuild_holding_aggregate(s, user_id, ticker)
+        s.commit()
+        return tickers
+
+
 def update_holding_source_meta(
     user_id: int,
     ticker: str,
@@ -2770,6 +2846,31 @@ def create_trade(
                 WHERE user_id = :uid AND source = :source AND external_id = :external_id
             """), {"uid": user_id, "source": source, "external_id": external_id}).fetchone()
             if existing:
+                s.execute(text("""
+                    UPDATE trades
+                    SET ticker = :ticker,
+                        market = :market,
+                        trade_type = :type,
+                        quantity = :qty,
+                        price = :price,
+                        currency = :cur,
+                        traded_at = :date,
+                        fee = :fee,
+                        note = :note
+                    WHERE id = :id
+                """), {
+                    "id": existing[0],
+                    "ticker": ticker,
+                    "market": market,
+                    "type": trade_type,
+                    "qty": quantity,
+                    "price": price,
+                    "cur": currency,
+                    "date": traded_at,
+                    "fee": fee,
+                    "note": note,
+                })
+                s.commit()
                 return int(existing[0])
         row = s.execute(text("SELECT nextval('trades_id_seq')")).fetchone()
         trade_id = row[0]

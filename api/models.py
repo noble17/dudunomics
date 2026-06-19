@@ -710,6 +710,10 @@ class SyncResult(BaseModel):
     errors: list[str]
 
 
+class HoldingSyncResult(SyncResult):
+    deleted: int
+
+
 class JobRunOut(BaseModel):
     id: int
     job_id: str

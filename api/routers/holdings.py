@@ -2,9 +2,10 @@ import json
 from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, Query
 from core.auth.deps import current_user, CurrentUser
-from api.models import CashUpdate, HoldingIn, HoldingOut, HoldingSourceMetaUpdate, TickerLookupOut, TickerSearchHit, TargetWeightUpdate, SyncResult
+from api.models import CashUpdate, HoldingIn, HoldingOut, HoldingSourceMetaUpdate, HoldingSyncResult, TickerLookupOut, TickerSearchHit, TargetWeightUpdate, SyncResult
 from core.prices.toss import fetch_buying_power as fetch_toss_buying_power
 from core.prices.toss import fetch_holdings as fetch_toss_holdings
+from core.prices.toss import fetch_orders as fetch_toss_orders
 from core.prices.toss import TossPriceProvider
 import core.repository as repo
 
@@ -121,17 +122,17 @@ def sync_from_kis(user: CurrentUser = Depends(current_user)):
     return SyncResult(added=0, updated=0, errors=["KIS 동기화는 Toss 동기화로 대체되었습니다."])
 
 
-@router.post("/sync-from-toss", response_model=SyncResult)
+@router.post("/sync-from-toss", response_model=HoldingSyncResult)
 def sync_from_toss(user: CurrentUser = Depends(current_user)):
     try:
         items = fetch_toss_holdings()
     except Exception as e:
-        return SyncResult(added=0, updated=0, errors=[f"Toss 동기화 실패: {e}"])
-    cash_errors = _sync_toss_cash(user.id)
-    if not items:
-        return SyncResult(added=0, updated=0, errors=cash_errors)
+        return HoldingSyncResult(added=0, updated=0, deleted=0, errors=[f"Toss 동기화 실패: {e}"])
+    errors = _sync_toss_trades(user.id)
+    errors.extend(_sync_toss_cash(user.id))
+    repo.delete_seeded_manual_holding_shadows(user.id)
     result = _sync_holdings(user.id, items, source="toss")
-    result.errors.extend(cash_errors)
+    result.errors.extend(errors)
     return result
 
 
@@ -148,7 +149,31 @@ def _sync_toss_cash(user_id: int) -> list[str]:
     return []
 
 
-def _sync_holdings(user_id: int, items: list[dict], source: str) -> SyncResult:
+def _sync_toss_trades(user_id: int) -> list[str]:
+    try:
+        items = fetch_toss_orders(status="CLOSED")
+    except Exception as e:
+        return [f"Toss 체결내역 동기화 실패: {e}"]
+    for item in items:
+        repo.create_trade(
+            user_id=user_id,
+            ticker=item["ticker"],
+            market=item.get("market"),
+            trade_type=item["trade_type"],
+            quantity=item["quantity"],
+            price=item["price"],
+            currency=item["currency"],
+            traded_at=item["traded_at"],
+            fee=item.get("fee", 0),
+            note=item.get("note"),
+            source="toss",
+            external_id=item["external_id"],
+            sync_holdings=False,
+        )
+    return []
+
+
+def _sync_holdings(user_id: int, items: list[dict], source: str) -> HoldingSyncResult:
     existing = {h["ticker"] for h in repo.get_holdings(user_id)}
     added, updated, errors = 0, 0, []
 
@@ -167,7 +192,12 @@ def _sync_holdings(user_id: int, items: list[dict], source: str) -> SyncResult:
         except Exception as e:
             errors.append(f"{item['ticker']}: {e}")
 
-    return SyncResult(added=added, updated=updated, errors=errors)
+    deleted = 0
+    if not errors:
+        current_tickers = {item["ticker"] for item in items}
+        deleted = len(repo.delete_holdings_missing_from_source(user_id, source, current_tickers))
+
+    return HoldingSyncResult(added=added, updated=updated, deleted=deleted, errors=errors)
 
 
 def _search_tickers(query: str, max_results: int = 8) -> list[dict]:

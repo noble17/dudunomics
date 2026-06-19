@@ -275,14 +275,11 @@ def fetch_ohlcv_daily(ticker: str, start: date, end: date) -> pd.DataFrame:
 
 def fetch_holdings(symbol: str | None = None) -> list[dict]:
     params = {"symbol": _to_toss_symbol(symbol)} if symbol else None
-    try:
-        res = _get(
-            "/api/v1/holdings",
-            params=params,
-            account=True,
-        )
-    except RuntimeError:
-        return []
+    res = _get(
+        "/api/v1/holdings",
+        params=params,
+        account=True,
+    )
 
     items = (res.json().get("result") or {}).get("items") or []
     stock_infos = _fetch_stock_infos([
@@ -323,16 +320,27 @@ def fetch_orders(start_date: str | None = None, end_date: str | None = None, sta
     if end_date:
         params["to"] = end_date
 
-    res = _get(
-        "/api/v1/orders",
-        params=params,
-        account=True,
-    )
-    result = res.json().get("result") or {}
-    if isinstance(result, list):
-        items = result
-    else:
-        items = result.get("orders") or result.get("items") or []
+    items = []
+    cursor = None
+    while True:
+        page_params = dict(params)
+        if status == "CLOSED":
+            page_params["limit"] = 100
+            if cursor:
+                page_params["cursor"] = cursor
+        res = _get(
+            "/api/v1/orders",
+            params=page_params,
+            account=True,
+        )
+        result = res.json().get("result") or {}
+        if isinstance(result, list):
+            items.extend(result)
+            break
+        items.extend(result.get("orders") or result.get("items") or [])
+        if status != "CLOSED" or not result.get("hasNext") or not result.get("nextCursor"):
+            break
+        cursor = result["nextCursor"]
 
     trades = []
     for row in items:
@@ -341,7 +349,10 @@ def fetch_orders(start_date: str | None = None, end_date: str | None = None, sta
             continue
 
         raw_status = str(_first_value(row, ("status", "orderStatus", "state"), "")).upper()
-        if raw_status and raw_status not in ("FILLED", "EXECUTED", "COMPLETED", "DONE", "PARTIALLY_FILLED"):
+        if raw_status and raw_status not in (
+            "FILLED", "EXECUTED", "COMPLETED", "DONE",
+            "PARTIAL_FILLED", "PARTIALLY_FILLED", "CANCELED", "REJECTED", "REPLACED",
+        ):
             continue
 
         qty = float(_order_value(row, ("executedQuantity", "filledQuantity", "filledQty"), 0) or 0)
@@ -366,7 +377,10 @@ def fetch_orders(start_date: str | None = None, end_date: str | None = None, sta
             "price": price,
             "currency": _first_value(row, ("currency",), None) or ("KRW" if market_country == "KR" else "USD"),
             "traded_at": _date_part(executed_at),
-            "fee": float(_order_value(row, ("fee", "commission", "commissionAmount"), 0) or 0),
+            "fee": (
+                float(_order_value(row, ("fee", "commission", "commissionAmount"), 0) or 0)
+                + float(_order_value(row, ("tax", "taxAmount"), 0) or 0)
+            ),
             "note": "Toss OpenAPI 주문/체결 동기화",
         })
     return trades

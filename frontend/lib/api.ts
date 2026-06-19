@@ -59,7 +59,7 @@ export const holdingsApi = {
       { method: "POST" }
     ),
   syncFromToss: () =>
-    request<{ added: number; updated: number; errors: string[] }>(
+    request<{ added: number; updated: number; deleted: number; errors: string[] }>(
       "/api/holdings/sync-from-toss",
       { method: "POST" }
     ),

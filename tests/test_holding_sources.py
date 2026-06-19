@@ -28,6 +28,44 @@ def test_delete_holding_removes_manual_source_only(fresh_db):
     assert [s["source"] for s in row["sources"]] == ["toss"]
 
 
+def test_delete_holdings_missing_from_source_rebuilds_aggregate(fresh_db):
+    repo.upsert_holding(1, "AAPL", "Apple", "USD", 2, 180, source="manual")
+    repo.upsert_holding(1, "AAPL", "Apple", "USD", 3, 185, source="toss")
+    repo.upsert_holding(1, "TSLA", "Tesla", "USD", 1, 220, source="toss")
+
+    deleted = repo.delete_holdings_missing_from_source(1, "toss", {"AAPL"})
+
+    assert deleted == ["TSLA"]
+    rows = repo.get_holdings(1)
+    assert [(row["ticker"], row["quantity"]) for row in rows] == [("AAPL", 5)]
+
+
+def test_delete_seeded_manual_holding_shadows_only_removes_migration_copy(fresh_db):
+    repo.upsert_holding(1, "AAPL", "Apple", "USD", 10, 180, source="manual")
+    repo.create_trade(
+        1, "AAPL", "NASDAQ", "BUY", 10, 180, "USD", "2024-01-01",
+        sync_holdings=False,
+    )
+    repo.create_trade(
+        1, "AAPL", "NASDAQ", "SELL", 10, 210, "USD", "2026-06-18",
+        source="toss", external_id="sell-aapl", sync_holdings=False,
+    )
+    repo.upsert_holding(1, "TSLA", "Tesla", "USD", 2, 200, source="manual")
+    repo.create_trade(
+        1, "TSLA", "NASDAQ", "BUY", 2, 200, "USD", "2026-01-01",
+        sync_holdings=False,
+    )
+    repo.create_trade(
+        1, "TSLA", "NASDAQ", "BUY", 1, 220, "USD", "2026-06-18",
+        source="toss", external_id="buy-tsla", sync_holdings=False,
+    )
+
+    deleted = repo.delete_seeded_manual_holding_shadows(1)
+
+    assert deleted == ["AAPL"]
+    assert [(row["ticker"], row["quantity"]) for row in repo.get_holdings(1)] == [("TSLA", 2)]
+
+
 def test_update_holding_source_meta_updates_display_fields_only(fresh_db):
     repo.upsert_holding(1, "0195R0", "TIGER 삼성전자단일종목레버리지", "KRW", 800, 25345, market="KOSPI", source="toss")
 
