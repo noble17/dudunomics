@@ -30,6 +30,7 @@ from api.routers.tickers import router as tickers_router
 from api.routers.jobs import router as jobs_router
 from api.routers.golden_cross import router as golden_cross_router
 from api.routers.candidates import router as candidates_router
+from api.routers.portfolio_export import router as portfolio_export_router
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
@@ -77,6 +78,7 @@ app.include_router(tickers_router)
 app.include_router(jobs_router)
 app.include_router(golden_cross_router)
 app.include_router(candidates_router)
+app.include_router(portfolio_export_router)
 
 @app.get("/health")
 def health():

@@ -22,3 +22,5 @@ services:
         sync: false
       - key: BASIC_AUTH_PASSWORD
         sync: false
+      - key: PORTFOLIO_EXPORT_API_KEY
+        sync: false

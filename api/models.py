@@ -83,6 +83,28 @@ class PortfolioSnapshot(BaseModel):
     updated_at: datetime
 
 
+class PortfolioExportRow(BaseModel):
+    no: int
+    name: str
+    ticker: str
+    market: str
+    quantity: float
+    avg_price: float
+    sector: str
+
+
+class PortfolioExportCash(BaseModel):
+    krw: float
+    usd: float
+
+
+class PortfolioExportOut(BaseModel):
+    generated_at: datetime
+    cash: PortfolioExportCash
+    domestic: list[PortfolioExportRow]
+    overseas: list[PortfolioExportRow]
+
+
 class TickerPerformanceOut(BaseModel):
     ticker: str
     name: str
