@@ -92,13 +92,17 @@ def test_portfolio_export_matches_spreadsheet_shape(client, monkeypatch):
     assert "generated_at" in body
 
 
-def test_portfolio_export_rejects_multiple_active_users(client, monkeypatch):
+def test_portfolio_export_uses_primary_user_when_multiple_users_exist(client, monkeypatch):
     from core.auth.passwords import hash_password
 
+    primary = repo.get_user_by_email("test@test.com")
+    repo.upsert_holding(primary["id"], "005930.KS", "삼성전자", "KRW", 10, 70000)
     second_id = repo.create_user("second@test.com", hash_password("password123"))
     repo.upsert_holding(second_id, "AAPL", "Apple", "USD", 10, 150)
     monkeypatch.setenv("PORTFOLIO_EXPORT_API_KEY", "sheet-secret")
 
     res = client.get("/api/external/portfolio", headers=_headers())
 
-    assert res.status_code == 409
+    assert res.status_code == 200
+    assert [row["ticker"] for row in res.json()["domestic"]] == ["005930"]
+    assert res.json()["overseas"] == []

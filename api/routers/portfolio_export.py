@@ -26,6 +26,10 @@ def _export_user_id(authorization: str | None) -> int:
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    primary_user = repo.get_user_by_id(1)
+    if primary_user:
+        return 1
+
     user_ids = repo.get_active_user_ids()
     if not user_ids:
         raise HTTPException(
